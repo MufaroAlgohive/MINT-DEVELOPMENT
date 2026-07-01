@@ -1137,7 +1137,8 @@ app.post("/api/user/request-sell", async (req, res) => {
     const db = getAuthenticatedDb(token);
     const userId = user.id;
 
-    const { kind, holdingId, strategyId, familyMemberId } = req.body || {};
+    const { kind, holdingId, strategyId, familyMemberId, quantity } = req.body || {};
+    const requestedQty = Number.isFinite(Number(quantity)) && Number(quantity) > 0 ? Math.floor(Number(quantity)) : null;
     if (kind !== "security" && kind !== "strategy")
       return res.status(400).json({ success: false, error: "kind must be 'security' or 'strategy'" });
     if (kind === "security" && !holdingId)
@@ -1156,7 +1157,7 @@ app.post("/api/user/request-sell", async (req, res) => {
     // Resolve target holdings — must belong to the caller, be active and filled.
     let q = db
       .from("stock_holdings_c")
-      .select("id, user_id, family_member_id, security_id, strategy_id, quantity, avg_fill, market_value, side, Status")
+      .select('id, user_id, family_member_id, security_id, strategy_id, quantity, avg_fill, market_value, side, trade_side, Status, "Expected_fill", "Fill_date", transaction_id, strategy_name_snapshot')
       .eq("user_id", userId).eq("Status", "active").gt("avg_fill", 0);
     q = familyMemberId ? q.eq("family_member_id", familyMemberId) : q.is("family_member_id", null);
     q = kind === "security" ? q.eq("id", holdingId) : q.eq("strategy_id", strategyId);
@@ -1177,7 +1178,28 @@ app.post("/api/user/request-sell", async (req, res) => {
       return res.status(409).json({ success: false, error: "A sell is already pending for this holding", alreadyPending: true });
 
     const ids = sellable.map((r) => r.id);
-    const estValueCents = sellable.reduce((s, r) => s + Number(r.market_value || 0), 0);
+
+    // Partial single-security sell (e.g. 4 of 5) — baskets always sell in full.
+    const singleRow = kind === "security" && sellable.length === 1 ? sellable[0] : null;
+    const holdingQty = singleRow ? Number(singleRow.quantity || 0) : 0;
+    const isPartial = !!(singleRow && requestedQty != null && requestedQty < holdingQty);
+    const soldQty = (r) => (isPartial && r.id === singleRow.id ? requestedQty : Number(r.quantity || 0));
+
+    // Live price = client's "expected exit" (per-share, cents).
+    const secIds = [...new Set(sellable.map((r) => r.security_id).filter(Boolean))];
+    const priceBySec = {};
+    await Promise.all(secIds.map(async (sid) => {
+      const { data } = await db
+        .from("stock_intraday_c").select("current_price")
+        .eq("security_id", sid).order("timestamp", { ascending: false }).limit(1).maybeSingle();
+      if (data?.current_price != null) priceBySec[sid] = Math.round(Number(data.current_price));
+    }));
+    const expectedExitCents = (r) => { const px = priceBySec[r.security_id]; return Number.isFinite(px) && px > 0 ? px : null; };
+    const estValueCents = sellable.reduce((s, r) => {
+      const px = expectedExitCents(r); const qty = soldQty(r);
+      const v = px != null ? px * qty : (Number(r.quantity || 0) > 0 ? Number(r.market_value || 0) * (qty / Number(r.quantity)) : 0);
+      return s + Math.round(v);
+    }, 0);
 
     // Friendly label for the transaction row.
     let label = "holding";
@@ -1195,19 +1217,8 @@ app.post("/api/user/request-sell", async (req, res) => {
     const reference = "SELL-" + Date.now().toString(36).toUpperCase() + "-" + Math.random().toString(36).slice(2, 6).toUpperCase();
     const now = new Date().toISOString();
 
-    // Flip the holding(s) to a pending SELL. Set BOTH fields so the CRM order
-    // book (which reads trade_side first) recognises it as a SELL, not a BUY.
-    const { error: updErr } = await db
-      .from("stock_holdings_c")
-      .update({ side: "sell", trade_side: "SELL", sell_requested_at: now, updated_at: now })
-      .in("id", ids);
-    if (updErr) {
-      console.error("[request-sell] holding update error:", updErr.message);
-      return res.status(500).json({ success: false, error: "Could not queue the sell" });
-    }
-
-    // Record the instruction as a pending credit (proceeds land once the broker fills).
-    const { error: txErr } = await db.from("transactions").insert({
+    // Pending credit first — its id links every SELL row for deterministic settlement.
+    const { data: txnRow, error: txErr } = await db.from("transactions").insert({
       user_id: userId,
       family_member_id: familyMemberId || null,
       direction: "credit",
@@ -1221,14 +1232,59 @@ app.post("/api/user/request-sell", async (req, res) => {
       status: "pending",
       transaction_date: now,
       created_at: now,
-    });
+    }).select("id").single();
     if (txErr) {
-      // Holding is already flagged — log but don't fail, surface the reference regardless.
-      console.error("[request-sell] transaction insert error (non-fatal):", txErr.message);
+      console.error("[request-sell] transaction insert error:", txErr.message);
+      return res.status(500).json({ success: false, error: "Could not record the sell instruction" });
     }
 
-    console.log(`[request-sell] queued ${ids.length} holding(s) as SELL for user ${userId}, ref ${reference}`);
-    return res.json({ success: true, reference, kind, holdingCount: ids.length, estimatedValueCents: estValueCents });
+    let updErr = null;
+    if (isPartial) {
+      // SPLIT: new pending-SELL row for the sold shares + reduce the BUY holding.
+      const px = expectedExitCents(singleRow);
+      const perShareCents = px != null ? px : (holdingQty > 0 ? Math.round(Number(singleRow.market_value || 0) / holdingQty) : 0);
+      const sellRow = {
+        user_id: singleRow.user_id,
+        family_member_id: singleRow.family_member_id || null,
+        security_id: singleRow.security_id,
+        strategy_id: singleRow.strategy_id || null,
+        quantity: requestedQty,
+        avg_fill: singleRow.avg_fill,
+        "Expected_fill": singleRow.Expected_fill,
+        "Fill_date": singleRow.Fill_date,
+        market_value: Math.round(perShareCents * requestedQty),
+        side: "sell", trade_side: "SELL", Status: "active", is_active: true,
+        sell_requested_at: now, sell_transaction_id: txnRow.id,
+        transaction_id: singleRow.transaction_id || null,
+        strategy_name_snapshot: singleRow.strategy_name_snapshot || null,
+        created_at: now, updated_at: now,
+      };
+      if (px != null) sellRow.expected_exit = px;
+      const { error: insErr } = await db.from("stock_holdings_c").insert(sellRow);
+      if (insErr) updErr = insErr;
+      if (!updErr) {
+        const remainingQty = holdingQty - requestedQty;
+        const { error: redErr } = await db.from("stock_holdings_c")
+          .update({ quantity: remainingQty, market_value: Math.round(perShareCents * remainingQty), updated_at: now })
+          .eq("id", singleRow.id);
+        if (redErr) updErr = redErr;
+      }
+    } else {
+      for (const r of sellable) {
+        const patch = { side: "sell", trade_side: "SELL", sell_requested_at: now, updated_at: now, sell_transaction_id: txnRow.id };
+        const px = expectedExitCents(r);
+        if (px != null) patch.expected_exit = px;
+        const { error } = await db.from("stock_holdings_c").update(patch).eq("id", r.id);
+        if (error) { updErr = error; break; }
+      }
+    }
+    if (updErr) {
+      console.error("[request-sell] holding update error:", updErr.message);
+      return res.status(500).json({ success: false, error: "Could not queue the sell" });
+    }
+
+    console.log(`[request-sell] queued ${isPartial ? `${requestedQty} share(s) (partial)` : `${ids.length} holding(s)`} as SELL for user ${userId}, ref ${reference}`);
+    return res.json({ success: true, reference, kind, partial: isPartial, soldQuantity: isPartial ? requestedQty : undefined, holdingCount: ids.length, estimatedValueCents: estValueCents });
   } catch (e) {
     console.error("[request-sell] error:", e.message);
     return res.status(500).json({ success: false, error: e.message });

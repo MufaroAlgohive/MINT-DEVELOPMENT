@@ -9,7 +9,12 @@ import { supabase, supabaseAdmin, authenticateUser } from "../_lib/supabase.js";
  * order book — which reads trade_side first — picks it up), and records a pending
  * credit transaction as the instruction. Proceeds land once the broker fills.
  *
- * Body: { kind: "security"|"strategy", holdingId?, strategyId?, familyMemberId? }
+ * Body: { kind: "security"|"strategy", holdingId?, strategyId?, familyMemberId?, quantity? }
+ *
+ * quantity (single-security only): sell PART of a holding, e.g. 4 of 5 shares.
+ * When quantity < the holding's quantity we SPLIT — reduce the original BUY
+ * holding and create a new pending-SELL row for just the sold shares (carrying
+ * the same cost basis + buy transaction_id). Baskets always sell in full.
  */
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -28,7 +33,8 @@ export default async function handler(req, res) {
     const userId = user.id;
 
     const body = typeof req.body === "object" && req.body ? req.body : {};
-    const { kind, holdingId, strategyId, familyMemberId } = body;
+    const { kind, holdingId, strategyId, familyMemberId, quantity } = body;
+    const requestedQty = Number.isFinite(Number(quantity)) && Number(quantity) > 0 ? Math.floor(Number(quantity)) : null;
     if (kind !== "security" && kind !== "strategy")
       return res.status(400).json({ success: false, error: "kind must be 'security' or 'strategy'" });
     if (kind === "security" && !holdingId)
@@ -47,7 +53,7 @@ export default async function handler(req, res) {
     // Resolve target holdings — must belong to the caller, be active and filled.
     let q = db
       .from("stock_holdings_c")
-      .select("id, user_id, family_member_id, security_id, strategy_id, quantity, avg_fill, market_value, side, trade_side, Status")
+      .select('id, user_id, family_member_id, security_id, strategy_id, quantity, avg_fill, market_value, side, trade_side, Status, "Expected_fill", "Fill_date", transaction_id, strategy_name_snapshot')
       .eq("user_id", userId).eq("Status", "active").gt("avg_fill", 0);
     q = familyMemberId ? q.eq("family_member_id", familyMemberId) : q.is("family_member_id", null);
     q = kind === "security" ? q.eq("id", holdingId) : q.eq("strategy_id", strategyId);
@@ -69,6 +75,15 @@ export default async function handler(req, res) {
 
     const ids = sellable.map((r) => r.id);
 
+    // ── Partial single-security sell? ────────────────────────────────────────
+    // Only for kind=security on a single holding, when the requested quantity is
+    // below what's held (e.g. 4 of 5). Baskets and "sell all" fall through to the
+    // full-position flip. Cap at the holding's quantity for safety.
+    const singleRow = kind === "security" && sellable.length === 1 ? sellable[0] : null;
+    const holdingQty = singleRow ? Number(singleRow.quantity || 0) : 0;
+    const isPartial = !!(singleRow && requestedQty != null && requestedQty < holdingQty);
+    const soldQty = (r) => (isPartial && r.id === singleRow.id ? requestedQty : Number(r.quantity || 0));
+
     // Capture the live price the client is seeing right now (per-share, cents) —
     // this is their "expected exit". Source: latest stock_intraday_c (same as the
     // holdings API). Stored per holding as expected_exit; the client is credited
@@ -85,11 +100,15 @@ export default async function handler(req, res) {
       const px = priceBySec[r.security_id];
       return Number.isFinite(px) && px > 0 ? px : null;
     };
-    // Expected proceeds total (what they saw): live price × qty, else market_value.
+    // Expected proceeds total (what they saw): live price × SOLD qty, else a
+    // proportional slice of market_value.
     const estValueCents = sellable.reduce((s, r) => {
       const px = expectedExitCents(r);
-      const v = px != null ? px * Number(r.quantity || 0) : Number(r.market_value || 0);
-      return s + v;
+      const qty = soldQty(r);
+      const v = px != null
+        ? px * qty
+        : (Number(r.quantity || 0) > 0 ? Number(r.market_value || 0) * (qty / Number(r.quantity)) : 0);
+      return s + Math.round(v);
     }, 0);
 
     // Friendly label for the transaction row.
@@ -134,27 +153,69 @@ export default async function handler(req, res) {
       return res.status(500).json({ success: false, error: "Could not record the sell instruction" });
     }
 
-    // Flip each holding to a pending SELL (side + trade_side so the CRM order
-    // book recognises it), stamp the expected exit price (what the client saw),
-    // and link it to this transaction for settlement.
     let updErr = null;
-    for (const r of sellable) {
-      const patch = {
-        side: "sell", trade_side: "SELL", sell_requested_at: now, updated_at: now,
+    if (isPartial) {
+      // ── SPLIT: sell only `requestedQty` of the single holding ──────────────
+      // 1. New pending-SELL row for the sold shares, carrying the same cost basis
+      //    (avg_fill / Expected_fill) and the original BUY transaction_id so the
+      //    reserve-refund logic still ties back to the funding transaction (and
+      //    correctly does NOT refund on a partial exit).
+      const px = expectedExitCents(singleRow);
+      const perShareCents = px != null ? px : (holdingQty > 0 ? Math.round(Number(singleRow.market_value || 0) / holdingQty) : 0);
+      const sellRow = {
+        user_id: singleRow.user_id,
+        family_member_id: singleRow.family_member_id || null,
+        security_id: singleRow.security_id,
+        strategy_id: singleRow.strategy_id || null,
+        quantity: requestedQty,
+        avg_fill: singleRow.avg_fill,
+        "Expected_fill": singleRow.Expected_fill,
+        "Fill_date": singleRow.Fill_date,
+        market_value: Math.round(perShareCents * requestedQty),
+        side: "sell",
+        trade_side: "SELL",
+        Status: "active",
+        is_active: true,
+        sell_requested_at: now,
         sell_transaction_id: txnRow.id,
+        transaction_id: singleRow.transaction_id || null,
+        strategy_name_snapshot: singleRow.strategy_name_snapshot || null,
+        created_at: now,
+        updated_at: now,
       };
-      const px = expectedExitCents(r);
-      if (px != null) patch.expected_exit = px;
-      const { error } = await db.from("stock_holdings_c").update(patch).eq("id", r.id);
-      if (error) { updErr = error; break; }
+      if (px != null) sellRow.expected_exit = px;
+      const { error: insErr } = await db.from("stock_holdings_c").insert(sellRow);
+      if (insErr) { updErr = insErr; }
+
+      // 2. Reduce the original BUY holding by the sold shares (keep it BUY/active).
+      if (!updErr) {
+        const remainingQty = holdingQty - requestedQty;
+        const remainingMv = Math.round(perShareCents * remainingQty);
+        const { error: redErr } = await db.from("stock_holdings_c")
+          .update({ quantity: remainingQty, market_value: remainingMv, updated_at: now })
+          .eq("id", singleRow.id);
+        if (redErr) updErr = redErr;
+      }
+    } else {
+      // ── FULL: flip each holding to a pending SELL (baskets + "sell all"). ───
+      for (const r of sellable) {
+        const patch = {
+          side: "sell", trade_side: "SELL", sell_requested_at: now, updated_at: now,
+          sell_transaction_id: txnRow.id,
+        };
+        const px = expectedExitCents(r);
+        if (px != null) patch.expected_exit = px;
+        const { error } = await db.from("stock_holdings_c").update(patch).eq("id", r.id);
+        if (error) { updErr = error; break; }
+      }
     }
     if (updErr) {
       console.error("[request-sell] holding update error:", updErr.message);
       return res.status(500).json({ success: false, error: "Could not queue the sell" });
     }
 
-    console.log(`[request-sell] queued ${ids.length} holding(s) as SELL for user ${userId}, ref ${reference}`);
-    return res.status(200).json({ success: true, reference, kind, holdingCount: ids.length, estimatedValueCents: estValueCents });
+    console.log(`[request-sell] queued ${isPartial ? `${requestedQty} share(s) (partial)` : `${ids.length} holding(s)`} as SELL for user ${userId}, ref ${reference}`);
+    return res.status(200).json({ success: true, reference, kind, partial: isPartial, soldQuantity: isPartial ? requestedQty : undefined, holdingCount: ids.length, estimatedValueCents: estValueCents });
   } catch (e) {
     console.error("[request-sell] error:", e?.message || e);
     return res.status(500).json({ success: false, error: e?.message || "Failed to submit sell" });
