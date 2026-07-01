@@ -1,0 +1,227 @@
+
+
+Admin Preview Mode — Mint App Changes
+What this does
+When an admin opens a client profile from the CRM (via "Open as [Name] in Mint"), the CRM generates a magic link and sends a postMessage signal into the iframe. These changes make the Mint app detect both signals and show a fully read-only view — all transactional and account-mutating actions are grayed out / disabled.
+
+Complete list of things to disable:
+
+Invest / Purchase (main account)
+Invest / Purchase (child account — separate component)
+Deposit / Transfer money (child account)
+Gift invest / Send a gift
+Create goal + Edit goal (adult account)
+Create goal + Edit goal (child account — separate component)
+Add child account
+Delete child account
+Add spouse / partner
+Refund, Cancel order
+Viewing, scrolling, navigating, and reading data must continue to work normally.
+
+Why two signals? The ?admin_preview=1 URL param is the primary signal, but Supabase's client-side auth calls router.replace() to clean the URL hash, stripping query params before useEffect can read them. The CRM's phone-preview.html also sends postMessage({ type: 'MINT_ADMIN_PREVIEW' }) into the iframe every 2 s for 30 s as a reliable backup. Both must be handled.
+
+TASK FOR REPLIT AGENT
+Apply the following changes to this codebase. Read each file listed, make only the changes described, and do not alter anything else.
+
+1. CREATE (or fully replace) lib/adminPreview.ts
+File path: lib/adminPreview.ts (Use .js and remove type annotations if the project is plain JS)
+
+/**
+ * Admin Preview Mode
+ *
+ * The Mint CRM signals admin preview in two ways:
+ *   1. Appends ?admin_preview=1 to the magic-link redirect URL.
+ *   2. Sends postMessage({ type: 'MINT_ADMIN_PREVIEW' }) into the iframe
+ *      every 2 s for 30 s (Supabase's router.replace() strips query params
+ *      before useEffect can read them, so the postMessage is the reliable path).
+ *
+ * Usage:
+ *   initAdminPreview()             — call once on app load (checks URL param)
+ *   listenForAdminPreviewMessage() — call once on app load (listens for postMessage)
+ *   isAdminPreview()               — call anywhere to check the flag
+ *   clearAdminPreview()            — call on sign-out to reset the flag
+ */
+export function initAdminPreview(): void {
+  if (typeof window === 'undefined') return;
+  if (new URLSearchParams(window.location.search).has('admin_preview')) {
+    localStorage.setItem('mint_admin_preview', '1');
+  }
+}
+export function listenForAdminPreviewMessage(): () => void {
+  if (typeof window === 'undefined') return () => {};
+  const handler = (event: MessageEvent) => {
+    if (event.data?.type === 'MINT_ADMIN_PREVIEW') {
+      localStorage.setItem('mint_admin_preview', '1');
+    }
+  };
+  window.addEventListener('message', handler);
+  return () => window.removeEventListener('message', handler);
+}
+export function isAdminPreview(): boolean {
+  if (typeof window === 'undefined') return false;
+  return localStorage.getItem('mint_admin_preview') === '1';
+}
+export function clearAdminPreview(): void {
+  if (typeof window !== 'undefined') {
+    localStorage.removeItem('mint_admin_preview');
+  }
+}
+
+2. EDIT the root layout / _app file
+File to find: app/layout.tsx OR pages/_app.tsx — whichever exists.
+
+Add this import near the top:
+
+import { initAdminPreview, listenForAdminPreviewMessage } from '@/lib/adminPreview';
+
+Add this useEffect inside the root component (or merge into any existing empty-dep useEffect):
+
+useEffect(() => {
+  initAdminPreview();                            // URL param — fast path
+  const cleanup = listenForAdminPreviewMessage(); // postMessage — reliable path
+  return cleanup;
+}, []);
+
+Both calls are required. initAdminPreview() works if the URL param survives. listenForAdminPreviewMessage() works when Supabase has already stripped it. Without the listener, isAdminPreview() will always return false and nothing will be grayed out.
+
+3. EDIT the sign-out function
+File to find: Search for signOut or auth.signOut — wherever supabase.auth.signOut() is called.
+
+Add import:
+
+import { clearAdminPreview } from '@/lib/adminPreview';
+
+Add immediately before or after the signOut() call:
+
+clearAdminPreview();
+
+Standard pattern used in every section below
+Every section below follows the same three-step pattern. Apply it to every component listed.
+
+// Step A — import (add with other imports at top of file)
+import { isAdminPreview } from '@/lib/adminPreview';
+// Step B — read the flag inside the component function
+const readOnly = isAdminPreview();
+// Step C — apply to buttons
+// disabled={readOnly}
+// className={readOnly ? 'opacity-40 cursor-not-allowed pointer-events-none' : ''}
+// Step C (alternative) — apply to a container of clickable items / cards
+// className={readOnly ? 'opacity-40 pointer-events-none select-none' : ''}
+
+4. DISABLE invest / purchase — main account
+Search for: "Choose a method" OR "Invest" OR "Purchase" in JSX/TSX files (main account invest flow — NOT the child flow).
+
+Apply the standard pattern. Disable:
+
+Every button that opens or confirms the invest/purchase flow
+The list of payment method cards/options (EFT, Card, Wallet) — wrap the container with the pointer-events-none class
+5. DISABLE invest / purchase — child account
+Separate component from section 4. The child account has its own invest button.
+
+Search for: "Invest Now" OR "Invest for" combined with "child" in JSX/TSX files. Also look for pages/components named ChildInvest, InvestForChild, ChildPurchase, or routes like children/[id]/invest.
+
+Apply the standard pattern. Disable:
+
+The "Invest Now" / "Purchase" / "Confirm" button
+Strategy picker cards (if clickable) — wrap their container
+Any "Choose a method" step that is child-specific
+6. DISABLE deposit / transfer money — child account
+Search for: "Deposit" OR "Transfer" OR "Add funds" OR "Send money" in JSX/TSX files that are within the child account context. Also search for a button or link labeled "Deposit" on the child profile / child dashboard screen.
+
+Apply the standard pattern. Disable:
+
+The Deposit button on the child profile page
+The Transfer / Send money button
+Any confirm / submit step inside the deposit or transfer flow
+Also disable the entire deposit/transfer modal trigger:
+
+onClick={readOnly ? undefined : () => openDepositModal()}
+disabled={readOnly}
+className={readOnly ? 'opacity-40 cursor-not-allowed pointer-events-none' : ''}
+
+7. DISABLE gift invest / send a gift
+Search for: "Send a gift" OR "Gift" OR "Invest as gift" in JSX/TSX files.
+
+Apply the standard pattern. Disable:
+
+The gift invest / send button
+Any confirm step in the gift flow
+8. DISABLE create goal + edit goal — adult account
+Search for: "Save goal" OR "Create goal" OR "Update goal" OR "Edit goal" in JSX/TSX files (adult / main account context — not the child version).
+
+Apply the standard pattern. Disable:
+
+The Save / Create / Update Goal button
+All form input fields inside the goal form (make them read-only):
+readOnly={readOnly}
+className={readOnly ? 'pointer-events-none opacity-60' : ''}
+
+The button that opens the "Create goal" or "Edit goal" modal / screen:
+disabled={readOnly}
+onClick={readOnly ? undefined : openGoalModal}
+className={readOnly ? 'opacity-40 cursor-not-allowed pointer-events-none' : ''}
+
+9. DISABLE create goal + edit goal — child account
+Separate component from section 8. Goals created for a child account render in their own component.
+
+Search for: "goal" combined with "child" OR "minor" in JSX/TSX files. Also look for components named ChildGoal, GoalForChild, or routes like children/[id]/goals.
+
+Apply the same pattern as section 8 — disable the Save / Create / Update button, disable form inputs, and disable the modal trigger.
+
+10. DISABLE add child account
+Search for: "Add child" OR "Create child" OR "Add minor" OR "New child" in JSX/TSX files.
+
+Apply the standard pattern. Disable:
+
+The "Add child" button / link that opens the child creation flow
+The Save / Confirm button at the end of the child creation form
+11. DISABLE delete child account
+Search for: "Delete child" OR "Remove child" OR "Delete account" in JSX/TSX files within the child account context. Also look for a trash icon button on the child profile.
+
+Apply the standard pattern. Disable:
+
+The Delete / Remove child button
+The Confirm button inside the deletion confirmation modal
+12. DISABLE add spouse / partner
+Search for: "Add spouse" OR "Add partner" OR "Spouse" OR "Joint account" in JSX/TSX files.
+
+Apply the standard pattern. Disable:
+
+The "Add spouse" / "Add partner" button
+The Save / Confirm button inside the spouse/partner addition flow
+13. DISABLE refund and cancel order
+Search for: "Refund" OR "Cancel order" OR "Cancel investment" in JSX/TSX files (transaction detail or order management).
+
+Apply the standard pattern. Disable:
+
+The Refund button
+The Cancel order / Cancel investment button
+The Confirm button inside any cancellation confirmation modal
+Summary of all changes
+#	What to disable	Notes
+1	Create / replace lib/adminPreview.ts	Required foundation — do this first
+2	Call both init functions in root layout	Must include listenForAdminPreviewMessage or nothing works
+3	Call clearAdminPreview() on sign-out	Prevents flag leaking to real sessions
+4	Main account invest / purchase	"Choose a method" flow
+5	Child account invest / purchase	Separate component — search "Invest Now" + "child"
+6	Child account deposit / transfer	Search "Deposit" / "Transfer" in child context
+7	Gift invest	"Send a gift" screen
+8	Adult goal — create + edit	Search "Save goal" / "Create goal" (main account)
+9	Child goal — create + edit	Separate component — search "goal" + "child"
+10	Add child account	Search "Add child" / "Create child"
+11	Delete child account	Search "Delete child" in child profile
+12	Add spouse / partner	Search "Add spouse" / "Spouse"
+13	Refund + Cancel order	Transaction / order management screen
+How to verify it worked
+Open the Mint CRM → Studio → open any client with "Open as [Name] in Mint". Then in the phone preview:
+
+Main invest tab — "Choose a method" options grayed out, cannot tap
+Child account — "Invest Now" grayed out, Deposit button grayed out
+Goals (adult) — "Create goal" and "Edit goal" buttons grayed out, form fields uneditable
+Goals (child) — same as above, on the child's goal screen
+Family / children — "Add child" and "Delete child" grayed out
+Spouse / partner — "Add spouse" grayed out
+Gifting — gift invest button grayed out
+Transactions — Refund and Cancel buttons grayed out
+Navigation, scrolling, viewing — all works normally
+
