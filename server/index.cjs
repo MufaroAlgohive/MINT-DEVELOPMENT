@@ -1277,17 +1277,26 @@ app.post("/api/user/request-sell", async (req, res) => {
         }
       }
     } else {
+      // All-or-nothing: track flipped rows so a mid-loop failure can be reverted.
+      const flipped = [];
       for (const r of sellable) {
         const patch = { side: "sell", trade_side: "SELL", sell_requested_at: now, updated_at: now, sell_transaction_id: txnRow.id };
         const px = expectedExitCents(r);
         if (px != null) patch.expected_exit = px;
         const { error } = await db.from("stock_holdings_c").update(patch).eq("id", r.id);
         if (error) { updErr = error; break; }
+        flipped.push(r.id);
+      }
+      if (updErr && flipped.length) {
+        await db.from("stock_holdings_c").update({
+          side: "buy", trade_side: "BUY", sell_requested_at: null,
+          sell_transaction_id: null, expected_exit: null, updated_at: now,
+        }).in("id", flipped);
       }
     }
     if (updErr) {
       console.error("[request-sell] holding update error:", updErr.message);
-      if (isPartial) await db.from("transactions").delete().eq("id", txnRow.id);
+      await db.from("transactions").delete().eq("id", txnRow.id);
       return res.status(500).json({ success: false, error: "Could not queue the sell" });
     }
 

@@ -209,6 +209,9 @@ export default async function handler(req, res) {
       }
     } else {
       // ── FULL: flip each holding to a pending SELL (baskets + "sell all"). ───
+      // All-or-nothing: track flipped rows so a mid-loop failure (e.g. a basket
+      // with many securities) can be reverted — never leave a half-sold basket.
+      const flipped = [];
       for (const r of sellable) {
         const patch = {
           side: "sell", trade_side: "SELL", sell_requested_at: now, updated_at: now,
@@ -218,13 +221,21 @@ export default async function handler(req, res) {
         if (px != null) patch.expected_exit = px;
         const { error } = await db.from("stock_holdings_c").update(patch).eq("id", r.id);
         if (error) { updErr = error; break; }
+        flipped.push(r.id);
+      }
+      if (updErr && flipped.length) {
+        // Revert the rows already flipped back to BUY so the basket sell is atomic.
+        await db.from("stock_holdings_c").update({
+          side: "buy", trade_side: "BUY", sell_requested_at: null,
+          sell_transaction_id: null, expected_exit: null, updated_at: now,
+        }).in("id", flipped);
       }
     }
     if (updErr) {
       console.error("[request-sell] holding update error:", updErr.message);
-      // Partial split is fully compensated above (no holdings changed), so void
-      // the pending "Sell:" transaction to avoid an orphan credit line.
-      if (isPartial) await db.from("transactions").delete().eq("id", txnRow.id);
+      // Holdings are fully reverted/removed in both paths above, so void the
+      // pending "Sell:" transaction to avoid an orphan credit line.
+      await db.from("transactions").delete().eq("id", txnRow.id);
       return res.status(500).json({ success: false, error: "Could not queue the sell" });
     }
 
