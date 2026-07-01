@@ -34,7 +34,13 @@ export default async function handler(req, res) {
 
     const body = typeof req.body === "object" && req.body ? req.body : {};
     const { kind, holdingId, strategyId, familyMemberId, quantity } = body;
-    const requestedQty = Number.isFinite(Number(quantity)) && Number(quantity) > 0 ? Math.floor(Number(quantity)) : null;
+    // quantity is optional; if provided it must be a positive number (partial
+    // single-security sell). Reject a bad value rather than silently selling all.
+    const qtyProvided = quantity !== undefined && quantity !== null && quantity !== "";
+    if (qtyProvided && !(Number.isFinite(Number(quantity)) && Number(quantity) > 0)) {
+      return res.status(400).json({ success: false, error: "quantity must be a positive number" });
+    }
+    const requestedQty = qtyProvided ? Math.floor(Number(quantity)) : null;
     if (kind !== "security" && kind !== "strategy")
       return res.status(400).json({ success: false, error: "kind must be 'security' or 'strategy'" });
     if (kind === "security" && !holdingId)
@@ -184,17 +190,22 @@ export default async function handler(req, res) {
         updated_at: now,
       };
       if (px != null) sellRow.expected_exit = px;
-      const { error: insErr } = await db.from("stock_holdings_c").insert(sellRow);
+      const { data: insertedSell, error: insErr } = await db.from("stock_holdings_c").insert(sellRow).select("id").single();
       if (insErr) { updErr = insErr; }
 
       // 2. Reduce the original BUY holding by the sold shares (keep it BUY/active).
+      //    If this fails, DELETE the SELL row we just created — otherwise the
+      //    client would briefly show more shares than they own (split leak).
       if (!updErr) {
         const remainingQty = holdingQty - requestedQty;
         const remainingMv = Math.round(perShareCents * remainingQty);
         const { error: redErr } = await db.from("stock_holdings_c")
           .update({ quantity: remainingQty, market_value: remainingMv, updated_at: now })
           .eq("id", singleRow.id);
-        if (redErr) updErr = redErr;
+        if (redErr) {
+          updErr = redErr;
+          if (insertedSell?.id) await db.from("stock_holdings_c").delete().eq("id", insertedSell.id);
+        }
       }
     } else {
       // ── FULL: flip each holding to a pending SELL (baskets + "sell all"). ───
@@ -211,6 +222,9 @@ export default async function handler(req, res) {
     }
     if (updErr) {
       console.error("[request-sell] holding update error:", updErr.message);
+      // Partial split is fully compensated above (no holdings changed), so void
+      // the pending "Sell:" transaction to avoid an orphan credit line.
+      if (isPartial) await db.from("transactions").delete().eq("id", txnRow.id);
       return res.status(500).json({ success: false, error: "Could not queue the sell" });
     }
 

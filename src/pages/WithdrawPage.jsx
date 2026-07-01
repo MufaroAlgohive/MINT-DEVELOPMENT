@@ -599,8 +599,13 @@ function SellSheet({ item, onClose, onSubmit, onSold }) {
   const isPartial = canPartial && sellQty < maxQty;
   const frac = maxQty > 0 ? sellQty / maxQty : 1; // slice of the position being sold
 
+  // Ref lock: setState is async, so two fast taps can both pass a `submitting`
+  // check before it flips. A ref guard blocks the second synchronously — no
+  // duplicate sell request.
+  const submitLock = useRef(false);
   const confirm = async () => {
-    if (!ack || submitting) return;
+    if (!ack || submitLock.current) return;
+    submitLock.current = true;
     setSubmitting(true);
     setErr("");
     try {
@@ -610,6 +615,7 @@ function SellSheet({ item, onClose, onSubmit, onSold }) {
       onSold?.(); // grey out the sold card + reflect the pending drop immediately
     } catch (e) {
       setErr(e.message || "Could not submit your sell. Please try again.");
+      submitLock.current = false; // allow a retry only on failure
     } finally {
       setSubmitting(false);
     }
