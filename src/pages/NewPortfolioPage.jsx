@@ -1157,7 +1157,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                     </button>
                   </div>
                   {!balanceVisible ? (
-                    <p className="mt-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/60">Account Value</p>
+                    <p className="mt-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/60">Total Value</p>
                   ) : (
                     <>
                       <div className="mt-1 flex items-center gap-2.5">
@@ -1169,7 +1169,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                           {isPnlPos ? '▲' : '▼'} {isPnlPos ? '+' : ''}{totalPnlPct.toFixed(1)}%
                         </span>
                       </div>
-                      <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/50">Account Value</p>
+                      <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/50">Total Value</p>
                     </>
                   )}
                 </>
