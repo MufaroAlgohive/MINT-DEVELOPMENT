@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, useCallback, useMemo, lazy, Suspense, startTransition } from "react";
 import { supabase } from "./lib/supabase.js";
-import { initAdminPreview, clearAdminPreview } from "./lib/adminPreview.js";
+import { initAdminPreview, listenForAdminPreviewMessage, clearAdminPreview } from "./lib/adminPreview.js";
 import { getMarketsSecuritiesWithMetrics } from "./lib/marketData.js";
 import { setCachedSession, clearSessionCache } from "./lib/sessionCache.js";
 import { clearAllUserCaches } from "./lib/userCacheReset.js";
@@ -317,9 +317,11 @@ const App = () => {
 
   useEffect(() => {
     initAdminPreview();
+    const cleanupAdminListener = listenForAdminPreviewMessage();
     if (ozowReturnParam.current) {
       window.history.replaceState({}, "", window.location.pathname);
     }
+    return cleanupAdminListener;
   }, []);
 
   useEffect(() => {

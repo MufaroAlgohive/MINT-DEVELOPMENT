@@ -1,17 +1,16 @@
 /**
  * Admin Preview Mode
  *
- * When the Mint CRM opens a client session via impersonation, it appends
- * ?admin_preview=1 to the magic link redirect URL.
+ * The Mint CRM signals admin preview in two ways:
+ *   1. Appends ?admin_preview=1 to the magic-link redirect URL.
+ *   2. Sends postMessage({ type: 'MINT_ADMIN_PREVIEW' }) into the iframe
+ *      every 2 s for 30 s (Supabase's router.replace() strips query params
+ *      before useEffect can read them, so the postMessage is the reliable path).
  *
- * initAdminPreview() — call once on app load. Detects the flag in the URL
- *   and saves it to localStorage so it survives client-side navigation.
- *
- * isAdminPreview() — call in any component to check if this is a read-only
- *   admin session. Returns true when the admin preview flag is active.
- *
- * clearAdminPreview() — call on sign-out to clean up the flag so a real
- *   client logging in on the same browser gets a normal session.
+ * initAdminPreview()             — call once on app load (checks URL param)
+ * listenForAdminPreviewMessage() — call once on app load (listens for postMessage)
+ * isAdminPreview()               — call anywhere to check the flag
+ * clearAdminPreview()            — call on sign-out to reset the flag
  */
 
 export function initAdminPreview() {
@@ -19,6 +18,17 @@ export function initAdminPreview() {
   if (new URLSearchParams(window.location.search).has('admin_preview')) {
     localStorage.setItem('mint_admin_preview', '1');
   }
+}
+
+export function listenForAdminPreviewMessage() {
+  if (typeof window === 'undefined') return () => {};
+  const handler = (event) => {
+    if (event.data?.type === 'MINT_ADMIN_PREVIEW') {
+      localStorage.setItem('mint_admin_preview', '1');
+    }
+  };
+  window.addEventListener('message', handler);
+  return () => window.removeEventListener('message', handler);
 }
 
 export function isAdminPreview() {

@@ -7,6 +7,7 @@ import { supabase } from "../lib/supabase.js";
 import { calculateMinInvestmentSync, buildHoldingsBySymbol, getHoldingsArray } from "../lib/strategyUtils";
 import { useDiscretionType } from "../lib/useDiscretionType";
 import { useFees } from "../lib/useFees";
+import { isAdminPreview } from "../lib/adminPreview";
 
 export default function ChildInvestModal({
   child,
@@ -17,6 +18,7 @@ export default function ChildInvestModal({
   onUpdateMandate,
 }) {
   const gradientId = useId();
+  const readOnly = isAdminPreview();
   const { isLimited: isLimitedDiscretion } = useDiscretionType();
   const { ISIN_FEE_PER_ASSET, BROKER_FEE_RATE, TRANSACTION_FEE_RATE, CASH_BUFFER_RATE } = useFees();
   const [showDiscretionModal, setShowDiscretionModal] = useState(false);
@@ -425,8 +427,8 @@ export default function ChildInvestModal({
               <div className="space-y-2.5 pt-1">
                 <button
                   onClick={handleInvestNowClick}
-                  disabled={!minimum || feeChecking}
-                  className="w-full rounded-2xl py-4 text-sm font-bold text-white shadow-lg active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={readOnly || !minimum || feeChecking}
+                  className={`w-full rounded-2xl py-4 text-sm font-bold text-white shadow-lg active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed${readOnly ? " opacity-40 cursor-not-allowed pointer-events-none" : ""}`}
                   style={{ background: "linear-gradient(135deg,#4f46e5,#7c3aed)" }}
                 >
                   {minimumLoading || feeChecking ? (

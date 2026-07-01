@@ -1489,8 +1489,9 @@ export default function FamilyDashboardPage({ onBack, userId, onOpenChildDashboa
               ) : (
                 <motion.button
                   whileTap={{ scale: 0.98 }}
-                  onClick={() => setAddingType("spouse")}
-                  className="w-full flex items-center gap-4 rounded-2xl border-2 border-dashed border-[#DDD6FE] bg-white px-5 py-4 text-left hover:border-purple-400 hover:bg-[#F5F3FF] transition-all group"
+                  onClick={() => { if (!isAdminPreview()) setAddingType("spouse"); }}
+                  disabled={isAdminPreview()}
+                  className={`w-full flex items-center gap-4 rounded-2xl border-2 border-dashed border-[#DDD6FE] bg-white px-5 py-4 text-left hover:border-purple-400 hover:bg-[#F5F3FF] transition-all group${isAdminPreview() ? " opacity-40 cursor-not-allowed pointer-events-none" : ""}`}
                   style={{ boxShadow: "0 1px 8px rgba(91,33,182,0.05)" }}
                 >
                   <div className="h-12 w-12 rounded-full border-2 border-dashed border-[#DDD6FE] group-hover:border-purple-400 flex items-center justify-center flex-shrink-0 transition-all">

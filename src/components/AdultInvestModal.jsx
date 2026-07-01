@@ -10,6 +10,7 @@ import { calculateMinInvestmentSync, buildHoldingsBySymbol, getHoldingsArray } f
 import GiftToggleV2 from "./GiftToggleV2";
 import { useDiscretionType } from "../lib/useDiscretionType";
 import { useFees } from "../lib/useFees";
+import { isAdminPreview } from "../lib/adminPreview";
 
 const fmt = (n) => Number(n).toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -22,6 +23,7 @@ export default function AdultInvestModal({
 }) {
   const currency = strategy?.currency || "R";
   const isAdditionalStrategy = !!strategy?.isAdditionalStrategy;
+  const readOnly = isAdminPreview();
   const { isLimited: isLimitedDiscretion } = useDiscretionType();
   const { ISIN_FEE_PER_ASSET, BROKER_FEE_RATE, TRANSACTION_FEE_RATE, CASH_BUFFER_RATE } = useFees();
   const [showDiscretionModal, setShowDiscretionModal] = useState(false);
@@ -387,8 +389,8 @@ export default function AdultInvestModal({
                 <button
                   type="button"
                   onClick={handleConfirm}
-                  disabled={isLimitedDiscretion ? false : (!agreementChecked || !minimum)}
-                  className="w-full rounded-2xl py-4 text-sm font-bold text-white shadow-lg active:scale-[0.98] transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                  disabled={readOnly || (isLimitedDiscretion ? false : (!agreementChecked || !minimum))}
+                  className={`w-full rounded-2xl py-4 text-sm font-bold text-white shadow-lg active:scale-[0.98] transition-all disabled:opacity-40 disabled:cursor-not-allowed${readOnly ? " opacity-40 cursor-not-allowed pointer-events-none" : ""}`}
                   style={{ background: "linear-gradient(135deg,#4f46e5,#7c3aed)" }}
                 >
                   Continue
