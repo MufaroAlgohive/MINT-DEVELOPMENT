@@ -94,6 +94,18 @@ export default function WithdrawPage({ onBack }) {
 
         const isSellHolding = (h) => String(h.trade_side || "").toUpperCase() === "SELL" || String(h.side || "").toLowerCase() === "sell";
 
+        // Which securities have a live intraday price right now. If one doesn't,
+        // we can't capture an "expected exit" at sell time, so we warn the client
+        // their proceeds will be set by the broker's execution price instead.
+        const singleSecIds = [...new Set(holdings.filter((h) => !h.strategy_id).map((h) => h.security_id).filter(Boolean))];
+        const livePricedSecIds = new Set();
+        await Promise.all(singleSecIds.map(async (sid) => {
+          const { data } = await supabase
+            .from("stock_intraday_c").select("current_price")
+            .eq("security_id", sid).order("timestamp", { ascending: false }).limit(1).maybeSingle();
+          if (data?.current_price != null) livePricedSecIds.add(String(sid));
+        }));
+
         const singleAssets = holdings.filter((h) => !h.strategy_id).map((h) => {
           const e = enrich(h);
           return {
@@ -111,6 +123,7 @@ export default function WithdrawPage({ onBack }) {
             change: e.change,
             up: e.up,
             pendingSell: isSellHolding(h),
+            hasLivePrice: livePricedSecIds.has(String(h.security_id)),
             // Breakdown inputs: a single asset's proceeds = its value; any unused
             // reserve is computed/returned at settlement (not pre-estimated here).
             positionsValue: e.value,
@@ -714,6 +727,16 @@ function SellSheet({ item, onClose, onSubmit, onSold }) {
                 </div>
               );
             })()}
+
+            {/* No live price → warn (non-blocking): proceeds set by broker fill. */}
+            {item.kind === "security" && item.hasLivePrice === false && (
+              <div style={{ marginTop: 14, display: "flex", gap: 10, padding: "12px 14px", borderRadius: 14, background: "rgba(245,197,24,0.08)", border: "0.5px solid rgba(245,197,24,0.3)" }}>
+                <ShieldAlert size={16} color="#BA7517" style={{ flexShrink: 0, marginTop: 1 }} />
+                <div style={{ fontSize: 12, color: "#7d6a3a", lineHeight: 1.55 }}>
+                  We couldn't get a live price for <span style={{ fontWeight: 500, color: "#5a4d1a" }}>{item.symbol}</span> right now, so the estimate above may be off. Your proceeds will be set by the broker's execution price at the next market window.
+                </div>
+              </div>
+            )}
 
             <div className="wd-warn">
               <ShieldAlert size={16} color="#BA7517" style={{ flexShrink: 0, marginTop: 2 }} />
