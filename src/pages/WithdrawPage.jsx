@@ -43,7 +43,7 @@ function useCountUp(target, dur = 1100) {
   return v;
 }
 
-export default function WithdrawPage({ onBack }) {
+export default function WithdrawPage({ onBack, familyMemberId = null, childName = null }) {
   const [loading, setLoading] = useState(true);
   const [strategies, setStrategies] = useState([]);
   const [singles, setSingles] = useState([]);
@@ -65,7 +65,7 @@ export default function WithdrawPage({ onBack }) {
         const uid = session?.user?.id || null;
 
         const res = token
-          ? await fetch("/api/user/holdings", { headers: { Authorization: `Bearer ${token}` } })
+          ? await fetch(`/api/user/holdings${familyMemberId ? `?familyMemberId=${encodeURIComponent(familyMemberId)}` : ""}`, { headers: { Authorization: `Bearer ${token}` } })
           : null;
         const json = res && res.ok ? await res.json() : { holdings: [] };
         if (cancelled) return;
@@ -204,9 +204,17 @@ export default function WithdrawPage({ onBack }) {
           if (t && (!earliest || t < earliest)) earliest = t;
         });
 
-        // Available cash (wallet balance, in rands).
+        // Available cash. Child: family_members.available_balance (CENTS).
+        // Parent: wallets.balance (RANDS). Both shown in rands.
         let walletCash = 0;
-        if (uid) {
+        if (familyMemberId) {
+          const { data: fm } = await supabase
+            .from("family_members")
+            .select("available_balance")
+            .eq("id", familyMemberId)
+            .maybeSingle();
+          walletCash = Number(fm?.available_balance || 0) / 100;
+        } else if (uid) {
           const { data: wallet } = await supabase
             .from("wallets")
             .select("balance")
@@ -228,7 +236,7 @@ export default function WithdrawPage({ onBack }) {
       }
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [familyMemberId]);
 
   // An item is pending-sell if the server says so OR we just sold it this session.
   const isItemSelling = (item) => item.pendingSell || justSold.has(item.id);
@@ -446,7 +454,7 @@ void main(){ mainImage(fragColor, gl_FragCoord.xy); }`;
 
         {/* Hero */}
         <div style={{ textAlign: "center", padding: "18px 24px 0" }}>
-          <div className="wd-hero-label">Your Portfolio</div>
+          <div className="wd-hero-label">{childName ? `${childName}'s Portfolio` : "Your Portfolio"}</div>
           <div className="wd-hero-val">
             {"R" + totalAnim.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </div>
@@ -562,6 +570,7 @@ void main(){ mainImage(fragColor, gl_FragCoord.xy); }`;
       {selected && (
         <SellSheet
           item={selected}
+          childName={childName}
           onSold={() => setJustSold((prev) => new Set(prev).add(selected.id))}
           onClose={() => setSelected(null)}
           onSubmit={async (quantity) => {
@@ -570,6 +579,7 @@ void main(){ mainImage(fragColor, gl_FragCoord.xy); }`;
             const body = selected.kind === "strategy"
               ? { kind: "strategy", strategyId: selected.strategyId }
               : { kind: "security", holdingId: selected.holdingId, ...(Number(quantity) > 0 ? { quantity: Number(quantity) } : {}) };
+            if (familyMemberId) body.familyMemberId = familyMemberId; // sell from the child's account
             const res = await fetch("/api/user/request-sell", {
               method: "POST",
               headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
@@ -598,7 +608,7 @@ void main(){ mainImage(fragColor, gl_FragCoord.xy); }`;
 /* ── Confirmation bottom-sheet ──────────────────────────────────────────────
    Real-money action: the client must tick an acknowledgement before "Confirm
    sell" unlocks; on confirm we POST and show the server-issued reference. */
-function SellSheet({ item, onClose, onSubmit, onSold }) {
+function SellSheet({ item, onClose, onSubmit, onSold, childName = null }) {
   const [ack, setAck] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
@@ -662,9 +672,15 @@ function SellSheet({ item, onClose, onSubmit, onSold }) {
               {isStrategy
                 ? "You are instructing us to sell every asset held in this strategy."
                 : isPartial
-                  ? `You are instructing us to sell ${sellQty} of your ${maxQty} shares.`
+                  ? `You are instructing us to sell ${sellQty} of ${childName ? `${childName}'s` : "your"} ${maxQty} shares.`
                   : "You are instructing us to sell this asset in full."}
             </div>
+            {childName && (
+              <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", borderRadius: 12, background: "#f0edff", border: "0.5px solid rgba(127,119,221,0.2)" }}>
+                <span style={{ fontSize: 12, color: "#534AB7", fontWeight: 500 }}>Child account · {childName}</span>
+                <span style={{ fontSize: 11.5, color: "#7d72a8" }}>proceeds go to {childName}'s balance</span>
+              </div>
+            )}
 
             <div className="wd-asset-row">
               <div className="wd-avatar" style={{ height: 42, width: 42, background: item.logo ? "#fff" : colorFor(item.symbol) }}>

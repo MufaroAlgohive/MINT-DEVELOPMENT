@@ -211,6 +211,7 @@ const App = () => {
   const [selectedStrategy, setSelectedStrategy] = useState(null);
   const [selectedArticleId, setSelectedArticleId] = useState(null);
   const [selectedFamilyChild, setSelectedFamilyChild] = useState(null);
+  const [withdrawChild, setWithdrawChild] = useState(null); // child whose holdings the Withdraw page is scoped to (null = parent)
   const [funeralCoverInitialDependents, setFuneralCoverInitialDependents] = useState([]);
   const [marketsInitialView, setMarketsInitialView] = useState(null);
   const [portfolioDeepLink, setPortfolioDeepLink] = useState(null);
@@ -982,7 +983,7 @@ const App = () => {
               onOpenNotifications={noOp}
               onOpenInvest={noOp}
               onOpenStrategies={noOp}
-              onWithdraw={() => navigateTo("withdraw")}
+              onWithdraw={() => { setWithdrawChild(null); navigateTo("withdraw"); }}
             />
           </AppLayout>
         );
@@ -1283,6 +1284,7 @@ const App = () => {
             child={selectedFamilyChild}
             onBack={noOp}
             onTabChange={handleTabChange}
+            onWithdraw={() => { setWithdrawChild(selectedFamilyChild); navigateTo("withdraw"); }}
             onOpenFactsheet={(strategy) => {
               setSelectedChildForInvest(selectedFamilyChild);
               setSelectedStrategy(strategy);
@@ -1441,7 +1443,7 @@ const App = () => {
                   onOpenNotifications={() => { setNotificationReturnPage("investments"); navigateTo("notifications"); }}
                   onOpenInvest={() => navigateTo("markets")}
                   onOpenStrategies={() => { setMarketsInitialView("openstrategies"); navigateTo("markets"); }}
-                  onWithdraw={() => navigateTo("withdraw")}
+                  onWithdraw={() => { setWithdrawChild(null); navigateTo("withdraw"); }}
                   deepLink={portfolioDeepLink}
                   onDeepLinkConsumed={() => setPortfolioDeepLink(null)}
                 />
@@ -1724,7 +1726,11 @@ const App = () => {
         modal={null}
         onCloseModal={() => {}}
       >
-        <WithdrawPage onBack={canSwipeBack ? goBack : () => handleTabChange("home")} />
+        <WithdrawPage
+          onBack={canSwipeBack ? goBack : () => handleTabChange("home")}
+          familyMemberId={withdrawChild?.id || null}
+          childName={withdrawChild ? (withdrawChild.first_name || withdrawChild.name || "Child") : null}
+        />
       </AppLayout>
     );
   }
@@ -2486,6 +2492,7 @@ const App = () => {
         <ChildDashboardPage
           child={selectedFamilyChild}
           onBack={goBack}
+          onWithdraw={() => { setWithdrawChild(selectedFamilyChild); navigateTo("withdraw"); }}
           onOpenFactsheet={(strategy) => {
             setSelectedChildForInvest(selectedFamilyChild);
             setSelectedStrategy(strategy);

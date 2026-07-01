@@ -201,7 +201,7 @@ async function addDisclosurePage(doc, name, dateStr, monthStr, isoDate, feeRates
   const aumPct     = +((feeRates.AUM_FEE_RATE                 ?? 0.0099) * 100).toFixed(2);
   // override the hardcoded "Fees & Charges" section body with live values
   function buildFeesChargesBody() {
-    return `Transaction fee: ${walletPct}% per trade for wallet/EFT payments, ${ozowPct}% for Ozow payments. Broker fee: ${brokerPct}% per trade. Custody and administrative fees: R${custodyAmt} per asset, charged transparently at checkout prior to investment confirmation. AUM management fee: ${aumPct}% per annum, accrued daily and settled monthly from the strategy cash sleeve. A full schedule of fees is available on request from MINT.`;
+    return `Transaction fee: ${walletPct}% per trade for wallet/EFT payments, ${ozowPct}% for Ozow payments. Broker fee: ${brokerPct}% per trade. Custody and administrative fees: R${custodyAmt} per asset, charged transparently at checkout prior to investment confirmation. AUM fee: ${aumPct}% per annum, accrued daily and settled monthly from the strategy cash sleeve. A full schedule of fees is available on request from MINT.`;
   }
   // Re-declare sections here so we can inject dynamic fee text
   doc.addPage();
@@ -484,7 +484,7 @@ export default async function generateFactsheetPdf({
     ["Transaction Fee (Wallet/EFT)", `${_walletPct}% / trade`],
     ["Transaction Fee (Ozow)",       `${_ozowPct}% / trade`],
     ["Broker Fee",                   `${_brokerPct}% / trade`],
-    ["AUM Management Fee",           `${_aumPct}% p.a.`],
+    ["AUM Fee",                      `${_aumPct}% p.a.`],
     ["Custody fee (per asset)",      `R${_custodyAmt} / asset`],
   ];
 
@@ -572,7 +572,7 @@ export default async function generateFactsheetPdf({
     { title: "Custody & Asset Segregation", body: "Client assets are held via an appointed Central Securities Depository Participant (CSDP) through its appointed nominee custodian. Assets are fully segregated from MINT's own assets at all times." },
     { title: "Performance Disclosure", body: "Performance may include historical or back-tested results. Back-tested performance does not represent actual trading and is constructed with hindsight. Performance is gross of fees unless stated. Individual returns may differ based on timing, costs, and taxes." },
     { title: "Risk Warning", body: "Past performance does not guarantee future results. Capital is not guaranteed. Strategies are subject to Market, Equity, Volatility, Leverage, Liquidity, Counterparty, Concentration, and Foreign Market risks. See Page 2 for full risk factor disclosures." },
-    { title: "Fees Summary", body: `Transaction fee: ${_walletPct}% per trade (wallet/EFT), ${_ozowPct}% (Ozow). Broker fee: ${_brokerPct}% per trade. Custody: R${_custodyAmt} per asset (shown at checkout). AUM management fee: ${_aumPct}% per annum, accrued daily and settled monthly from the cash sleeve. No performance fee. Full fee schedule available on request.` },
+    { title: "Fees Summary", body: `Transaction fee: ${_walletPct}% per trade (wallet/EFT), ${_ozowPct}% (Ozow). Broker fee: ${_brokerPct}% per trade. Custody: R${_custodyAmt} per asset (shown at checkout). AUM fee: ${_aumPct}% per annum, accrued daily and settled monthly from the cash sleeve. No performance fee. Full fee schedule available on request.` },
     { title: "Full Disclosures", body: "Complete regulatory disclosures, risk factors, legal notices, and the full disclaimer are contained on Page 2 of this factsheet. Please read all disclosures carefully before investing." },
   ];
 
