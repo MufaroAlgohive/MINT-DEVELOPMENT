@@ -657,6 +657,9 @@ export default async function handler(req, res) {
       applicationId,
       userId,
       creditScore: creditScoreValue,
+      // Official Experian report PDF (base64) for the client-side download button.
+      reportPdfBase64: result?.reportPdfBase64 || null,
+      reportPdfFilename: result?.reportPdfFilename || 'experian-credit-report.pdf',
       recommendation: result?.recommendation,
       riskFlags: result?.riskFlags,
       breakdown: engineResultPayload,

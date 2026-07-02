@@ -64,7 +64,7 @@ const PIE_COLORS = ["#4C1D95","#5B21B6","#6D28D9","#7C3AED","#8B5CF6","#A78BFA",
 
 // ─── ChildPortfolioTab ─────────────────────────────────────────────────────────
 
-const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest, livePriceMap: livePriceMapProp = null }) => {
+const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest, onWithdraw, livePriceMap: livePriceMapProp = null }) => {
   const { profile } = useProfile();
   const familyMemberId = child?.id || null;
 
@@ -812,6 +812,16 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest, livePriceMap
                   >
                     Invest More
                   </button>
+
+                  {/* Withdraw — sell the child's holdings (parent-operated). */}
+                  {onWithdraw && (
+                    <button
+                      onClick={onWithdraw}
+                      className="mt-3 w-full py-3.5 rounded-full border border-slate-200 bg-white text-sm font-semibold uppercase tracking-[0.1em] text-slate-700 shadow-sm active:scale-[0.99]"
+                    >
+                      Withdraw
+                    </button>
+                  )}
                 </>
               )}
             </div>
