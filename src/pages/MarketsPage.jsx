@@ -1987,7 +1987,8 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                 <section key={sector}>
                   <div className="mb-4 flex items-center justify-between">
                     <h2 className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">{sector === 'General' ? (childFilter ? 'Child Friendly' : 'Strategies') : sector}</h2>
-                    <ChevronRight className="h-4 w-4 text-slate-300" />
+                    {/* Show how many baskets are in this category instead of a chevron. */}
+                    <span className="text-[11px] font-semibold tabular-nums text-slate-400">({sectorStrategies.length})</span>
                   </div>
                   <div className="flex gap-3 overflow-x-auto snap-x snap-mandatory pb-2 scrollbar-hide">
                     {sectorStrategies.map((strategy) => {

@@ -101,9 +101,12 @@ export default async function handler(req, res) {
       raw.bank_letter_uploaded_at = new Date().toISOString();
       raw.bank_letter_verified_at = new Date().toISOString();
 
+      // Store the OBJECT, not JSON.stringify(...) — a stringified value in the
+      // jsonb column becomes a string scalar that downstream merges mangle and
+      // can drop sibling keys (e.g. the credit flow's).
       await db
         .from("user_onboarding")
-        .update({ sumsub_raw: JSON.stringify(raw) })
+        .update({ sumsub_raw: raw })
         .eq("id", onboardingRecord.id);
     }
 

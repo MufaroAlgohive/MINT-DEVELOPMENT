@@ -840,6 +840,11 @@ async function performCreditCheck(userData, applicationId, authToken = null) {
                 zipData: retdata, // Include ZIP data as base64 for download
                 zipDataLength: typeof retdata === 'string' ? retdata.length : 0,
                 xmlContent,
+                // The official Experian report PDF, pulled straight out of the
+                // returned ZIP — surfaced so the client can download proof of the
+                // exact bureau result (XPDF2 ResultType requests it).
+                reportPdfBase64: pdfBuffer ? pdfBuffer.toString('base64') : null,
+                reportPdfFilename: pdfFilename || 'experian-credit-report.pdf',
                 databaseId: savedRecord.id,
                 recommendation: savedRecord.recommendation,
                 riskFlags: savedRecord.risk_flags,

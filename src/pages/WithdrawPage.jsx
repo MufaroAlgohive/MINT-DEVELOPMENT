@@ -43,7 +43,7 @@ function useCountUp(target, dur = 1100) {
   return v;
 }
 
-export default function WithdrawPage({ onBack }) {
+export default function WithdrawPage({ onBack, familyMemberId = null, childName = null }) {
   const [loading, setLoading] = useState(true);
   const [strategies, setStrategies] = useState([]);
   const [singles, setSingles] = useState([]);
@@ -65,7 +65,7 @@ export default function WithdrawPage({ onBack }) {
         const uid = session?.user?.id || null;
 
         const res = token
-          ? await fetch("/api/user/holdings", { headers: { Authorization: `Bearer ${token}` } })
+          ? await fetch(`/api/user/holdings${familyMemberId ? `?familyMemberId=${encodeURIComponent(familyMemberId)}` : ""}`, { headers: { Authorization: `Bearer ${token}` } })
           : null;
         const json = res && res.ok ? await res.json() : { holdings: [] };
         if (cancelled) return;
@@ -94,6 +94,18 @@ export default function WithdrawPage({ onBack }) {
 
         const isSellHolding = (h) => String(h.trade_side || "").toUpperCase() === "SELL" || String(h.side || "").toLowerCase() === "sell";
 
+        // Which securities have a live intraday price right now. If one doesn't,
+        // we can't capture an "expected exit" at sell time, so we warn the client
+        // their proceeds will be set by the broker's execution price instead.
+        const singleSecIds = [...new Set(holdings.filter((h) => !h.strategy_id).map((h) => h.security_id).filter(Boolean))];
+        const livePricedSecIds = new Set();
+        await Promise.all(singleSecIds.map(async (sid) => {
+          const { data } = await supabase
+            .from("stock_intraday_c").select("current_price")
+            .eq("security_id", sid).order("timestamp", { ascending: false }).limit(1).maybeSingle();
+          if (data?.current_price != null) livePricedSecIds.add(String(sid));
+        }));
+
         const singleAssets = holdings.filter((h) => !h.strategy_id).map((h) => {
           const e = enrich(h);
           return {
@@ -111,6 +123,7 @@ export default function WithdrawPage({ onBack }) {
             change: e.change,
             up: e.up,
             pendingSell: isSellHolding(h),
+            hasLivePrice: livePricedSecIds.has(String(h.security_id)),
             // Breakdown inputs: a single asset's proceeds = its value; any unused
             // reserve is computed/returned at settlement (not pre-estimated here).
             positionsValue: e.value,
@@ -191,9 +204,17 @@ export default function WithdrawPage({ onBack }) {
           if (t && (!earliest || t < earliest)) earliest = t;
         });
 
-        // Available cash (wallet balance, in rands).
+        // Available cash. Child: family_members.available_balance (CENTS).
+        // Parent: wallets.balance (RANDS). Both shown in rands.
         let walletCash = 0;
-        if (uid) {
+        if (familyMemberId) {
+          const { data: fm } = await supabase
+            .from("family_members")
+            .select("available_balance")
+            .eq("id", familyMemberId)
+            .maybeSingle();
+          walletCash = Number(fm?.available_balance || 0) / 100;
+        } else if (uid) {
           const { data: wallet } = await supabase
             .from("wallets")
             .select("balance")
@@ -215,7 +236,7 @@ export default function WithdrawPage({ onBack }) {
       }
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [familyMemberId]);
 
   // An item is pending-sell if the server says so OR we just sold it this session.
   const isItemSelling = (item) => item.pendingSell || justSold.has(item.id);
@@ -433,7 +454,7 @@ void main(){ mainImage(fragColor, gl_FragCoord.xy); }`;
 
         {/* Hero */}
         <div style={{ textAlign: "center", padding: "18px 24px 0" }}>
-          <div className="wd-hero-label">Your Portfolio</div>
+          <div className="wd-hero-label">{childName ? `${childName}'s Portfolio` : "Your Portfolio"}</div>
           <div className="wd-hero-val">
             {"R" + totalAnim.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </div>
@@ -549,14 +570,16 @@ void main(){ mainImage(fragColor, gl_FragCoord.xy); }`;
       {selected && (
         <SellSheet
           item={selected}
+          childName={childName}
           onSold={() => setJustSold((prev) => new Set(prev).add(selected.id))}
           onClose={() => setSelected(null)}
-          onSubmit={async () => {
+          onSubmit={async (quantity) => {
             const session = await getSession();
             const token = session?.access_token || null;
             const body = selected.kind === "strategy"
               ? { kind: "strategy", strategyId: selected.strategyId }
-              : { kind: "security", holdingId: selected.holdingId };
+              : { kind: "security", holdingId: selected.holdingId, ...(Number(quantity) > 0 ? { quantity: Number(quantity) } : {}) };
+            if (familyMemberId) body.familyMemberId = familyMemberId; // sell from the child's account
             const res = await fetch("/api/user/request-sell", {
               method: "POST",
               headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
@@ -585,25 +608,37 @@ void main(){ mainImage(fragColor, gl_FragCoord.xy); }`;
 /* ── Confirmation bottom-sheet ──────────────────────────────────────────────
    Real-money action: the client must tick an acknowledgement before "Confirm
    sell" unlocks; on confirm we POST and show the server-issued reference. */
-function SellSheet({ item, onClose, onSubmit, onSold }) {
+function SellSheet({ item, onClose, onSubmit, onSold, childName = null }) {
   const [ack, setAck] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
   const [ref, setRef] = useState("");
   const [err, setErr] = useState("");
   const isStrategy = item.kind === "strategy";
+  // Partial-quantity selling: single securities only. Baskets always sell whole.
+  const maxQty = item.kind === "security" ? Math.max(0, Math.floor(Number(item.qty || 0))) : 0;
+  const canPartial = item.kind === "security" && maxQty > 1;
+  const [sellQty, setSellQty] = useState(maxQty || 1);
+  const isPartial = canPartial && sellQty < maxQty;
+  const frac = maxQty > 0 ? sellQty / maxQty : 1; // slice of the position being sold
 
+  // Ref lock: setState is async, so two fast taps can both pass a `submitting`
+  // check before it flips. A ref guard blocks the second synchronously — no
+  // duplicate sell request.
+  const submitLock = useRef(false);
   const confirm = async () => {
-    if (!ack || submitting) return;
+    if (!ack || submitLock.current) return;
+    submitLock.current = true;
     setSubmitting(true);
     setErr("");
     try {
-      const reference = await onSubmit();
+      const reference = await onSubmit(item.kind === "security" ? sellQty : undefined);
       setRef(reference || "—");
       setDone(true);
       onSold?.(); // grey out the sold card + reflect the pending drop immediately
     } catch (e) {
       setErr(e.message || "Could not submit your sell. Please try again.");
+      submitLock.current = false; // allow a retry only on failure
     } finally {
       setSubmitting(false);
     }
@@ -636,8 +671,16 @@ function SellSheet({ item, onClose, onSubmit, onSold }) {
             <div style={{ fontSize: 13.5, color: "#7d72a8", marginTop: 4, lineHeight: 1.4 }}>
               {isStrategy
                 ? "You are instructing us to sell every asset held in this strategy."
-                : "You are instructing us to sell this asset in full."}
+                : isPartial
+                  ? `You are instructing us to sell ${sellQty} of ${childName ? `${childName}'s` : "your"} ${maxQty} shares.`
+                  : "You are instructing us to sell this asset in full."}
             </div>
+            {childName && (
+              <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", borderRadius: 12, background: "#f0edff", border: "0.5px solid rgba(127,119,221,0.2)" }}>
+                <span style={{ fontSize: 12, color: "#534AB7", fontWeight: 500 }}>Child account · {childName}</span>
+                <span style={{ fontSize: 11.5, color: "#7d72a8" }}>proceeds go to {childName}'s balance</span>
+              </div>
+            )}
 
             <div className="wd-asset-row">
               <div className="wd-avatar" style={{ height: 42, width: 42, background: item.logo ? "#fff" : colorFor(item.symbol) }}>
@@ -648,18 +691,42 @@ function SellSheet({ item, onClose, onSubmit, onSold }) {
               <div style={{ minWidth: 0, flex: 1 }}>
                 <div style={{ fontSize: 14, fontWeight: 500, color: "#26215C" }}>{item.symbol}</div>
                 <div style={{ fontSize: 12, color: "#9a8fc0" }}>
-                  {item.name}{item.kind === "security" && item.qty ? ` · ${item.qty} sh` : ""}
+                  {item.name}{item.kind === "security" && item.qty ? ` · ${item.qty} sh held` : ""}
                 </div>
               </div>
               <div style={{ textAlign: "right", flexShrink: 0 }}>
                 <div style={{ fontSize: 10, color: "#b3a9d4", textTransform: "uppercase", letterSpacing: "0.06em" }}>Est. value</div>
-                <div style={{ fontSize: 14, fontWeight: 500, color: "#26215C", fontVariantNumeric: "tabular-nums" }}>{fmtR(item.value)}</div>
+                <div style={{ fontSize: 14, fontWeight: 500, color: "#26215C", fontVariantNumeric: "tabular-nums" }}>{fmtR(item.value * frac)}</div>
               </div>
             </div>
 
+            {/* Quantity picker — single securities with more than one share. */}
+            {canPartial && (
+              <div style={{ marginTop: 16, padding: "14px 16px", borderRadius: 16, background: "#faf8ff", border: "0.5px solid rgba(127,119,221,0.16)" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ fontSize: 12.5, color: "#7d72a8" }}>Shares to sell</span>
+                  <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                    <button type="button" onClick={() => setSellQty((q) => Math.max(1, q - 1))} disabled={sellQty <= 1}
+                      style={{ height: 30, width: 30, borderRadius: 9, border: "0.5px solid rgba(127,119,221,0.3)", background: "#fff", color: "#534AB7", fontSize: 18, lineHeight: "1", cursor: sellQty <= 1 ? "not-allowed" : "pointer", opacity: sellQty <= 1 ? 0.4 : 1 }}>−</button>
+                    <span style={{ minWidth: 44, textAlign: "center", fontSize: 18, fontWeight: 600, color: "#26215C", fontVariantNumeric: "tabular-nums" }}>{sellQty}</span>
+                    <button type="button" onClick={() => setSellQty((q) => Math.min(maxQty, q + 1))} disabled={sellQty >= maxQty}
+                      style={{ height: 30, width: 30, borderRadius: 9, border: "0.5px solid rgba(127,119,221,0.3)", background: "#fff", color: "#534AB7", fontSize: 18, lineHeight: "1", cursor: sellQty >= maxQty ? "not-allowed" : "pointer", opacity: sellQty >= maxQty ? 0.4 : 1 }}>+</button>
+                  </div>
+                </div>
+                <input type="range" min={1} max={maxQty} step={1} value={sellQty}
+                  onChange={(e) => setSellQty(Number(e.target.value))}
+                  style={{ marginTop: 12, width: "100%", accentColor: "#534AB7" }} />
+                <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
+                  <button type="button" onClick={() => setSellQty(maxQty)} style={{ fontSize: 11, fontWeight: 600, color: "#534AB7", background: "none", border: "none", cursor: "pointer", padding: 0 }}>Sell all {maxQty}</button>
+                  <span style={{ fontSize: 11, color: "#9a8fc0" }}>{sellQty} of {maxQty} shares</span>
+                </div>
+              </div>
+            )}
+
             {(() => {
-              const proceeds = Number(item.positionsValue ?? item.value ?? 0);
-              const reserve = Math.max(0, Number(item.reserveRefundCents || 0)) / 100;
+              const proceeds = Number(item.positionsValue ?? item.value ?? 0) * frac;
+              // Reserve is only returned on a FULL exit — a partial sell keeps the position open.
+              const reserve = isPartial ? 0 : Math.max(0, Number(item.reserveRefundCents || 0)) / 100;
               const net = proceeds + reserve;
               const row = (label, val, opts = {}) => (
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: opts.last ? "none" : "0.5px solid rgba(127,119,221,0.14)" }}>
@@ -676,6 +743,16 @@ function SellSheet({ item, onClose, onSubmit, onSold }) {
                 </div>
               );
             })()}
+
+            {/* No live price → warn (non-blocking): proceeds set by broker fill. */}
+            {item.kind === "security" && item.hasLivePrice === false && (
+              <div style={{ marginTop: 14, display: "flex", gap: 10, padding: "12px 14px", borderRadius: 14, background: "rgba(245,197,24,0.08)", border: "0.5px solid rgba(245,197,24,0.3)" }}>
+                <ShieldAlert size={16} color="#BA7517" style={{ flexShrink: 0, marginTop: 1 }} />
+                <div style={{ fontSize: 12, color: "#7d6a3a", lineHeight: 1.55 }}>
+                  We couldn't get a live price for <span style={{ fontWeight: 500, color: "#5a4d1a" }}>{item.symbol}</span> right now, so the estimate above may be off. Your proceeds will be set by the broker's execution price at the next market window.
+                </div>
+              </div>
+            )}
 
             <div className="wd-warn">
               <ShieldAlert size={16} color="#BA7517" style={{ flexShrink: 0, marginTop: 2 }} />

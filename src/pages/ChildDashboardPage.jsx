@@ -1903,7 +1903,7 @@ function CompleteProfileModal({ child, parentProfile, onUpdate, onClose }) {
 
 // --- Main Page ---------------------------------------------------------------
 
-export default function ChildDashboardPage({ child: initialChild, onBack, onOpenFactsheet, onTabChange }) {
+export default function ChildDashboardPage({ child: initialChild, onBack, onOpenFactsheet, onTabChange, onWithdraw }) {
   const { profile } = useProfile();
   const isMounted = useRef(true);
   const [child, setChild] = useState(initialChild);
@@ -3481,6 +3481,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
             child={child}
             rawHoldings={holdings}
             onOpenInvest={openInvestModal}
+            onWithdraw={onWithdraw}
             livePriceMap={childLivePriceMap}
           />
         )}

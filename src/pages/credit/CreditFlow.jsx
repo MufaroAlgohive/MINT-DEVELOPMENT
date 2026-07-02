@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
-import { ArrowLeft, ShieldCheck, IdCard, MapPin, Search, CheckCircle2, Loader2, Store, ChevronRight, Plus, Check, Upload } from "lucide-react";
+import { ArrowLeft, ShieldCheck, IdCard, MapPin, Search, CheckCircle2, Loader2, Store, ChevronRight, Plus, Check, Upload, Download, Trash2 } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 import ExperianVerification from "../../components/ExperianVerification";
 
@@ -162,6 +162,9 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
   const [scoreError, setScoreError] = useState("");
   const [creditDone, setCreditDone] = useState(false);
   const [creditAt, setCreditAt] = useState(null); // when the bureau check last ran
+  // Official Experian report PDF (base64) returned by the last run — powers the
+  // download button so the client can verify the score straight from the bureau.
+  const [reportPdf, setReportPdf] = useState(null); // { base64, filename }
   const [idOnFile, setIdOnFile] = useState("");
   const [loanAmount, setLoanAmount] = useState(50000);
   const [loanTermMonths, setLoanTermMonths] = useState(3);
@@ -194,6 +197,9 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
   const [applicationsLoading, setApplicationsLoading] = useState(false);
   const [activeApplication, setActiveApplication] = useState(null);
   const [creatingApplication, setCreatingApplication] = useState(false);
+  const [deletingAppId, setDeletingAppId] = useState(null); // app being deleted (un-sent only)
+  const [adjustAmount, setAdjustAmount] = useState(0);      // lower-amount control on the offers page
+  const [adjustSaving, setAdjustSaving] = useState(false);
   const [providerSel, setProviderSel] = useState(new Set());
   const [providerSubmitting, setProviderSubmitting] = useState(false);
   const [providerSubmitted, setProviderSubmitted] = useState(false);
@@ -320,8 +326,18 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
       const savedIncome = Number(raw.credit_monthly_income) || 0;
       if (savedIncome > 0) setMonthlyIncome(savedIncome);
       const incomeDone = savedIncome > 0;
-      // Furthest completed point — where "Continue" resumes to.
-      setResumeTarget(scored ? (incomeDone ? "marketplace" : "income") : verified ? "bureau" : consented ? "kyc" : "consent");
+      // Resume to the FIRST INCOMPLETE step in order (consent → kyc → bureau →
+      // income → marketplace), NOT the furthest-reachable one. The old logic
+      // checked the furthest gate first, so if a later step was satisfied (e.g.
+      // KYC marked done by INVESTMENT onboarding) it would skip an earlier
+      // incomplete step — notably credit consent, which must always be given.
+      setResumeTarget(
+        !consented ? "consent"
+        : !verified ? "kyc"
+        : !scored ? "bureau"
+        : !incomeDone ? "income"
+        : "marketplace"
+      );
       // Fully onboarded (scored + income) → straight to My applications (no
       // checklist). Anyone mid-setup → the overview checklist first (ticks on
       // what's done), and Continue resumes to resumeTarget.
@@ -330,6 +346,15 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
     })();
     return () => { cancelled = true; };
   }, []);
+
+  // Skip-completed: if the user is routed to the KYC step but identity is already
+  // verified (e.g. it was done during INVESTMENT onboarding), don't force them to
+  // re-verify — advance straight to the bureau step. This pairs with the
+  // first-incomplete resume so consent is still collected first, then KYC is
+  // skipped because it's genuinely done.
+  useEffect(() => {
+    if (step === "kyc" && kycVerified) setStep("bureau");
+  }, [step, kycVerified]);
 
   const loadApplications = useCallback(async () => {
     setApplicationsLoading(true);
@@ -348,6 +373,29 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
       setApplications([]);
     } finally {
       setApplicationsLoading(false);
+    }
+  }, []);
+
+  // Delete an application that hasn't been sent to any provider yet. Owner-RLS
+  // protects it server-side; the button only renders when selected_providers is
+  // empty, so a submitted application can never be deleted from here.
+  const deleteApplication = useCallback(async (appId) => {
+    setDeletingAppId(appId);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const uid = session?.user?.id;
+      if (!uid) return;
+      const { error } = await supabase
+        .from("credit_marketplace_applications")
+        .delete()
+        .eq("id", appId)
+        .eq("user_id", uid);
+      if (error) throw error;
+      setApplications((prev) => prev.filter((a) => a.id !== appId));
+    } catch (e) {
+      console.warn("[CreditFlow] deleteApplication failed:", e?.message || e);
+    } finally {
+      setDeletingAppId(null);
     }
   }, []);
 
@@ -397,12 +445,39 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
 
   const openApplication = useCallback((app) => {
     setActiveApplication(app);
+    setAdjustAmount(Number(app.requested_amount) || 0); // seed the lower-amount control
     const existing = Array.isArray(app.selected_providers) ? app.selected_providers : [];
     setProviderSel(new Set(existing.map((p) => p.provider_id)));
     setProviderSubmitted(existing.length > 0);
     setStep("marketplaceOffers");
     evaluateWithAlgoLend(app);
   }, [evaluateWithAlgoLend]);
+
+  // Lower the active application's requested amount when no lender made an offer.
+  // The new (lower) amount becomes the OFFICIAL requested_amount, then we
+  // re-evaluate AlgoLend against it. Declared AFTER evaluateWithAlgoLend so its
+  // dependency reference is initialised (avoids a TDZ crash on render).
+  const applyAdjustedAmount = useCallback(async () => {
+    const amt = Number(adjustAmount) || 0;
+    const current = Number(activeApplication?.requested_amount) || 0;
+    if (!activeApplication || amt < 100 || amt >= current) return;
+    setAdjustSaving(true);
+    try {
+      const { error } = await supabase
+        .from("credit_marketplace_applications")
+        .update({ requested_amount: amt, updated_at: new Date().toISOString() })
+        .eq("id", activeApplication.id);
+      if (error) throw error;
+      const updated = { ...activeApplication, requested_amount: amt };
+      setActiveApplication(updated);
+      setApplications((prev) => prev.map((a) => (a.id === updated.id ? updated : a)));
+      await evaluateWithAlgoLend(updated);
+    } catch (e) {
+      console.warn("[CreditFlow] applyAdjustedAmount failed:", e?.message || e);
+    } finally {
+      setAdjustSaving(false);
+    }
+  }, [adjustAmount, activeApplication, evaluateWithAlgoLend]);
 
   // Multi-select — the CEO's model lets a borrower apply to several lenders.
   const toggleProviderSel = useCallback((id) => {
@@ -425,21 +500,35 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
       const { data: { session } } = await supabase.auth.getSession();
       const email = session?.user?.email || "";
       const lenderIds = [...providerSel];
-      const results = await Promise.allSettled(
-        lenderIds.map((lenderId) =>
-          fetch(`${ALGOLEND_URL}/api/marketplace/offers`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${ALGOLEND_KEY}`,
-            },
-            body: JSON.stringify({ requestId: algolendRequestId, lenderId, mintUserId: email }),
-          }).then(async (res) => {
-            if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || "rejected"); }
-            return lenderId;
-          })
-        )
-      );
+
+      // AlgoLend's offers endpoint can transiently 404 (cold start) or 5xx — the
+      // user saw it fail on the first tap and succeed on the second. Retry each
+      // submission up to 5 times with a short backoff before giving up, so a
+      // transient blip doesn't surface as "couldn't be submitted".
+      const TRANSIENT = [404, 408, 425, 429, 500, 502, 503, 504];
+      const submitOne = async (lenderId, attempts = 5) => {
+        let lastErr;
+        for (let i = 0; i < attempts; i++) {
+          try {
+            const res = await fetch(`${ALGOLEND_URL}/api/marketplace/offers`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json", Authorization: `Bearer ${ALGOLEND_KEY}` },
+              body: JSON.stringify({ requestId: algolendRequestId, lenderId, mintUserId: email }),
+            });
+            if (res.ok) return lenderId;
+            const e = await res.json().catch(() => ({}));
+            lastErr = new Error(e.error || `HTTP ${res.status}`);
+            // Permanent error (auth/validation) → stop retrying immediately.
+            if (!TRANSIENT.includes(res.status)) throw lastErr;
+          } catch (err) {
+            lastErr = err; // network error → also retryable
+          }
+          if (i < attempts - 1) await new Promise((r) => setTimeout(r, 400 * (i + 1)));
+        }
+        throw lastErr || new Error("rejected");
+      };
+
+      const results = await Promise.allSettled(lenderIds.map((lenderId) => submitOne(lenderId)));
       const accepted = lenderIds.filter((_, i) => results[i].status === "fulfilled");
       if (accepted.length === 0) throw new Error("None of your selected lenders could be submitted. Please try again.");
       const selected = accepted.map((lenderId) => {
@@ -686,6 +775,10 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
       setScoreReasons(reasons);
       setCreditDone(true);
       setCreditAt(nowIso);
+      // Stash the official Experian PDF (if the bureau returned one) for download.
+      if (data.reportPdfBase64) {
+        setReportPdf({ base64: data.reportPdfBase64, filename: data.reportPdfFilename || "experian-credit-report.pdf" });
+      }
       await saveCreditFlag({
         credit_score: hasScore ? s : null,
         credit_score_band: band,
@@ -701,6 +794,26 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
       setBureauRunning(false);
     }
   }, [idOnFile, profile, addr1, addr2, addr3, addrPostal, poaPath, saveCreditFlag, fetchKycAddress]);
+
+  // Download the official Experian report PDF (base64 → blob) so the client has
+  // proof of the exact bureau result, straight from Experian.
+  const downloadReportPdf = useCallback(() => {
+    if (!reportPdf?.base64) return;
+    try {
+      const chars = atob(reportPdf.base64);
+      const bytes = new Uint8Array(chars.length);
+      for (let i = 0; i < chars.length; i++) bytes[i] = chars.charCodeAt(i);
+      const blob = new Blob([bytes], { type: "application/pdf" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = reportPdf.filename || "experian-credit-report.pdf";
+      document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error("[CreditFlow] PDF download failed:", e?.message || e);
+    }
+  }, [reportPdf]);
 
   // Bouncy purple coin carried over from the old unsecured-credit first page.
   const BouncyCoin = () => (
@@ -736,9 +849,12 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
         {step === "checking" && (
           <>
             <Header title="Credit" />
-            <div className="flex flex-col items-center justify-center py-24 text-slate-400">
-              <Loader2 className="h-7 w-7 animate-spin" />
-              <p className="mt-3 text-sm">Checking your verification…</p>
+            <div className="flex flex-col items-center justify-center py-20">
+              <BouncyCoin />
+              <div className="mt-2 flex items-center gap-2 text-slate-500">
+                <Loader2 className="h-4 w-4 animate-spin text-violet-500" />
+                <p className="text-sm font-medium">Loading your credit hub…</p>
+              </div>
             </div>
           </>
         )}
@@ -874,7 +990,20 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
           <>
             <Header title="Credit check" />
 
-            <section className="rounded-3xl border border-slate-100 bg-white p-6 shadow-sm">
+            <section className="relative rounded-3xl border border-slate-100 bg-white p-6 shadow-sm">
+              {/* Download the official Experian report PDF — proof of the score,
+                  straight from the bureau. Shown only once a run returns a PDF. */}
+              {reportPdf?.base64 && (
+                <button
+                  type="button"
+                  onClick={downloadReportPdf}
+                  title="Download your Experian report (PDF)"
+                  aria-label="Download your Experian report (PDF)"
+                  className="absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-full bg-violet-600 text-white shadow-md transition active:scale-95 hover:bg-violet-700"
+                >
+                  <Download className="h-4 w-4" />
+                </button>
+              )}
               <ScoreGauge value={score} />
               <p className="mt-1 text-center text-xs text-slate-400">
                 {creditDone ? `${scoreBand} · one enquiry, reused across all lenders` : "We run a single credit bureau enquiry — reused across every lender, so your score is protected."}
@@ -1066,18 +1195,30 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
                         )}
                         <div className="relative mt-3 flex items-end gap-1">
                           <span className="mb-1.5 text-xl font-light text-slate-400">R</span>
-                          <input
-                            type="text" inputMode="numeric"
-                            value={monthlyIncome ? monthlyIncome.toLocaleString("en-ZA") : ""}
-                            onChange={(e) => setMonthlyIncome(Number(e.target.value.replace(/\D/g, "")) || 0)}
-                            placeholder="0"
-                            className="w-full bg-transparent text-[36px] font-light leading-none text-slate-900 placeholder-slate-300 outline-none"
-                          />
+                          {found ? (
+                            // AI-detected salary is authoritative — read-only, not user-editable.
+                            <div className="w-full text-[36px] font-light leading-none text-slate-900">
+                              {monthlyIncome.toLocaleString("en-ZA")}
+                            </div>
+                          ) : (
+                            // Only when detection fails do we let the user type a figure in.
+                            <input
+                              type="text" inputMode="numeric"
+                              value={monthlyIncome ? monthlyIncome.toLocaleString("en-ZA") : ""}
+                              onChange={(e) => setMonthlyIncome(Number(e.target.value.replace(/\D/g, "")) || 0)}
+                              placeholder="0"
+                              className="w-full bg-transparent text-[36px] font-light leading-none text-slate-900 placeholder-slate-300 outline-none"
+                            />
+                          )}
                         </div>
                         {found && lastTxn?.salary_date && (
                           <p className="mt-1 text-[11px] text-slate-400">Last deposit detected on {lastTxn.salary_date}{lastTxn.employer_name ? ` from ${lastTxn.employer_name}` : ""}.</p>
                         )}
-                        <p className="mt-2 text-[11px] text-slate-400">Edit the amount above if this isn't quite right, then continue.</p>
+                        <p className="mt-2 text-[11px] text-slate-400">
+                          {found
+                            ? "This figure is taken from your bank statement and can't be edited. Upload a different statement if it's not right."
+                            : "We couldn't detect a salary automatically — enter your monthly income to continue."}
+                        </p>
                       </div>
                     );
                   })()}
@@ -1266,10 +1407,12 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
                       const isComplete = app.status === "complete";
                       return (
                         <li key={app.id} className="cf-fade" style={{ animationDelay: `${0.1 + idx * 0.08}s` }}>
-                          <button
-                            type="button"
+                          <div
+                            role="button"
+                            tabIndex={0}
                             onClick={() => openApplication(app)}
-                            className="block w-full rounded-3xl border border-slate-100 bg-white p-5 text-left shadow-sm transition hover:border-violet-200 hover:shadow-md active:scale-[0.99]"
+                            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openApplication(app); } }}
+                            className="block w-full cursor-pointer rounded-3xl border border-slate-100 bg-white p-5 text-left shadow-sm transition hover:border-violet-200 hover:shadow-md active:scale-[0.99]"
                           >
                             <div className="flex items-start justify-between gap-3">
                               <div className="min-w-0">
@@ -1303,7 +1446,25 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
                               <span className="text-[12px] font-semibold text-violet-600">{sel.length > 0 ? (isComplete ? "View offers" : "Edit lenders") : "Choose lenders"}</span>
                               <ChevronRight className="h-4 w-4 text-slate-300" />
                             </div>
-                          </button>
+
+                            {/* Delete — only while the application hasn't been sent to any
+                                provider (no selected_providers). Disappears once submitted. */}
+                            {sel.length === 0 && (
+                              <div className="mt-3 border-t border-slate-100 pt-3">
+                                <button
+                                  type="button"
+                                  onClick={(e) => { e.stopPropagation(); deleteApplication(app.id); }}
+                                  disabled={deletingAppId === app.id}
+                                  className="inline-flex items-center gap-1.5 rounded-xl bg-slate-600 px-3 py-1.5 text-[12px] font-semibold text-white transition hover:bg-slate-700 active:scale-95 disabled:opacity-50"
+                                >
+                                  {deletingAppId === app.id
+                                    ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                    : <Trash2 className="h-3.5 w-3.5" />}
+                                  {deletingAppId === app.id ? "Deleting…" : "Delete"}
+                                </button>
+                              </div>
+                            )}
+                          </div>
                         </li>
                       );
                     })}
@@ -1533,6 +1694,41 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
               )}
               {!algolendLoading && !algolendError && count === 0 && algolendDeclines.length > 0 && (
                 <p className="mb-3 rounded-2xl bg-amber-50 px-4 py-3 text-center text-xs font-medium text-amber-700">No lender made an offer for R {Number(activeApplication.requested_amount || 0).toLocaleString("en-ZA")} yet — here's where each one stands.</p>
+              )}
+
+              {/* No offers → let the client LOWER their requested amount. The new,
+                  lower figure becomes the official requested_amount, then we
+                  re-evaluate against it. */}
+              {!algolendLoading && !algolendError && count === 0 && Number(activeApplication.requested_amount) > 100 && (
+                <div className="mb-3 rounded-3xl border border-slate-100 bg-white p-5 shadow-sm">
+                  <p className="text-sm font-semibold text-slate-800">Try a lower amount</p>
+                  <p className="mt-1 text-xs text-slate-500">Lowering your request can unlock offers. This becomes your official requested amount.</p>
+                  <div className="mt-4 flex items-end gap-1">
+                    <span className="mb-1 text-lg font-light text-slate-400">R</span>
+                    <input
+                      type="text" inputMode="numeric"
+                      value={adjustAmount ? adjustAmount.toLocaleString("en-ZA") : ""}
+                      onChange={(e) => setAdjustAmount(Math.min(Number(activeApplication.requested_amount) || 0, Number(e.target.value.replace(/\D/g, "")) || 0))}
+                      className="w-full bg-transparent text-3xl font-light leading-none text-slate-900 outline-none"
+                    />
+                  </div>
+                  <input
+                    type="range" min={100} max={Number(activeApplication.requested_amount)} step={100}
+                    value={Math.max(100, Math.min(adjustAmount || 100, Number(activeApplication.requested_amount)))}
+                    onChange={(e) => setAdjustAmount(Number(e.target.value))}
+                    className="mt-3 w-full accent-violet-600"
+                  />
+                  <button
+                    type="button"
+                    onClick={applyAdjustedAmount}
+                    disabled={adjustSaving || !(adjustAmount >= 100 && adjustAmount < Number(activeApplication.requested_amount))}
+                    className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-violet-600 py-3 text-sm font-semibold text-white transition active:scale-[0.99] disabled:opacity-50"
+                  >
+                    {adjustSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                    {adjustSaving ? "Updating…" : "Update amount & recheck"}
+                  </button>
+                  <p className="mt-2 text-center text-[10px] text-slate-400">Current request: R {Number(activeApplication.requested_amount || 0).toLocaleString("en-ZA")} · minimum R100</p>
+                </div>
               )}
 
               <div className="space-y-3">

@@ -60,21 +60,27 @@ export default async function handler(req, res) {
     const holdingsSelect = "id, user_id, family_member_id, security_id, strategy_id, quantity, avg_fill, Expected_fill, market_value, unrealized_pnl, as_of_date, created_at, updated_at, Status, transaction_id, trade_side, sell_requested_at, avg_exit";
     const holdingsSelectWithSettlement = `${holdingsSelect}, settlement_status`;
 
+    // Optional: scope to a child (family member). The parent operates the child
+    // view, so verify the family member belongs to this user before returning
+    // their holdings. Absent → the parent's own holdings (family_member_id null).
+    const famId = req.query?.familyMemberId ? String(req.query.familyMemberId) : null;
+    if (famId) {
+      const { data: fm, error: fmErr } = await db
+        .from("family_members").select("id, primary_user_id").eq("id", famId).maybeSingle();
+      if (fmErr || !fm || fm.primary_user_id !== userId) {
+        return res.status(403).json({ success: false, error: "Child account not found or access denied" });
+      }
+    }
+    const applyScope = (query) => {
+      const q = query.eq("user_id", userId).eq("Status", "active");
+      return famId ? q.eq("family_member_id", famId) : q.is("family_member_id", null);
+    };
+
     let holdings, holdingsError;
-    const holdingsResult = await db
-      .from("stock_holdings_c")
-      .select(holdingsSelectWithSettlement)
-      .eq("user_id", userId)
-      .is("family_member_id", null)
-      .eq("Status", "active");
+    const holdingsResult = await applyScope(db.from("stock_holdings_c").select(holdingsSelectWithSettlement));
 
     if (holdingsResult.error && holdingsResult.error.message && holdingsResult.error.message.includes("settlement_status")) {
-      const fallback = await db
-        .from("stock_holdings_c")
-        .select(holdingsSelect)
-        .eq("user_id", userId)
-        .is("family_member_id", null)
-        .eq("Status", "active");
+      const fallback = await applyScope(db.from("stock_holdings_c").select(holdingsSelect));
       holdings = fallback.data;
       holdingsError = fallback.error;
     } else {

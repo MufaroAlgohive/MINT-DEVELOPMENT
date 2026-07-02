@@ -1059,7 +1059,7 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest, onNavigateToOnboarding,
         <section className="mt-6 rounded-3xl border border-slate-100 bg-white p-5 shadow-sm">
           <h2 className="text-sm font-semibold text-slate-900">Fees & Disclaimers</h2>
           <ul className="mt-3 space-y-2 text-xs text-slate-600">
-            <li>• AUM management fee: {+(feeRates.AUM_FEE_RATE * 100).toFixed(2)}% per annum</li>
+            <li>• AUM fee: {+(feeRates.AUM_FEE_RATE * 100).toFixed(2)}% per annum</li>
             <li>• Broker fee ({+(feeRates.BROKER_FEE_RATE * 100).toFixed(3)}%)</li>
             <li>• Custody (R{+Number(feeRates.ISIN_FEE_PER_ASSET).toFixed(2)} per asset)</li>
             <li>• Past performance does not guarantee future results</li>
