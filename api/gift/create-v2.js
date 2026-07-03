@@ -316,6 +316,12 @@ export default async function handler(req, res) {
         `;
         emailCta = "Open Mint App";
       }
+      
+      const messageHtml = message?.trim() ? `
+      <div style="background:#F9F8FB; border-left:4px solid #DDC357; border-radius:8px; padding:24px; margin-bottom:32px;">
+        <p style="font-family:'Outfit', sans-serif; font-size:15px; font-style:italic; color:#3A3448; margin:0; line-height:1.6;">"${message.trim()}"</p>
+        <p style="font-family:'Outfit', sans-serif; font-size:11px; color:#8A8398; margin:12px 0 0; text-transform:uppercase; letter-spacing:1px; font-weight:600;">— ${senderName}</p>
+      </div>` : "";
 
       try {
         await resend.emails.send({
@@ -358,6 +364,8 @@ export default async function handler(req, res) {
     <h2 style="font-family:'Inter', sans-serif; font-size:22px; font-weight:600; color:#31005E; margin:0 0 12px; letter-spacing:-0.2px;">${senderName} sent you a surprise.</h2>
     <p style="font-family:'Outfit', sans-serif; font-size:16px; color:#3A3448; line-height:1.6; margin:0 0 32px; font-weight:300;">${senderName} has gifted you <strong style="color:#7c3aed;">R${amountRands.toFixed(2)}</strong> invested in <strong>${asset_name}</strong> on MINT.</p>
     
+    ${messageHtml}
+
     <div style="background:#F9F8FB; border:1px solid #E4E0EC; border-radius:8px; padding:28px; margin-bottom:32px;">
       <p style="font-family:'Outfit', sans-serif; font-size:10px; font-weight:600; color:#5C3BCF; text-transform:uppercase; letter-spacing:2px; margin:0 0 16px;">How to claim your gift</p>
       <table style="width:100%; border-collapse:collapse; font-family:'Outfit', sans-serif; font-size:14.5px; color:#2C2738; font-weight:300; line-height:1.6;">
