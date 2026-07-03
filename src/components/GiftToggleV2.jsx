@@ -564,11 +564,15 @@ export default function GiftToggleV2({
       {createPortal(<AnimatePresence>
         {enabled && step !== "success" && (
           <>
-            {/* Backdrop — above AdultInvestModal (z:9998/9999) */}
+            {/* Backdrop — above AdultInvestModal (z:9998/9999)
+                pointerEvents is bound directly to `enabled`, not to the exit
+                animation finishing — a ghost/stuck node (opacity 0, still
+                mounted mid fade-out) was previously left with pointerEvents:
+                auto, silently swallowing every click on the whole screen. */}
             <motion.div
               key="gift-backdrop"
               className="fixed inset-0 bg-black/60"
-              style={{ zIndex: 10000 }}
+              style={{ zIndex: 10000, pointerEvents: enabled ? "auto" : "none" }}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
@@ -580,7 +584,7 @@ export default function GiftToggleV2({
             <motion.div
               key="gift-sheet"
               className="fixed bottom-0 left-0 right-0 flex justify-center items-end"
-              style={{ zIndex: 10001 }}
+              style={{ zIndex: 10001, pointerEvents: enabled ? "auto" : "none" }}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
