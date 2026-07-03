@@ -45,7 +45,8 @@ export default async function handler(req, res) {
   if (!amount || typeof amount !== "number" || amount <= 0) return res.status(400).json({ error: "amount must be a positive number in cents." });
   if (!["strategy", "stock"].includes(asset_type)) return res.status(400).json({ error: "asset_type must be 'strategy' or 'stock'." });
   if (!recipient_first_name?.trim()) return res.status(400).json({ error: "recipient_first_name is required." });
-  if (!recipient_last_name?.trim()) return res.status(400).json({ error: "recipient_last_name is required." });
+  // last name is optional — non-Mint invitees may only have a first name
+  const normalizedLastName = (recipient_last_name || "").trim();
 
   // Block self-gifting
   if (recipient_identifier?.trim()) {
@@ -76,7 +77,7 @@ export default async function handler(req, res) {
   // Encode recipient name + message into the message column as JSON
   const messagePayload = JSON.stringify({
     fn: recipient_first_name.trim(),
-    ln: recipient_last_name.trim(),
+    ln: normalizedLastName,
     ...(message?.trim() ? { msg: message.trim() } : {}),
   });
 
@@ -132,7 +133,7 @@ export default async function handler(req, res) {
       user_id: user.id,
       direction: "debit",
       name: `Investment Gift — ${asset_name}`,
-      description: `Gift to ${recipient_first_name.trim()} ${recipient_last_name.trim()} — reserved until claimed`,
+      description: `Gift to ${recipient_first_name.trim()}${normalizedLastName ? ` ${normalizedLastName}` : ""} — reserved until claimed`,
       amount,
       store_reference: `GIFT2-HOLD-${gift.id}`,
       currency: "ZAR",
@@ -190,7 +191,7 @@ export default async function handler(req, res) {
     <p style="font-family:'Inter','Helvetica Neue',Arial,sans-serif;font-size:13px;font-weight:600;color:rgba(255,255,255,0.75);margin:0;text-transform:uppercase;letter-spacing:2px">doing gifting differently</p>
   </div>
   <div style="padding:32px 28px 24px">
-    <p style="font-size:15px;color:#475569;line-height:1.6;margin:0 0 24px">Hi ${senderProfile?.first_name || "there"}, your gift of <strong>R${amountRands.toFixed(2)}</strong> in <strong>${asset_name}</strong> to ${recipient_first_name.trim()} ${recipient_last_name.trim()} has been sent successfully.</p>
+    <p style="font-size:15px;color:#475569;line-height:1.6;margin:0 0 24px">Hi ${senderProfile?.first_name || "there"}, your gift of <strong>R${amountRands.toFixed(2)}</strong> in <strong>${asset_name}</strong> to ${recipient_first_name.trim()}${normalizedLastName ? ` ${normalizedLastName}` : ""} has been sent successfully.</p>
     <div style="background:linear-gradient(135deg,#f5f3ff,#ede9fe);border:1px solid #e2d9ff;border-radius:16px;padding:24px;margin-bottom:24px">
       <p style="font-size:12px;font-weight:700;color:#7c3aed;text-transform:uppercase;letter-spacing:1px;margin:0 0 12px">What happens next?</p>
       <table style="width:100%;border-collapse:collapse">
