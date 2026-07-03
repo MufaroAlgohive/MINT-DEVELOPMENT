@@ -565,17 +565,25 @@ export default function GiftToggleV2({
         {enabled && step !== "success" && (
           <>
             {/* Backdrop — above AdultInvestModal (z:9998/9999)
-                pointerEvents is bound directly to `enabled`, not to the exit
-                animation finishing — a ghost/stuck node (opacity 0, still
-                mounted mid fade-out) was previously left with pointerEvents:
-                auto, silently swallowing every click on the whole screen. */}
+                CRITICAL: pointerEvents must live inside initial/animate/exit
+                (not a plain `style` object). AnimatePresence freezes an
+                exiting element's last-rendered `style` prop for the whole
+                fade-out, so a conditional like `pointerEvents: enabled ?
+                "auto" : "none"` never re-evaluates once the exit starts —
+                it stays "auto" the entire time. Also: opacity:0 does NOT
+                disable clicks in the browser, only pointer-events/display/
+                visibility do — so a "invisible" fading backdrop was still
+                fully clickable and silently swallowing every click on the
+                whole screen for the ~200ms+ of its exit animation. Putting
+                pointerEvents inside `exit` makes Framer Motion apply it
+                immediately when the exit starts, not at the end. */}
             <motion.div
               key="gift-backdrop"
               className="fixed inset-0 bg-black/60"
-              style={{ zIndex: 10000, pointerEvents: enabled ? "auto" : "none" }}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
+              style={{ zIndex: 10000 }}
+              initial={{ opacity: 0, pointerEvents: "none" }}
+              animate={{ opacity: 1, pointerEvents: "auto" }}
+              exit={{ opacity: 0, pointerEvents: "none" }}
               transition={{ duration: 0.2 }}
               onClick={handleClose}
             />
@@ -584,10 +592,10 @@ export default function GiftToggleV2({
             <motion.div
               key="gift-sheet"
               className="fixed bottom-0 left-0 right-0 flex justify-center items-end"
-              style={{ zIndex: 10001, pointerEvents: enabled ? "auto" : "none" }}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
+              style={{ zIndex: 10001 }}
+              initial={{ opacity: 0, pointerEvents: "none" }}
+              animate={{ opacity: 1, pointerEvents: "auto" }}
+              exit={{ opacity: 0, pointerEvents: "none" }}
             >
               <motion.div
                 className="w-full max-w-md bg-white rounded-t-3xl shadow-2xl overflow-hidden"
