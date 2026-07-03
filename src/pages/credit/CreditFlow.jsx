@@ -379,10 +379,14 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
         : !incomeDone ? "income"
         : "marketplace"
       );
-      // Fully onboarded (scored + income) → straight to My applications (no
-      // checklist). Anyone mid-setup → the overview checklist first (ticks on
-      // what's done), and Continue resumes to resumeTarget.
-      if (scored && incomeDone) { setStep("marketplace"); loadApplications(); }
+      // Straight to My applications ONLY when EVERY step is complete. If any step
+      // is missing — even one that was later un-done, e.g. consent reset while the
+      // bureau/income remain — show the overview checklist first (ticks on what's
+      // done) with a Continue that resumes at the first incomplete step. Checking
+      // only scored+income here skipped the checklist whenever an EARLIER step
+      // (consent/KYC) was incomplete but the later ones happened to be done.
+      const allComplete = consented && verified && scored && incomeDone;
+      if (allComplete) { setStep("marketplace"); loadApplications(); }
       else setStep("overview");
     })();
     return () => { cancelled = true; };
@@ -929,6 +933,11 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
   );
 
 
+  // "Returning" if any step is already done — so the overview greets a partly-
+  // onboarded user (e.g. consent reset while bureau/income remain) with
+  // "Welcome back / Continue" rather than the brand-new "Get started" copy.
+  const hasCreditProgress = consentDone || kycVerified || creditDone || monthlyIncome > 0;
+
   return (
     <div className="min-h-screen bg-slate-50 pb-10 text-slate-900">
       <div className="mx-auto flex w-full max-w-sm flex-col px-3 pt-12 md:max-w-md md:px-6">
@@ -953,12 +962,12 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
             <BouncyCoin />
             <section className="rounded-3xl border border-slate-100 bg-white p-6 shadow-sm">
               <h2 className="text-center text-base font-semibold text-slate-900">
-                {resumeTarget === "consent" ? "Let's get you set up for credit" : "Welcome back — let's continue"}
+                {hasCreditProgress ? "Welcome back — let's continue" : "Let's get you set up for credit"}
               </h2>
               <p className="mt-1 text-center text-sm text-slate-500">
-                {resumeTarget === "consent"
-                  ? "A quick, one-time setup so we can show you offers from multiple lenders."
-                  : "Here's where you are — pick up right where you left off."}
+                {hasCreditProgress
+                  ? "Here's where you are — pick up right where you left off."
+                  : "A quick, one-time setup so we can show you offers from multiple lenders."}
               </p>
 
               <ul className="mt-5 space-y-3">
@@ -984,7 +993,7 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
               </ul>
 
               <button type="button" onClick={() => setStep(resumeTarget)} className="mt-6 w-full rounded-2xl bg-violet-600 py-3.5 text-sm font-semibold text-white active:scale-[0.99]">
-                {resumeTarget === "consent" ? "Get started" : "Continue"}
+                {hasCreditProgress ? "Continue" : "Get started"}
               </button>
             </section>
           </>
