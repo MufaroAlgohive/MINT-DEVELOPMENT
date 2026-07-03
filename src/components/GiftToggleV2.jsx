@@ -383,31 +383,60 @@ export default function GiftToggleV2({
     emailDebounceRef.current = setTimeout(() => searchByEmail(val), 700);
   }
 
+  async function sendInviteRequest() {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const accessToken = sessionData?.session?.access_token;
+    const res = await fetch("/api/user/invite-beneficiary", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+      },
+      body: JSON.stringify({
+        email: emailSearch.trim().toLowerCase(),
+        first_name: inviteFirstName.trim() || undefined,
+        last_name: inviteLastName.trim() || undefined,
+      }),
+    });
+    return res.json().then(data => ({ ok: res.ok, data }));
+  }
+
   async function handleSendInvite() {
     setInviteSending(true);
     setInviteError(null);
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const accessToken = sessionData?.session?.access_token;
-      const res = await fetch("/api/user/invite-beneficiary", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-        },
-        body: JSON.stringify({
-          email: emailSearch.trim().toLowerCase(),
-          first_name: inviteFirstName.trim() || undefined,
-          last_name: inviteLastName.trim() || undefined,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok || data.error) {
+      const { ok, data } = await sendInviteRequest();
+      if (!ok || data.error) {
         setInviteError(data.error || "Failed to send invite.");
       } else {
         setInviteEmailSent(data.email_sent === true);
         setInviteSent(true);
       }
+    } catch {
+      setInviteError("Something went wrong. Please try again.");
+    } finally {
+      setInviteSending(false);
+    }
+  }
+
+  async function handleSendInviteAndGift() {
+    setInviteSending(true);
+    setInviteError(null);
+    try {
+      const { ok, data } = await sendInviteRequest();
+      if (!ok && data.error) {
+        // Only hard-block on a real error (not missing email delivery)
+        setInviteError(data.error);
+        return;
+      }
+      // Populate gift fields and jump straight to confirmation
+      const fn = inviteFirstName.trim() || emailSearch.split("@")[0];
+      const ln = inviteLastName.trim() || "";
+      setFirstName(fn);
+      setLastName(ln);
+      setRecipientEmail(emailSearch.trim().toLowerCase());
+      setConfirmBackStep("form");
+      setStep("confirming");
     } catch {
       setInviteError("Something went wrong. Please try again.");
     } finally {
@@ -1260,16 +1289,26 @@ export default function GiftToggleV2({
 
                                   <button
                                     type="button"
-                                    onClick={handleSendInvite}
+                                    onClick={handleSendInviteAndGift}
                                     disabled={inviteSending}
-                                    className={`w-full flex items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-semibold text-white transition-all active:scale-[0.98] ${inviteSending ? "bg-slate-300 cursor-not-allowed" : "bg-gradient-to-r from-emerald-500 to-teal-600 shadow-lg"}`}
+                                    className={`w-full flex items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-semibold text-white transition-all active:scale-[0.98] ${inviteSending ? "bg-slate-300 cursor-not-allowed" : "bg-gradient-to-r from-[#1a1a2e] to-[#44296b] shadow-lg"}`}
                                   >
                                     {inviteSending ? (
                                       <div className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />
                                     ) : (
-                                      <Send size={14} />
+                                      <Gift size={14} />
                                     )}
-                                    {inviteSending ? "Sending…" : "Send invite"}
+                                    {inviteSending ? "Sending…" : "Send invite and gift"}
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={handleSendInvite}
+                                    disabled={inviteSending}
+                                    className={`w-full flex items-center justify-center gap-2 rounded-xl py-3 text-sm font-semibold transition-all active:scale-[0.98] ${inviteSending ? "text-slate-300 cursor-not-allowed border border-slate-100" : "border border-slate-200 text-slate-600"}`}
+                                  >
+                                    <Send size={14} />
+                                    Send invite only
                                   </button>
 
                                   <button
@@ -1282,9 +1321,9 @@ export default function GiftToggleV2({
                                       setBeneficiarySaved(true);
                                       setStep("picker");
                                     }}
-                                    className="w-full rounded-xl border border-slate-200 py-3 text-sm font-semibold text-slate-500 active:scale-[0.98] transition-all"
+                                    className="w-full rounded-xl py-2.5 text-[12px] font-semibold text-slate-400 active:scale-[0.98] transition-all"
                                   >
-                                    Add as beneficiary anyway
+                                    Add as beneficiary only
                                   </button>
                                 </>
                               ) : (
