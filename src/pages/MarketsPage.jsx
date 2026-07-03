@@ -454,6 +454,21 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
   const [draftTimeHorizon, setDraftTimeHorizon] = useState(_savedStrat?.timeHorizon || new Set());
   const [draftStrategySectors, setDraftStrategySectors] = useState(_savedStrat?.sectors || new Set());
 
+  // Category (sector) display order, set by the CRM (app_settings 'category_order'
+  // → { [sector]: number }). Lower number shows first; unset categories fall to
+  // the end in their natural order. Controls the order of the basket sections.
+  const [categoryOrder, setCategoryOrder] = useState({});
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data } = await supabase.from("app_settings").select("value").eq("key", "category_order").maybeSingle();
+        if (!cancelled && data?.value && typeof data.value === "object") setCategoryOrder(data.value);
+      } catch { /* non-fatal: fall back to natural order */ }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
   const [activeChips, setActiveChips] = useState(() => {
     if (viewMode === "openstrategies" && _savedStrat) return buildChipsFromFilters(_savedStrat);
     if (viewMode === "invest" && _savedInvest) return buildInvestChips(_savedInvest);
@@ -1974,11 +1989,23 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
               </div>
             ) : (
               <>
-              {/* Strategies grouped by sector — Equities first, ETFs last */}
-              {[...new Set(filteredStrategies.map(s => s.sector || 'General'))].sort((a, b) => {
-                const order = { 'Equities': 0, 'Fixed Income': 1, 'General': 2, 'ETFs': 3 };
-                return (order[a] ?? 2) - (order[b] ?? 2);
-              }).map((sector) => {
+              {/* Strategies grouped by sector. Order priority:
+                  1) CRM-set category order (app_settings 'category_order') when present;
+                  2) else a sensible default (Equities first, ETFs last);
+                  3) else natural order. CRM-numbered categories always sort ahead of
+                  un-numbered ones, so the CRM control wins whenever it's used. */}
+              {[...new Set(filteredStrategies.map(s => s.sector || 'General'))]
+                .sort((a, b) => {
+                  const DEFAULTS = { 'Equities': 0, 'Fixed Income': 1, 'General': 2, 'ETFs': 3 };
+                  const rank = (s) => {
+                    const crm = Number(categoryOrder[s]);
+                    if (Number.isFinite(crm)) return crm;               // CRM-set: use directly
+                    const d = DEFAULTS[s];                              // else fallback default,
+                    return (d != null ? d : 50) + 1000;                // pushed after CRM-numbered
+                  };
+                  return rank(a) - rank(b);
+                })
+                .map((sector) => {
                 const sectorStrategies = filteredStrategies.filter(s => (s.sector || 'General') === sector);
                 
                 if (sectorStrategies.length === 0) return null;
