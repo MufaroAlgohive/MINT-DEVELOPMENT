@@ -102,16 +102,47 @@ export default async function handler(req, res) {
     }
 
     const matchedRow = (rows || []).find((row) => hasMatchingPackIdNumber(row?.pack_details, idNumber));
-    const exists = Boolean(matchedRow);
+
+    // An ID match is only a CONFLICT when it belongs to a DIFFERENT user. The
+    // user's own ID — e.g. captured during a prior invest onboarding — is theirs
+    // to reuse: invest and credit share one identity, so a returning invest user
+    // can proceed straight through. Three cases:
+    //   • no match            → new ID, ask/create as before
+    //   • match, same user    → their own ID, reuse (not a duplicate)
+    //   • match, another user → real duplicate, block
+    const ownsMatch = Boolean(matchedRow) && String(matchedRow.user_id) === String(user.id);
+    const exists = Boolean(matchedRow) && !ownsMatch;
 
     let applicantId = null;
+    let reused = false;
 
     if (!exists) {
-      try {
-        const applicantData = await createApplicant(user.id, SUMSUB_LEVEL_NAME);
-        applicantId = applicantData.id;
-      } catch (err) {
-        console.error("[Onboarding] Failed to create Sumsub applicant:", err.message);
+      if (ownsMatch) {
+        // Returning invest-onboarded user: reuse their existing Sumsub applicant
+        // rather than creating a duplicate one.
+        reused = true;
+        try {
+          const { data: ob } = await db
+            .from("user_onboarding")
+            .select("sumsub_applicant_id")
+            .eq("user_id", user.id)
+            .not("sumsub_applicant_id", "is", null)
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          if (ob?.sumsub_applicant_id) applicantId = ob.sumsub_applicant_id;
+        } catch (err) {
+          console.error("[Onboarding] Failed to look up existing applicant:", err.message);
+        }
+      }
+
+      if (!applicantId) {
+        try {
+          const applicantData = await createApplicant(user.id, SUMSUB_LEVEL_NAME);
+          applicantId = applicantData.id;
+        } catch (err) {
+          console.error("[Onboarding] Failed to create Sumsub applicant:", err.message);
+        }
       }
 
       // Persist the ID to the profile now, so later steps (the mandate step reads
@@ -123,7 +154,7 @@ export default async function handler(req, res) {
       }
     }
 
-    return res.status(200).json({ success: true, exists, applicantId });
+    return res.status(200).json({ success: true, exists, reused, applicantId });
   } catch (error) {
     console.error("[Onboarding] ID precheck error:", error);
     return res.status(500).json({ success: false, error: error.message });

@@ -7746,9 +7746,8 @@ app.post("/api/onboarding/check-id-number", async (req, res) => {
       return res.status(400).json({ success: false, error: "A valid 13-digit id_number is required" });
     }
 
-    let exists = false;
+    let matchFound = false;
     let matchedUserId = null;
-    let matchedEmail = null;
 
     if (pgPool) {
       const client = await pgPool.connect();
@@ -7764,8 +7763,8 @@ app.post("/api/onboarding/check-id-number", async (req, res) => {
           LIMIT 1
         `;
         const result = await client.query(query, [idNumber]);
-        exists = result.rows.length > 0;
-        if (exists) {
+        matchFound = result.rows.length > 0;
+        if (matchFound) {
           matchedUserId = result.rows[0].user_id || null;
         }
       } catch (pgErr) {
@@ -7775,7 +7774,7 @@ app.post("/api/onboarding/check-id-number", async (req, res) => {
       }
     }
 
-    if (!exists) {
+    if (!matchFound) {
       const db = getAuthenticatedDb(token);
       const { data: rows, error } = await db
         .from("user_onboarding_pack_details")
@@ -7786,13 +7785,19 @@ app.post("/api/onboarding/check-id-number", async (req, res) => {
       }
 
       const matchedRow = (rows || []).find((row) => hasMatchingPackIdNumber(row?.pack_details, idNumber));
-      exists = Boolean(matchedRow);
+      matchFound = Boolean(matchedRow);
       if (matchedRow?.user_id) {
         matchedUserId = matchedRow.user_id;
       }
     }
 
-    return res.json({ success: true, exists });
+    // An ID match is only a CONFLICT when it belongs to a DIFFERENT user. The
+    // user's own ID (from a prior invest onboarding) is theirs to reuse — invest
+    // and credit share one identity. Only a foreign match blocks.
+    const ownsMatch = matchFound && String(matchedUserId) === String(user.id);
+    const exists = matchFound && !ownsMatch;
+
+    return res.json({ success: true, exists, reused: ownsMatch });
   } catch (error) {
     console.error("[Onboarding] ID precheck error:", error);
     return res.status(500).json({ success: false, error: error.message });
