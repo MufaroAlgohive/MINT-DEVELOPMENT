@@ -1,0 +1,233 @@
+ [realtime-prices] Setting up singleton subscription
+ [realtime-prices] Subscription status: SUBSCRIBED
+ Setting up SINGLETON real-time subscription: required-actions-singleton
+ Singleton subscription status: SUBSCRIBED
+ [PERIOD_DEBUG parent] RENDER: Object
+ [PERIOD_DEBUG parent] RENDER: Object
+ KYC status check: stored="null" current="verified"
+ [PERIOD_DEBUG parent] RENDER: Object
+ [useOnboardingStatus] Total Onboarding Status: COMPLETE ✅ Object
+ [PERIOD_DEBUG parent] RENDER: Object
+ [PERIOD_DEBUG parent] RENDER: Object
+ [PERIOD_DEBUG parent] RENDER: Object
+ [PERIOD_DEBUG parent] RENDER: Object
+ [PERIOD_DEBUG parent] RENDER: Object
+ [PERIOD_DEBUG parent] RENDER: Object
+ [PERIOD_DEBUG parent] RENDER: Object
+ [PERIOD_DEBUG parent] RENDER: Object
+ 🔍 Fetching latest intraday data from stock_intraday_c...
+ [useOnboardingStatus] Total Onboarding Status: COMPLETE ✅ Object
+ [PERIOD_DEBUG parent] RENDER: Object
+ [PERIOD_DEBUG parent] RENDER: Object
+ [useFinancialData] Updated balance from DB: 65271.89
+ [PERIOD_DEBUG parent] RENDER: Object
+ [PERIOD_DEBUG parent] RENDER: Object
+ [PERIOD_DEBUG parent] RENDER: Object
+ [PERIOD_DEBUG parent] RENDER: Object
+ [PERIOD_DEBUG parent] RENDER: Object
+ [PERIOD_DEBUG parent] RENDER: Object
+ [Chart] TimeFrame: YTD, Base: 100.31, End: 102.38, Return: 2.06%
+ 🔍 Fetching latest intraday data from stock_intraday_c...
+ 🔍 Fetching strategies with metrics from Supabase...
+ 🔍 Fetching public strategies from Supabase...
+ 🔍 Fetching news articles from News_articles table...
+ ✅ News articles fetched successfully!
+ 📊 Total count in DB: 5771
+ 📰 Articles returned: 50
+ Sample article: Object
+ ✅ Fetched 7 public strategies with dynamic metrics
+ The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+ The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+ The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+ The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+ The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+ The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+ The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+ ✅ Fetched 9 strategies with metrics
+ ✅ Fetched 239 securities with intraday metrics
+ [PERIOD_DEBUG parent] RENDER: Object
+ The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+ [Chart] TimeFrame: YTD, Base: -0.16, End: 17.28, Return: -10900.00%
+ The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+ [Chart] TimeFrame: YTD, Base: 100.31, End: 102.38, Return: 2.06%
+ [PERIOD_DEBUG parent] RENDER: Object
+ ✅ Fetched 239 securities with intraday metrics
+ 🔍 Fetching price history for cdb08821-d07a-4198-8ce8-b195f46a404f, timeframe 1M...
+ 🔍 Fetching price history for edd5dd04-7274-48ce-8f92-5299cd231256, timeframe 1M...
+ 🔍 Fetching price history for db9e9278-1d4b-40af-bda6-5ad1dc9dc735, timeframe 1M...
+ 🔍 Fetching price history for 7ae14f0b-d897-451a-acd0-a746c23934fa, timeframe 1M...
+ 🔍 Fetching price history for 91bf54ca-a7a3-4ea0-a274-f2225378b9c1, timeframe 1M...
+ 🔍 Fetching price history for 54539f26-2b28-416c-b9cf-25aecb9f2361, timeframe 1M...
+ 🔍 Fetching price history for 5bafe4a7-90ba-41bd-9836-606dfd20ff60, timeframe 1M...
+ 🔍 Fetching price history for 1867614b-28ae-46ae-b6b4-5a81f99acffe, timeframe 1M...
+ 🔍 Fetching price history for 27e45586-c932-4c52-a33e-d51bb86a8087, timeframe 1M...
+ 🔍 Fetching price history for 71082e14-2e8f-4bff-b273-30c4b616ed3a, timeframe 1M...
+ 🔍 Fetching price history for 04088874-53ac-437c-af81-f521b77a7d6a, timeframe 1M...
+ 🔍 Fetching price history for 8d70ce58-bbea-4148-873b-ad099cea0705, timeframe 1M...
+ 🔍 Fetching price history for 4e3f0cd5-26f7-45ec-99d0-0fdd5c0499d3, timeframe 1M...
+ 🔍 Fetching price history for 42ced564-a61d-4353-8d1f-57eff7b3e8fc, timeframe 1M...
+ 🔍 Fetching price history for 9e722062-432a-4af0-b775-4932099bf7ca, timeframe 1M...
+ 🔍 Fetching price history for fe7c325c-f1f1-42c3-9ce4-7dab640a9e64, timeframe 1M...
+ 🔍 Fetching price history for 20caa821-84c7-4764-b75d-d034e8b45e8b, timeframe 1M...
+ 🔍 Fetching price history for 8d590c7d-dcc1-428f-8155-0f422174b694, timeframe 1M...
+ 🔍 Fetching price history for 5a17fb2c-a141-4a55-a40e-95b185a33cd1, timeframe 1M...
+ 🔍 Fetching price history for 936e4345-4b21-4571-88a8-90aeadbc23b5, timeframe 1M...
+ 🔍 Fetching price history for 7a2563e3-2d0d-4b79-8abc-ad151acbcb5a, timeframe 1M...
+ 🔍 Fetching price history for b0bb909c-b76f-43ea-8036-c1f72359e7f1, timeframe 1M...
+ 🔍 Fetching price history for 338351c9-f2f2-4970-a328-6033ffbfce73, timeframe 1M...
+ 🔍 Fetching price history for 5819ea08-85c8-4cd2-be8c-2967c3947fbe, timeframe 1M...
+ 🔍 Fetching price history for 8a0c464a-d6ce-4883-9209-e2be12246bfd, timeframe 1M...
+ 🔍 Fetching price history for 3b88dca5-7721-4536-a6ba-1b2d16910f1b, timeframe 1M...
+ 🔍 Fetching price history for d51c4803-30a1-4d40-a162-0e2a34d8bb66, timeframe 1M...
+ 🔍 Fetching price history for efc72887-6e98-4707-aeaa-6b7eb8135508, timeframe 1M...
+ 🔍 Fetching price history for 7fbd6b5b-2314-4bc9-a96b-df89a57e62ae, timeframe 1M...
+ 🔍 Fetching price history for 1cb4135a-7e3d-4eac-9c81-79ad5594ed12, timeframe 1M...
+ ✅ Fetched 11 price points from stock_returns_c for 1M
+ ✅ Fetched 11 price points from stock_returns_c for 1M
+ ✅ Fetched 11 price points from stock_returns_c for 1M
+ ✅ Fetched 11 price points from stock_returns_c for 1M
+ ✅ Fetched 11 price points from stock_returns_c for 1M
+ ✅ Fetched 11 price points from stock_returns_c for 1M
+ ✅ Fetched 11 price points from stock_returns_c for 1M
+ ✅ Fetched 11 price points from stock_returns_c for 1M
+ ✅ Fetched 11 price points from stock_returns_c for 1M
+ ✅ Fetched 11 price points from stock_returns_c for 1M
+ ✅ Fetched 11 price points from stock_returns_c for 1M
+ ✅ Fetched 11 price points from stock_returns_c for 1M
+ ✅ Fetched 11 price points from stock_returns_c for 1M
+ ✅ Fetched 11 price points from stock_returns_c for 1M
+ ✅ Fetched 11 price points from stock_returns_c for 1M
+ ✅ Fetched 11 price points from stock_returns_c for 1M
+ ✅ Fetched 11 price points from stock_returns_c for 1M
+ ✅ Fetched 11 price points from stock_returns_c for 1M
+ ✅ Fetched 11 price points from stock_returns_c for 1M
+ ✅ Fetched 11 price points from stock_returns_c for 1M
+ ✅ Fetched 11 price points from stock_returns_c for 1M
+ [PERIOD_DEBUG parent] RENDER: Object
+ ✅ Fetched 11 price points from stock_returns_c for 1M
+ ✅ Fetched 11 price points from stock_returns_c for 1M
+ ✅ Fetched 11 price points from stock_returns_c for 1M
+ ✅ Fetched 11 price points from stock_returns_c for 1M
+ ✅ Fetched 11 price points from stock_returns_c for 1M
+ ✅ Fetched 11 price points from stock_returns_c for 1M
+ ✅ Fetched 11 price points from stock_returns_c for 1M
+ ✅ Fetched 11 price points from stock_returns_c for 1M
+ ✅ Fetched 11 price points from stock_returns_c for 1M
+ [PERIOD_DEBUG parent] RENDER: Object
+ [PERIOD_DEBUG parent] RENDER: Object
+ [PERIOD_DEBUG parent] RENDER: Object
+ [PERIOD_DEBUG parent] RENDER: Object
+ [PERIOD_DEBUG parent] RENDER: Object
+ [SwipeableBalanceCard] Loaded holdings: Object
+ [PERIOD_DEBUG parent] RENDER: Object
+ [PERIOD_DEBUG parent] RENDER: Object
+ [SwipeableBalanceCard] Loaded holdings: Object
+ [PERIOD_DEBUG parent] RENDER: Object
+ [PERIOD_DEBUG parent] RENDER: Object
+ Polling Sumsub status...
+ KYC status check: stored="verified" current="verified"
+ [PERIOD_DEBUG parent] RENDER: Object
+index-B2V9sVs9.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-B2V9sVs9.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-B2V9sVs9.js:7 [SwipeableBalanceCard] Loaded holdings: Object
+index-B2V9sVs9.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-B2V9sVs9.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-B2V9sVs9.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-B2V9sVs9.js:7 [PERIOD_DEBUG parent] RENDER: Object
+/api/user/lookup-by-email?email=stunnertsie645%40gmail.com:1  Failed to load resource: the server responded with a status of 404 ()
+index-B2V9sVs9.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-B2V9sVs9.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-B2V9sVs9.js:7 [SwipeableBalanceCard] Loaded holdings: Object
+index-B2V9sVs9.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-B2V9sVs9.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-B2V9sVs9.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-B2V9sVs9.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-B2V9sVs9.js:7 Polling Sumsub status...
+index-B2V9sVs9.js:7 KYC status check: stored="verified" current="verified"
+index-B2V9sVs9.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-B2V9sVs9.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-B2V9sVs9.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-B2V9sVs9.js:7 [SwipeableBalanceCard] Loaded holdings: Object
+index-B2V9sVs9.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-B2V9sVs9.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-B2V9sVs9.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-B2V9sVs9.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-B2V9sVs9.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-B2V9sVs9.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-B2V9sVs9.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-B2V9sVs9.js:7 Polling Sumsub status...
+index-B2V9sVs9.js:7 KYC status check: stored="verified" current="verified"
+index-B2V9sVs9.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-B2V9sVs9.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-B2V9sVs9.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-B2V9sVs9.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-B2V9sVs9.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-B2V9sVs9.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-B2V9sVs9.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-B2V9sVs9.js:7 Polling Sumsub status...
+index-B2V9sVs9.js:7 KYC status check: stored="verified" current="verified"
+index-B2V9sVs9.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-B2V9sVs9.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-B2V9sVs9.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-B2V9sVs9.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-B2V9sVs9.js:7 Polling Sumsub status...
+index-B2V9sVs9.js:7 KYC status check: stored="verified" current="verified"
+index-B2V9sVs9.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-B2V9sVs9.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-B2V9sVs9.js:7 Polling Sumsub status...
+index-B2V9sVs9.js:7 KYC status check: stored="verified" current="verified"
+index-B2V9sVs9.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-B2V9sVs9.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-B2V9sVs9.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-B2V9sVs9.js:7 Polling Sumsub status...
+index-B2V9sVs9.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-B2V9sVs9.js:7 KYC status check: stored="verified" current="verified"
+index-B2V9sVs9.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-B2V9sVs9.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-B2V9sVs9.js:7 [useOnboardingStatus] Total Onboarding Status: COMPLETE ✅ Object
+index-B2V9sVs9.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-B2V9sVs9.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-B2V9sVs9.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-B2V9sVs9.js:7 [useFinancialData] Updated balance from DB: 65271.89
+index-B2V9sVs9.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-B2V9sVs9.js:7 Polling Sumsub status...
+index-B2V9sVs9.js:7 KYC status check: stored="verified" current="verified"
+index-B2V9sVs9.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-B2V9sVs9.js:7 [PERIOD_DEBUG parent] RENDER: Object
+/api/user/lookup-by-email?email=stunnertsie645%40gmail.com:1  Failed to load resource: the server responded with a status of 404 ()
+index-B2V9sVs9.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-B2V9sVs9.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-B2V9sVs9.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-B2V9sVs9.js:7 [SwipeableBalanceCard] Loaded holdings: Object
+index-B2V9sVs9.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-B2V9sVs9.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-B2V9sVs9.js:7 [SwipeableBalanceCard] Loaded holdings: {count: 0, totalMarketValue: 0, holdings: Array(0)}
+index-B2V9sVs9.js:7 [PERIOD_DEBUG parent] RENDER: {activeTab: 'ytd', parentYearStartBasketCents: null, yearStartRands: null, parentSnapshotStartBasketCents: null, startBasketRands: null, …}
+index-B2V9sVs9.js:7 [PERIOD_DEBUG parent] RENDER: {activeTab: 'ytd', parentYearStartBasketCents: null, yearStartRands: null, parentSnapshotStartBasketCents: null, startBasketRands: null, …}
