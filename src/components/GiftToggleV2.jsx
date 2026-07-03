@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
-import { Gift, Copy, Check, AlertCircle, X, Search, Hash, User, ChevronLeft, ChevronRight, Plus, Trash2, CreditCard } from "lucide-react";
+import { Gift, Copy, Check, AlertCircle, X, Search, Hash, User, ChevronLeft, ChevronRight, Plus, Trash2, CreditCard, Mail, Send, UserPlus } from "lucide-react";
 import { motion, AnimatePresence, useMotionValue, animate } from "framer-motion";
 import { supabase } from "../lib/supabase";
 import { isAdminPreview } from "../lib/adminPreview";
@@ -285,6 +285,20 @@ export default function GiftToggleV2({
   const [pendingBeneficiary, setPendingBeneficiary] = useState(null);
   const [confirmBackStep, setConfirmBackStep] = useState("form");
 
+  // Email invite flow
+  const [emailSearch, setEmailSearch] = useState("");
+  const [emailSearching, setEmailSearching] = useState(false);
+  const [emailSearchResult, setEmailSearchResult] = useState(null); // null=idle, {found:bool, user?:{}}
+  const [emailSearchError, setEmailSearchError] = useState(null);
+  const emailDebounceRef = useRef(null);
+  const emailReqIdRef = useRef(0);
+  const [inviteFirstName, setInviteFirstName] = useState("");
+  const [inviteLastName, setInviteLastName] = useState("");
+  const [inviteSending, setInviteSending] = useState(false);
+  const [inviteSent, setInviteSent] = useState(false);
+  const [inviteEmailSent, setInviteEmailSent] = useState(false); // whether Resend actually delivered
+  const [inviteError, setInviteError] = useState(null);
+
   useEffect(() => {
     if (enabled) fetchBeneficiaries().then(setBeneficiaries);
   }, [enabled]);
@@ -314,6 +328,91 @@ export default function GiftToggleV2({
     setAskSaveBeneficiary(false);
     setPendingBeneficiary(null);
     setConfirmBackStep("form");
+    setEmailSearch("");
+    setEmailSearchResult(null);
+    setEmailSearchError(null);
+    setInviteFirstName("");
+    setInviteLastName("");
+    setInviteSending(false);
+    setInviteSent(false);
+    setInviteEmailSent(false);
+    setInviteError(null);
+  }
+
+  const searchByEmail = useCallback(async (email) => {
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      setEmailSearchResult(null);
+      setEmailSearchError(null);
+      return;
+    }
+    // Stale-response guard: increment request id and capture it
+    const reqId = ++emailReqIdRef.current;
+    setEmailSearching(true);
+    setEmailSearchError(null);
+    setEmailSearchResult(null);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData?.session?.access_token;
+      const res = await fetch(`/api/user/lookup-by-email?email=${encodeURIComponent(email.trim())}`, {
+        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+      });
+      if (reqId !== emailReqIdRef.current) return; // superseded by newer request
+      const data = await res.json();
+      if (res.status === 400 && data.error) {
+        setEmailSearchError(data.error);
+      } else if (!res.ok) {
+        setEmailSearchError(data.error || "Lookup failed");
+      } else {
+        setEmailSearchResult(data); // { found: bool, user?: {...} }
+      }
+    } catch {
+      if (reqId !== emailReqIdRef.current) return;
+      setEmailSearchError("Search failed. Please try again.");
+    } finally {
+      if (reqId === emailReqIdRef.current) setEmailSearching(false);
+    }
+  }, []);
+
+  function handleEmailSearchChange(val) {
+    setEmailSearch(val);
+    setEmailSearchResult(null);
+    setEmailSearchError(null);
+    setInviteSent(false);
+    setInviteError(null);
+    clearTimeout(emailDebounceRef.current);
+    emailDebounceRef.current = setTimeout(() => searchByEmail(val), 700);
+  }
+
+  async function handleSendInvite() {
+    setInviteSending(true);
+    setInviteError(null);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData?.session?.access_token;
+      const res = await fetch("/api/user/invite-beneficiary", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        },
+        body: JSON.stringify({
+          email: emailSearch.trim().toLowerCase(),
+          first_name: inviteFirstName.trim() || undefined,
+          last_name: inviteLastName.trim() || undefined,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        setInviteError(data.error || "Failed to send invite.");
+      } else {
+        setInviteEmailSent(data.email_sent === true);
+        setInviteSent(true);
+      }
+    } catch {
+      setInviteError("Something went wrong. Please try again.");
+    } finally {
+      setInviteSending(false);
+    }
   }
 
   function handleToggle(val) {
@@ -774,6 +873,22 @@ export default function GiftToggleV2({
                           </div>
                           <ChevronRight size={16} className="text-slate-300 shrink-0" />
                         </button>
+
+                        {/* Invite by Email */}
+                        <button
+                          type="button"
+                          onClick={() => { setInputMode("email"); setEmailSearch(""); setEmailSearchResult(null); setEmailSearchError(null); setInviteFirstName(""); setInviteLastName(""); setInviteSent(false); setInviteError(null); setStep("form"); }}
+                          className="w-full flex items-center gap-4 p-4 rounded-2xl bg-white border border-slate-200 shadow-sm active:scale-[0.98] transition-all text-left"
+                        >
+                          <div className="w-11 h-11 rounded-xl bg-emerald-100 flex items-center justify-center shrink-0">
+                            <Mail size={20} className="text-emerald-600" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[14px] font-bold text-slate-800">Invite by Email</p>
+                            <p className="text-[12px] text-slate-400 mt-0.5">Find or invite someone using their email</p>
+                          </div>
+                          <ChevronRight size={16} className="text-slate-300 shrink-0" />
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -791,7 +906,7 @@ export default function GiftToggleV2({
                         <ChevronLeft size={20} />
                       </button>
                       <h2 className="flex-1 text-center text-[17px] font-bold text-slate-900">
-                        {inputMode === "mint" ? "Find by MINT" : inputMode === "id" ? "Find by ID" : "Enter details"}
+                        {inputMode === "mint" ? "Find by MINT" : inputMode === "id" ? "Find by ID" : inputMode === "email" ? "Invite by Email" : "Enter details"}
                       </h2>
                       <div className="w-8" />
                     </div>
@@ -1003,6 +1118,221 @@ export default function GiftToggleV2({
                               >
                                 <Gift size={15} /> Continue
                               </button>
+                            </>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Email Invite tab */}
+                      {inputMode === "email" && (
+                        <div className="space-y-3">
+                          {/* Email input */}
+                          <div>
+                            <label className="text-[11px] font-semibold text-slate-500 mb-1.5 block">Email address</label>
+                            <div className="relative">
+                              <Mail size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                              <input
+                                type="email"
+                                inputMode="email"
+                                value={emailSearch}
+                                onChange={e => handleEmailSearchChange(e.target.value)}
+                                placeholder="friend@example.com"
+                                className="w-full rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-3 py-2.5 text-sm text-slate-800 placeholder:text-slate-300 focus:outline-none focus:border-violet-400 focus:bg-white transition-colors"
+                              />
+                              {emailSearching && (
+                                <div className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full border-2 border-violet-200 border-t-violet-600 animate-spin" />
+                              )}
+                            </div>
+                            {emailSearchError && (
+                              <p className="text-[11px] text-red-500 mt-1.5 flex items-center gap-1">
+                                <AlertCircle size={10} />{emailSearchError}
+                              </p>
+                            )}
+                            {!emailSearchResult && !emailSearching && !emailSearchError && (
+                              <p className="text-[11px] text-slate-400 mt-2">Enter their email — we'll check if they're on Mint.</p>
+                            )}
+                          </div>
+
+                          {/* Found on Mint */}
+                          {emailSearchResult?.found && emailSearchResult.user && (
+                            <>
+                              <div className="flex items-center gap-3 p-3 rounded-xl bg-emerald-50 border border-emerald-100">
+                                <div className={`w-11 h-11 rounded-2xl bg-gradient-to-br ${avatarGradient(emailSearchResult.user.first_name)} flex items-center justify-center shrink-0 shadow-sm`}>
+                                  <span className="text-base font-black text-white">{emailSearchResult.user.first_name?.[0]?.toUpperCase() || "?"}</span>
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-1.5 mb-0.5">
+                                    <span className="inline-flex items-center px-1.5 py-[1.5px] rounded bg-emerald-100 text-[8.5px] font-bold text-emerald-700 uppercase tracking-wider">On MINT</span>
+                                  </div>
+                                  <p className="text-sm font-bold text-slate-800">{emailSearchResult.user.first_name} {emailSearchResult.user.last_name}</p>
+                                  {emailSearchResult.user.mint_number && (
+                                    <p className="text-[11px] text-slate-400 font-mono">{emailSearchResult.user.mint_number}</p>
+                                  )}
+                                  <p className="text-[11px] text-slate-400 truncate">{maskEmail(emailSearchResult.user.email)}</p>
+                                </div>
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                  {!beneficiarySaved ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => setShowAddBeneficiaryPrompt(p => !p)}
+                                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-violet-500 to-purple-600 text-white shadow-sm hover:shadow-md active:scale-95 transition-all"
+                                    >
+                                      <Plus size={11} strokeWidth={2.5} />
+                                      <span className="text-[11px] font-semibold">Save</span>
+                                    </button>
+                                  ) : (
+                                    <div className="w-7 h-7 rounded-full bg-emerald-100 flex items-center justify-center">
+                                      <Check size={12} className="text-emerald-600" strokeWidth={3} />
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+
+                              {showAddBeneficiaryPrompt && !beneficiarySaved && (
+                                <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-white border border-violet-200">
+                                  <p className="text-[11px] text-slate-700 font-medium flex-1">
+                                    Save <span className="font-semibold text-violet-700">{emailSearchResult.user.first_name}</span> as a beneficiary?
+                                  </p>
+                                  <button type="button" onClick={async () => { await saveBeneficiary({ firstName: emailSearchResult.user.first_name, lastName: emailSearchResult.user.last_name, email: emailSearchResult.user.email, mintNumber: emailSearchResult.user.mint_number }); fetchBeneficiaries().then(setBeneficiaries); setShowAddBeneficiaryPrompt(false); setBeneficiarySaved(true); }} className="px-3 py-1 rounded-lg bg-violet-600 text-white text-[11px] font-semibold active:scale-95 transition-all">Yes</button>
+                                  <button type="button" onClick={() => setShowAddBeneficiaryPrompt(false)} className="px-3 py-1 rounded-lg bg-slate-100 text-slate-600 text-[11px] font-semibold active:scale-95 transition-all">No</button>
+                                </div>
+                              )}
+
+                              <div>
+                                <label className="text-[11px] font-semibold text-slate-500 mb-1 block">
+                                  Personal message <span className="text-slate-300 font-normal">(optional)</span>
+                                </label>
+                                <textarea
+                                  value={message}
+                                  onChange={e => setMessage(e.target.value)}
+                                  placeholder="Add a personal note…"
+                                  rows={3}
+                                  maxLength={200}
+                                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-800 placeholder:text-slate-300 focus:outline-none focus:border-violet-400 focus:bg-white transition-colors resize-none"
+                                />
+                              </div>
+
+                              <p className="text-[11px] text-slate-400 leading-relaxed">Your wallet is debited immediately. The recipient has 4 hours to claim.</p>
+
+                              <button
+                                type="button"
+                                onClick={() => { setFirstName(emailSearchResult.user.first_name || ""); setLastName(emailSearchResult.user.last_name || ""); setRecipientEmail(emailSearchResult.user.email || ""); setConfirmBackStep("form"); setStep("confirming"); }}
+                                className="w-full flex items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-semibold text-white bg-gradient-to-r from-[#1a1a2e] to-[#44296b] shadow-lg active:scale-[0.98] transition-all"
+                              >
+                                <Gift size={15} /> Continue
+                              </button>
+                            </>
+                          )}
+
+                          {/* Not on Mint */}
+                          {emailSearchResult && !emailSearchResult.found && (
+                            <>
+                              <div className="flex items-start gap-3 p-3.5 rounded-xl bg-amber-50 border border-amber-100">
+                                <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center shrink-0">
+                                  <UserPlus size={18} className="text-amber-600" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-[13px] font-bold text-slate-800">Not on Mint yet</p>
+                                  <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
+                                    <span className="font-mono text-slate-600">{emailSearch.trim().toLowerCase()}</span> doesn't have a Mint account. Send them an invite to join and claim their gift.
+                                  </p>
+                                </div>
+                              </div>
+
+                              {!inviteSent ? (
+                                <>
+                                  <div className="flex gap-3">
+                                    <div className="flex-1">
+                                      <label className="text-[11px] font-semibold text-slate-500 mb-1 block">First Name <span className="text-slate-300 font-normal">(optional)</span></label>
+                                      <input type="text" value={inviteFirstName} onChange={e => setInviteFirstName(e.target.value)} placeholder="Jane" className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-800 placeholder:text-slate-300 focus:outline-none focus:border-violet-400 focus:bg-white transition-colors" />
+                                    </div>
+                                    <div className="flex-1">
+                                      <label className="text-[11px] font-semibold text-slate-500 mb-1 block">Last Name <span className="text-slate-300 font-normal">(optional)</span></label>
+                                      <input type="text" value={inviteLastName} onChange={e => setInviteLastName(e.target.value)} placeholder="Doe" className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-800 placeholder:text-slate-300 focus:outline-none focus:border-violet-400 focus:bg-white transition-colors" />
+                                    </div>
+                                  </div>
+
+                                  {inviteError && (
+                                    <p className="text-[11px] text-red-500 flex items-center gap-1">
+                                      <AlertCircle size={10} />{inviteError}
+                                    </p>
+                                  )}
+
+                                  <button
+                                    type="button"
+                                    onClick={handleSendInvite}
+                                    disabled={inviteSending}
+                                    className={`w-full flex items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-semibold text-white transition-all active:scale-[0.98] ${inviteSending ? "bg-slate-300 cursor-not-allowed" : "bg-gradient-to-r from-emerald-500 to-teal-600 shadow-lg"}`}
+                                  >
+                                    {inviteSending ? (
+                                      <div className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />
+                                    ) : (
+                                      <Send size={14} />
+                                    )}
+                                    {inviteSending ? "Sending…" : "Send invite"}
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={async () => {
+                                      const fn = inviteFirstName.trim() || emailSearch.split("@")[0];
+                                      const ln = inviteLastName.trim() || "";
+                                      await saveBeneficiary({ firstName: fn, lastName: ln, email: emailSearch.trim().toLowerCase(), mintNumber: null });
+                                      fetchBeneficiaries().then(setBeneficiaries);
+                                      setBeneficiarySaved(true);
+                                      setStep("picker");
+                                    }}
+                                    className="w-full rounded-xl border border-slate-200 py-3 text-sm font-semibold text-slate-500 active:scale-[0.98] transition-all"
+                                  >
+                                    Add as beneficiary anyway
+                                  </button>
+                                </>
+                              ) : (
+                                /* Invite sent success */
+                                <div className="space-y-3">
+                                  <div className={`flex flex-col items-center gap-3 py-5 px-4 rounded-2xl text-center ${inviteEmailSent ? "bg-emerald-50 border border-emerald-100" : "bg-amber-50 border border-amber-100"}`}>
+                                    <div className={`w-12 h-12 rounded-full flex items-center justify-center ${inviteEmailSent ? "bg-emerald-100" : "bg-amber-100"}`}>
+                                      {inviteEmailSent
+                                        ? <Check size={22} className="text-emerald-600" strokeWidth={2.5} />
+                                        : <AlertCircle size={22} className="text-amber-600" />}
+                                    </div>
+                                    <div>
+                                      <p className="text-[14px] font-bold text-slate-800">{inviteEmailSent ? "Invite sent!" : "Recorded"}</p>
+                                      <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
+                                        {inviteEmailSent
+                                          ? <>We emailed <span className="font-mono text-slate-700">{emailSearch.trim().toLowerCase()}</span> an invitation to join Mint.</>
+                                          : <>Email delivery isn&apos;t configured yet — you can still add <span className="font-mono text-slate-700">{emailSearch.trim().toLowerCase()}</span> as a beneficiary.</>}
+                                      </p>
+                                    </div>
+                                  </div>
+
+                                  <p className="text-[12px] font-semibold text-slate-600 text-center">Would you like to add them as a beneficiary?</p>
+
+                                  <div className="flex gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={async () => {
+                                        const fn = inviteFirstName.trim() || emailSearch.split("@")[0];
+                                        const ln = inviteLastName.trim() || "";
+                                        await saveBeneficiary({ firstName: fn, lastName: ln, email: emailSearch.trim().toLowerCase(), mintNumber: null });
+                                        fetchBeneficiaries().then(setBeneficiaries);
+                                        setBeneficiarySaved(true);
+                                        setStep("picker");
+                                      }}
+                                      className="flex-1 rounded-xl bg-violet-600 py-3 text-sm font-semibold text-white active:scale-[0.98] transition-all shadow-sm"
+                                    >
+                                      Yes, add them
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setStep("picker")}
+                                      className="flex-1 rounded-xl border border-slate-200 py-3 text-sm font-semibold text-slate-500 active:scale-[0.98] transition-all"
+                                    >
+                                      No thanks
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
                             </>
                           )}
                         </div>
