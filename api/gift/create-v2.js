@@ -179,43 +179,108 @@ export default async function handler(req, res) {
           from: "Mint <noreply@mymint.co.za>",
           to: [senderAuthEmail],
           subject: `Your gift of ${asset_name} has been sent 🎁`,
-          html: `
-<!DOCTYPE html>
-<html>
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="margin:0;padding:0;background:#f1eef6;font-family:'Inter','Helvetica Neue',Arial,sans-serif">
-<div style="max-width:480px;margin:0 auto;background:#ffffff;border-radius:0 0 16px 16px;overflow:hidden">
-  <div style="background:linear-gradient(135deg,#c4b5fd 0%,#a78bfa 30%,#8b5cf6 60%,#7c3aed 100%);padding:40px 32px 48px;text-align:center">
-    <div style="font-size:56px;line-height:1;margin-bottom:16px">🎁</div>
-    <h1 style="font-family:'Inter','Helvetica Neue',Arial,sans-serif;font-size:28px;font-weight:800;color:#ffffff;margin:0 0 6px;letter-spacing:-0.5px">gift sent!</h1>
-    <p style="font-family:'Inter','Helvetica Neue',Arial,sans-serif;font-size:13px;font-weight:600;color:rgba(255,255,255,0.75);margin:0;text-transform:uppercase;letter-spacing:2px">doing gifting differently</p>
+          html: `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  body {
+    font-family: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+    background-color: #ffffff;
+    margin: 0;
+    padding: 0;
+    -webkit-font-smoothing: antialiased;
+  }
+  
+  /* OVERRIDE APP INLINE STYLES FOR TABLE */
+  .steps-table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    background-color: transparent !important;
+  }
+  .steps-table td {
+    font-family: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif !important;
+    color: #2C2738 !important;
+    font-size: 14.5px !important;
+    padding: 8px 0 !important;
+    border: none !important;
+  }
+  .steps-table strong, .steps-table b {
+    font-weight: 600 !important;
+    color: #1A1622 !important;
+  }
+</style>
+</head>
+<body style="margin:0;padding:40px 20px;background:#ffffff;font-family:'Outfit', sans-serif">
+
+<div style="max-width:520px;margin:0 auto;background:#ffffff;overflow:hidden;">
+
+  <!-- HEADER BLOCK -->
+  <div style="background:#31005E; border-bottom:3px solid #DDC357;">
+    
+    <!-- Text Section -->
+    <div style="padding:32px 36px; text-align:center;">
+      <p style="font-family:'Outfit', sans-serif; font-size:11px; font-weight:600; color:#DDC357; margin:0 0 10px; text-transform:uppercase; letter-spacing:3px;">Transfer Initiated</p>
+      <h1 style="font-family:'Inter', sans-serif; font-size:28px; font-weight:300; color:#ffffff; margin:0; letter-spacing:-0.5px; line-height:1.2;">Gift sent successfully.</h1>
+    </div>
+    
+    <!-- FULL WIDTH BANNER IMAGE -->
+    <img src="https://mfxnghmuccevsxwcetej.supabase.co/storage/v1/object/public/Emailer%20Ads/Gift%20Sent.jpg" alt="Gift Sent" style="width:100%; height:auto; display:block; margin:0;">
+    
   </div>
-  <div style="padding:32px 28px 24px">
-    <p style="font-size:15px;color:#475569;line-height:1.6;margin:0 0 24px">Hi ${senderProfile?.first_name || "there"}, your gift of <strong>R${amountRands.toFixed(2)}</strong> in <strong>${asset_name}</strong> to ${recipient_first_name.trim()}${normalizedLastName ? ` ${normalizedLastName}` : ""} has been sent successfully.</p>
-    <div style="background:linear-gradient(135deg,#f5f3ff,#ede9fe);border:1px solid #e2d9ff;border-radius:16px;padding:24px;margin-bottom:24px">
-      <p style="font-size:12px;font-weight:700;color:#7c3aed;text-transform:uppercase;letter-spacing:1px;margin:0 0 12px">What happens next?</p>
-      <table style="width:100%;border-collapse:collapse">
+
+  <!-- BODY CONTENT -->
+  <div style="padding:40px 36px 36px;">
+    
+    <p style="font-family:'Outfit', sans-serif; font-size:16px; color:#3A3448; line-height:1.6; margin:0 0 24px; font-weight:300;">Hi ${senderProfile?.first_name || "there"},</p>
+    
+    <p style="font-family:'Outfit', sans-serif; font-size:16px; color:#3A3448; line-height:1.6; margin:0 0 32px; font-weight:300;">
+      Your gift of <strong>R${amountRands.toFixed(2)}</strong> in <strong>${asset_name}</strong> to ${recipient_first_name.trim()}${normalizedLastName ? ` ${normalizedLastName}` : ""} has been sent successfully.
+    </p>
+
+    <!-- INSTRUCTIONS BOX -->
+    <div style="background:#F9F8FB; border:1px solid #E4E0EC; border-radius:8px; padding:28px; margin-bottom:24px;">
+      <p style="font-family:'Outfit', sans-serif; font-size:10px; font-weight:600; color:#5C3BCF; text-transform:uppercase; letter-spacing:2px; margin:0 0 16px;">What happens next?</p>
+      
+      <table class="steps-table" style="width:100%; border-collapse:collapse; font-family:'Outfit', sans-serif; font-size:14.5px; color:#2C2738; font-weight:300; line-height:1.6;">
         <tr>
-          <td style="padding:6px 12px 6px 0;vertical-align:top;width:24px"><div style="width:24px;height:24px;background:#7c3aed;border-radius:50%;color:#ffffff;font-size:12px;font-weight:700;text-align:center;line-height:24px">1</div></td>
-          <td style="padding:6px 0;font-size:14px;color:#475569;line-height:1.5"><strong>Share the 6-digit claim code</strong> with ${recipient_first_name.trim()} (find it in your Sent Gifts page)</td>
+          <td style="padding:8px 12px 8px 0; vertical-align:top; width:24px; color:#5C3BCF; font-weight:600;">1.</td>
+          <td style="padding:8px 0;"><strong>Share the 6-digit claim code</strong> with ${recipient_first_name.trim()} (find it in your Sent Gifts page).</td>
         </tr>
         <tr>
-          <td style="padding:6px 12px 6px 0;vertical-align:top"><div style="width:24px;height:24px;background:#7c3aed;border-radius:50%;color:#ffffff;font-size:12px;font-weight:700;text-align:center;line-height:24px">2</div></td>
-          <td style="padding:6px 0;font-size:14px;color:#475569;line-height:1.5">${recipient_first_name.trim()} enters the code + their <strong>SA ID number</strong> on the Mint app</td>
+          <td style="padding:8px 12px 8px 0; vertical-align:top; color:#5C3BCF; font-weight:600;">2.</td>
+          <td style="padding:8px 0;">${recipient_first_name.trim()} enters the code and their <strong>SA ID number</strong> on the MINT app.</td>
         </tr>
         <tr>
-          <td style="padding:6px 12px 6px 0;vertical-align:top"><div style="width:24px;height:24px;background:#7c3aed;border-radius:50%;color:#ffffff;font-size:12px;font-weight:700;text-align:center;line-height:24px">3</div></td>
-          <td style="padding:6px 0;font-size:14px;color:#475569;line-height:1.5">The investment is <strong>transferred to their portfolio</strong></td>
+          <td style="padding:8px 12px 8px 0; vertical-align:top; color:#5C3BCF; font-weight:600;">3.</td>
+          <td style="padding:8px 0;">The investment is <strong>transferred to their portfolio.</strong></td>
         </tr>
       </table>
     </div>
-    <div style="background:#fef3c7;border:1px solid #fde68a;border-radius:12px;padding:14px 16px;margin-bottom:24px">
-      <p style="font-size:13px;color:#92400e;margin:0;line-height:1.5">⏱ This gift <strong>expires in 4 hours</strong>. If it isn't claimed in time, just refund it to your wallet from your Sent Gifts page and try again. You can also cancel it there anytime.</p>
+
+    <!-- EXPIRATION NOTICE -->
+    <div style="border-left:3px solid #DDC357; padding:8px 0 8px 20px; margin-bottom:32px;">
+      <p style="font-family:'Outfit', sans-serif; font-size:13.5px; color:#3A3448; margin:0; line-height:1.6; font-weight:300;">
+        This gift <strong>expires in 4 hours</strong>. If it isn't claimed in time, you can refund it to your wallet from your Sent Gifts page and try again. You can also cancel it there at any time.
+      </p>
     </div>
-    <a href="${APP_URL}" style="display:block;background:linear-gradient(135deg,#7c3aed,#6d28d9);color:#ffffff;text-decoration:none;text-align:center;padding:16px 24px;border-radius:14px;font-size:16px;font-weight:700;margin-bottom:20px">View Sent Gifts</a>
-    <p style="font-size:12px;color:#94a3b8;text-align:center;margin:0">Mint (Pty) Ltd is a registered FSP (55118).</p>
+
+    <!-- CTA BUTTON -->
+    <a href="${APP_URL}" style="display:block; background:#31005E; color:#DDC357; text-decoration:none; text-align:center; padding:18px 24px; border-radius:6px; font-family:'Outfit', sans-serif; font-size:13px; font-weight:600; letter-spacing:2px; text-transform:uppercase; margin-bottom:32px; transition: opacity 0.2s ease;">View Sent Gifts</a>
+
+    <!-- FOOTER DISCLAIMER -->
+    <div style="text-align:center; border-top:1px solid #F0EDF5; padding-top:24px;">
+      <p style="font-family:'Outfit', sans-serif; font-size:11px; color:#8A8398; line-height:1.6; margin:0; font-weight:300;">
+        MINT - Money In Transit.<br>
+        MINT Platforms(Pty) Ltd is an authorised Financial Services Provider (FSP 55118) regulated by the Financial Sector Conduct Authority and a registered Credit Provider (NCRCP22892) under the National Credit Act.
+      </p>
+    </div>
+
   </div>
 </div>
+
 </body>
 </html>`,
         });
@@ -229,50 +294,26 @@ export default async function handler(req, res) {
       if (recipientStatus === "not_registered") {
         emailSubject = `You've been gifted an investment — sign up on Mint to claim it 🎁`;
         emailSteps = `
-        <tr>
-          <td style="padding:6px 12px 6px 0;vertical-align:top;width:24px"><div style="width:24px;height:24px;background:#7c3aed;border-radius:50%;color:#ffffff;font-size:12px;font-weight:700;text-align:center;line-height:24px">1</div></td>
-          <td style="padding:6px 0;font-size:14px;color:#475569;line-height:1.5"><strong>Sign up</strong> for a free Mint account</td>
-        </tr>
-        <tr>
-          <td style="padding:6px 12px 6px 0;vertical-align:top"><div style="width:24px;height:24px;background:#7c3aed;border-radius:50%;color:#ffffff;font-size:12px;font-weight:700;text-align:center;line-height:24px">2</div></td>
-          <td style="padding:6px 0;font-size:14px;color:#475569;line-height:1.5">Complete your <strong>FICA verification</strong> (takes ~2 min)</td>
-        </tr>
-        <tr>
-          <td style="padding:6px 12px 6px 0;vertical-align:top"><div style="width:24px;height:24px;background:#7c3aed;border-radius:50%;color:#ffffff;font-size:12px;font-weight:700;text-align:center;line-height:24px">3</div></td>
-          <td style="padding:6px 0;font-size:14px;color:#475569;line-height:1.5">Ask <strong>${senderName}</strong> for the 6-digit code, then tap <strong>Claim a Gift</strong></td>
-        </tr>`;
+      <tr><td style="padding:4px 0; color:#8A8398; width:20px; vertical-align:top;">1.</td><td style="padding:4px 0;"><strong>Sign up</strong> for a free Mint account</td></tr>
+      <tr><td style="padding:4px 0; color:#8A8398; width:20px; vertical-align:top;">2.</td><td style="padding:4px 0;">Complete your <strong>FICA verification</strong> (takes ~2 min)</td></tr>
+      <tr><td style="padding:4px 0; color:#8A8398; width:20px; vertical-align:top;">3.</td><td style="padding:4px 0;">Ask <strong>${senderName}</strong> for the 6-digit code, then tap <strong>Claim a Gift</strong></td></tr>
+        `;
         emailCta = "Sign Up on Mint";
       } else if (recipientStatus === "needs_kyc") {
         emailSubject = `${senderName} gifted you an investment — complete KYC to claim 🎁`;
         emailSteps = `
-        <tr>
-          <td style="padding:6px 12px 6px 0;vertical-align:top;width:24px"><div style="width:24px;height:24px;background:#7c3aed;border-radius:50%;color:#ffffff;font-size:12px;font-weight:700;text-align:center;line-height:24px">1</div></td>
-          <td style="padding:6px 0;font-size:14px;color:#475569;line-height:1.5">Open the Mint app and complete your <strong>FICA verification</strong></td>
-        </tr>
-        <tr>
-          <td style="padding:6px 12px 6px 0;vertical-align:top"><div style="width:24px;height:24px;background:#7c3aed;border-radius:50%;color:#ffffff;font-size:12px;font-weight:700;text-align:center;line-height:24px">2</div></td>
-          <td style="padding:6px 0;font-size:14px;color:#475569;line-height:1.5">Ask <strong>${senderName}</strong> for the 6-digit claim code</td>
-        </tr>
-        <tr>
-          <td style="padding:6px 12px 6px 0;vertical-align:top"><div style="width:24px;height:24px;background:#7c3aed;border-radius:50%;color:#ffffff;font-size:12px;font-weight:700;text-align:center;line-height:24px">3</div></td>
-          <td style="padding:6px 0;font-size:14px;color:#475569;line-height:1.5">Tap <strong>Claim a Gift</strong> and enter the code + your SA ID number</td>
-        </tr>`;
+      <tr><td style="padding:4px 0; color:#8A8398; width:20px; vertical-align:top;">1.</td><td style="padding:4px 0;">Open the Mint app and complete your <strong>FICA verification</strong></td></tr>
+      <tr><td style="padding:4px 0; color:#8A8398; width:20px; vertical-align:top;">2.</td><td style="padding:4px 0;">Ask <strong>${senderName}</strong> for the 6-digit claim code</td></tr>
+      <tr><td style="padding:4px 0; color:#8A8398; width:20px; vertical-align:top;">3.</td><td style="padding:4px 0;">Tap <strong>Claim a Gift</strong> and enter the code + your SA ID number</td></tr>
+        `;
         emailCta = "Complete KYC on Mint";
       } else {
         emailSubject = `${senderName} gifted you an investment on Mint 🎁`;
         emailSteps = `
-        <tr>
-          <td style="padding:6px 12px 6px 0;vertical-align:top;width:24px"><div style="width:24px;height:24px;background:#7c3aed;border-radius:50%;color:#ffffff;font-size:12px;font-weight:700;text-align:center;line-height:24px">1</div></td>
-          <td style="padding:6px 0;font-size:14px;color:#475569;line-height:1.5">Ask <strong>${senderName}</strong> for the 6-digit claim code</td>
-        </tr>
-        <tr>
-          <td style="padding:6px 12px 6px 0;vertical-align:top"><div style="width:24px;height:24px;background:#7c3aed;border-radius:50%;color:#ffffff;font-size:12px;font-weight:700;text-align:center;line-height:24px">2</div></td>
-          <td style="padding:6px 0;font-size:14px;color:#475569;line-height:1.5">Sign in to the Mint app and tap <strong>Claim a Gift</strong></td>
-        </tr>
-        <tr>
-          <td style="padding:6px 12px 6px 0;vertical-align:top"><div style="width:24px;height:24px;background:#7c3aed;border-radius:50%;color:#ffffff;font-size:12px;font-weight:700;text-align:center;line-height:24px">3</div></td>
-          <td style="padding:6px 0;font-size:14px;color:#475569;line-height:1.5">Enter the code + your SA ID number</td>
-        </tr>`;
+      <tr><td style="padding:4px 0; color:#8A8398; width:20px; vertical-align:top;">1.</td><td style="padding:4px 0;">Ask <strong>${senderName}</strong> for the 6-digit claim code</td></tr>
+      <tr><td style="padding:4px 0; color:#8A8398; width:20px; vertical-align:top;">2.</td><td style="padding:4px 0;">Sign in to the Mint app and tap <strong>Claim a Gift</strong></td></tr>
+      <tr><td style="padding:4px 0; color:#8A8398; width:20px; vertical-align:top;">3.</td><td style="padding:4px 0;">Enter the code + your SA ID number</td></tr>
+        `;
         emailCta = "Open Mint App";
       }
 
@@ -281,28 +322,62 @@ export default async function handler(req, res) {
           from: "Mint <noreply@mymint.co.za>",
           to: [recipientEmail],
           subject: emailSubject,
-          html: `
-<!DOCTYPE html>
-<html>
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="margin:0;padding:0;background:#f1eef6;font-family:'Inter','Helvetica Neue',Arial,sans-serif">
-<div style="max-width:480px;margin:0 auto;background:#ffffff;border-radius:0 0 16px 16px;overflow:hidden">
-  <div style="background:linear-gradient(135deg,#c4b5fd 0%,#a78bfa 30%,#8b5cf6 60%,#7c3aed 100%);padding:40px 32px 48px;text-align:center">
-    <div style="font-size:56px;line-height:1;margin-bottom:16px">🎁</div>
-    <h1 style="font-family:'Inter','Helvetica Neue',Arial,sans-serif;font-size:28px;font-weight:800;color:#ffffff;margin:0 0 6px;letter-spacing:-0.5px">you received a gift</h1>
-    <p style="font-family:'Inter','Helvetica Neue',Arial,sans-serif;font-size:13px;font-weight:600;color:rgba(255,255,255,0.75);margin:0;text-transform:uppercase;letter-spacing:2px">doing gifting differently</p>
-  </div>
-  <div style="padding:32px 28px 24px">
-    <h2 style="font-size:20px;font-weight:700;color:#0f172a;margin:0 0 8px">${senderName} sent you a gift</h2>
-    <p style="font-size:15px;color:#475569;line-height:1.6;margin:0 0 24px">You've been gifted an investment in <strong>${asset_name}</strong> on Mint.</p>
-    <div style="background:linear-gradient(135deg,#f5f3ff,#ede9fe);border:1px solid #e2d9ff;border-radius:16px;padding:24px;margin-bottom:24px">
-      <p style="font-size:12px;font-weight:700;color:#7c3aed;text-transform:uppercase;letter-spacing:1px;margin:0 0 12px">How to claim your gift</p>
-      <table style="width:100%;border-collapse:collapse">${emailSteps}</table>
+          html: `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  body {
+    font-family: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+    background-color: #ffffff;
+    margin: 0;
+    padding: 0;
+    -webkit-font-smoothing: antialiased;
+  }
+</style>
+</head>
+<body style="margin:0;padding:40px 20px;background:#ffffff;font-family:'Outfit', sans-serif">
+
+<div style="max-width:520px;margin:0 auto;background:#ffffff;overflow:hidden;">
+
+  <div style="background:#31005E; border-bottom:3px solid #DDC357;">
+    
+    <div style="padding:32px 36px; text-align:center;">
+      <p style="font-family:'Outfit', sans-serif; font-size:11px; font-weight:600; color:#DDC357; margin:0 0 10px; text-transform:uppercase; letter-spacing:3px;">A gift that grows</p>
+      <h1 style="font-family:'Inter', sans-serif; font-size:28px; font-weight:300; color:#ffffff; margin:0; letter-spacing:-0.5px; line-height:1.15;">Surprise! You just got a gift.</h1>
     </div>
-    <a href="${APP_URL}/?gift=${gift.id}" style="display:block;background:linear-gradient(135deg,#7c3aed,#6d28d9);color:#ffffff;text-decoration:none;text-align:center;padding:16px 24px;border-radius:14px;font-size:15px;font-weight:700;margin-bottom:12px">🎁 ${emailCta}</a>
-    <p style="font-size:12px;color:#94a3b8;text-align:center;line-height:1.5;margin:0">This gift expires in 4 hours.<br>Mint (Pty) Ltd is a registered FSP (55118).</p>
+    
+    <img src="https://mfxnghmuccevsxwcetej.supabase.co/storage/v1/object/public/Emailer%20Ads/Gifting%20New%20Image.png.jpg" alt="MINT Gift" style="width:100%; height:auto; display:block; margin:0;">
+    
+  </div>
+
+  <div style="padding:40px 36px 36px;">
+    
+    <h2 style="font-family:'Inter', sans-serif; font-size:22px; font-weight:600; color:#31005E; margin:0 0 12px; letter-spacing:-0.2px;">${senderName} sent you a surprise.</h2>
+    <p style="font-family:'Outfit', sans-serif; font-size:16px; color:#3A3448; line-height:1.6; margin:0 0 32px; font-weight:300;">${senderName} has gifted you <strong style="color:#7c3aed;">R${amountRands.toFixed(2)}</strong> invested in <strong>${asset_name}</strong> on MINT.</p>
+    
+    <div style="background:#F9F8FB; border:1px solid #E4E0EC; border-radius:8px; padding:28px; margin-bottom:32px;">
+      <p style="font-family:'Outfit', sans-serif; font-size:10px; font-weight:600; color:#5C3BCF; text-transform:uppercase; letter-spacing:2px; margin:0 0 16px;">How to claim your gift</p>
+      <table style="width:100%; border-collapse:collapse; font-family:'Outfit', sans-serif; font-size:14.5px; color:#2C2738; font-weight:300; line-height:1.6;">
+        ${emailSteps}
+      </table>
+    </div>
+
+    <a href="${APP_URL}/?gift=${gift.id}" style="display:block; background:#31005E; color:#DDC357; text-decoration:none; text-align:center; padding:18px 24px; border-radius:6px; font-family:'Outfit', sans-serif; font-size:13px; font-weight:600; letter-spacing:2px; text-transform:uppercase; margin-bottom:28px; transition: opacity 0.2s ease;">🎁 ${emailCta}</a>
+
+    <div style="text-align:center; border-top:1px solid #F0EDF5; padding-top:24px;">
+      <p style="font-family:'Outfit', sans-serif; font-size:11px; color:#8A8398; line-height:1.6; margin:0; font-weight:300;">
+        The gift expires in 4 hours<br>
+        MINT - Money In Transit.<br>
+        MINT Platforms(Pty) Ltd is an authorised Financial Services Provider (FSP 55118) regulated by the Financial Sector Conduct Authority and a registered Credit Provider (NCRCP22892) under the National Credit Act.
+      </p>
+    </div>
+
   </div>
 </div>
+
 </body>
 </html>`,
         });
