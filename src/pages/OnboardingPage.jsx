@@ -115,7 +115,7 @@ const OnboardingPage = ({ onCreateAccount, onLogin }) => {
   return (
     <div className="h-screen overflow-hidden bg-white">
       <div className="grid h-full grid-rows-2 lg:grid-cols-[1.05fr_1fr] lg:grid-rows-none">
-        <div className="order-2 flex h-full flex-col px-6 py-8 lg:order-1 lg:px-16 lg:py-12">
+        <div className="order-2 flex h-full flex-col overflow-y-auto px-6 py-8 lg:order-1 lg:px-16 lg:py-12">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3 animate-on-load delay-1">
               <img src="/assets/mint-logo.svg" alt="MINT logo" className="h-6 w-auto" />
@@ -123,7 +123,7 @@ const OnboardingPage = ({ onCreateAccount, onLogin }) => {
             </div>
           </div>
 
-          <div className="mx-auto flex w-full max-w-xl flex-1 flex-col justify-center space-y-8">
+          <div className="mx-auto flex w-full max-w-xl my-auto flex-col space-y-8 py-6">
             {giftId && (
               <>
                 <style>{`
