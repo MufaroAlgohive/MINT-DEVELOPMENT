@@ -204,7 +204,7 @@ export default function AdultInvestModal({
           <motion.div
             key="adult-invest-sheet"
             className="fixed inset-x-0 bottom-0 mx-auto flex w-full max-w-md flex-col rounded-t-[28px] bg-white shadow-2xl overflow-hidden"
-            style={{ zIndex: 9999, maxHeight: "92dvh", paddingBottom: "env(safe-area-inset-bottom)" }}
+            style={{ zIndex: 9999, maxHeight: "92dvh", paddingBottom: "env(safe-area-inset-bottom)", pointerEvents: isGift ? "none" : "auto" }}
             initial={{ y: "100%" }}
             animate={{ y: isGift ? "110%" : 0 }}
             exit={{ y: "100%" }}
