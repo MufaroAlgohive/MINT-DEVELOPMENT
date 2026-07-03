@@ -11,8 +11,77 @@ import GiftToggleV2 from "./GiftToggleV2";
 import { useDiscretionType } from "../lib/useDiscretionType";
 import { useFees } from "../lib/useFees";
 import { isAdminPreview } from "../lib/adminPreview";
+import { scanOverlays } from "../lib/overlayDebug";
 
 const fmt = (n) => Number(n).toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+// Live, on-screen debug HUD — shows current modal state plus the result of
+// the most recent overlay scan, so the "stuck / unclickable" bug can be
+// diagnosed visually without opening devtools. Toggle-able and draggable-free
+// (fixed bottom-left), rendered at the highest z-index in the app.
+function DebugPanel({ isOpen, isGift, gate }) {
+  const [scan, setScan] = useState(null);
+  const [collapsed, setCollapsed] = useState(false);
+
+  useEffect(() => {
+    const handler = (e) => setScan(e.detail);
+    window.addEventListener("gtv-overlay-scan", handler);
+    return () => window.removeEventListener("gtv-overlay-scan", handler);
+  }, []);
+
+  const hasBlockers = scan && scan.blockingCount > 1; // 1 = the sheet itself is expected
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        left: 8,
+        bottom: 8,
+        zIndex: 2147483647,
+        fontFamily: "monospace",
+        fontSize: 11,
+        lineHeight: 1.4,
+        background: hasBlockers ? "rgba(127,29,29,0.95)" : "rgba(15,23,42,0.9)",
+        color: "#e2e8f0",
+        borderRadius: 8,
+        padding: collapsed ? "4px 8px" : "8px 10px",
+        maxWidth: 260,
+        pointerEvents: "auto",
+        boxShadow: "0 4px 16px rgba(0,0,0,0.4)",
+        border: hasBlockers ? "1px solid #ef4444" : "1px solid #475569",
+      }}
+      onClick={() => setCollapsed((c) => !c)}
+    >
+      <div style={{ fontWeight: "bold", color: "#f59e0b" }}>
+        🐞 Invest Debug {collapsed ? "(tap to expand)" : "(tap to collapse)"}
+      </div>
+      {!collapsed && (
+        <>
+          <div>isOpen: {String(isOpen)} | isGift: {String(isGift)} | gate: {gate}</div>
+          {scan ? (
+            <>
+              <div>last scan: {scan.label}</div>
+              <div style={{ color: hasBlockers ? "#fca5a5" : "#86efac" }}>
+                blocking overlays: {scan.blockingCount} / {scan.totalSuspects}
+              </div>
+              {scan.centerEl && (
+                <div>center hit: {scan.centerEl.tag}{scan.centerEl.className ? `.${scan.centerEl.className.split(" ")[0]}` : ""}</div>
+              )}
+            </>
+          ) : (
+            <div>no scan yet…</div>
+          )}
+          <div
+            style={{ marginTop: 4, textDecoration: "underline", cursor: "pointer" }}
+            onClick={(e) => { e.stopPropagation(); scanOverlays("manual click"); }}
+          >
+            rescan now
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
 
 export default function AdultInvestModal({
   isOpen,
@@ -158,7 +227,9 @@ export default function AdultInvestModal({
   const finishOcr = () => { setGate("open"); };
 
   const handleGiftToggle = (val) => {
+    console.log(`[AdultInvestModal] handleGiftToggle(${val}) called | agreementChecked=${agreementChecked} isLimitedDiscretion=${isLimitedDiscretion}`);
     if (val && !agreementChecked && !isLimitedDiscretion) {
+      console.log("[AdultInvestModal] gift toggle BLOCKED — agreement not checked");
       setAgreementError(true);
       setShakeAgreement(true);
       setTimeout(() => setShakeAgreement(false), 500);
@@ -167,12 +238,20 @@ export default function AdultInvestModal({
     setIsGift(val);
   };
 
+  useEffect(() => {
+    console.log(`%c[AdultInvestModal] isOpen=${isOpen} isGift=${isGift} gate=${gate}`, "color:#4f46e5;font-weight:bold");
+    const t1 = setTimeout(() => scanOverlays(`AdultInvestModal isOpen=${isOpen} isGift=${isGift}`), 60);
+    const t2 = setTimeout(() => scanOverlays(`AdultInvestModal +500ms isOpen=${isOpen} isGift=${isGift}`), 500);
+    return () => { clearTimeout(t1); clearTimeout(t2); };
+  }, [isOpen, isGift, gate]);
+
   const portalTarget = document.getElementById("modal-root") || document.body;
 
   return createPortal(
     <AnimatePresence>
       {isOpen && (
         <>
+          <DebugPanel isOpen={isOpen} isGift={isGift} gate={gate} />
           {/* Backdrop */}
           <motion.div
             key="adult-invest-backdrop"
