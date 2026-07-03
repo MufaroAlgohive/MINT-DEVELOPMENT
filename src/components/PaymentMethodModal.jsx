@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "../lib/supabase";
 import { useProfile } from "../lib/useProfile";
 import { useFees } from "../lib/useFees";
+import { isAdminPreview } from "../lib/adminPreview";
 
 const STANDARD_BANK_LOGO = "https://cdn.brandfetch.io/ids9vvzhtN/w/720/h/720/theme/dark/icon.jpeg?c=1bxid64Mup7aczewSAYMX&t=1668518662439";
 
@@ -390,7 +391,7 @@ const PaymentMethodModal = ({
                 </p>
               </div>
 
-              <div className="px-5 pb-5 space-y-2.5 pt-3">
+              <div className={`px-5 pb-5 space-y-2.5 pt-3${isAdminPreview() ? " opacity-40 pointer-events-none select-none" : ""}`}>
 
                 {/* ── Pay with Wallet ── */}
                 <button

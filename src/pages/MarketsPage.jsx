@@ -1989,15 +1989,21 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
               </div>
             ) : (
               <>
-              {/* Strategies grouped by sector, ordered by the CRM-set category order
-                  (app_settings 'category_order'). Lower number first; categories
-                  with no order fall to the end keeping their natural order. */}
+              {/* Strategies grouped by sector. Order priority:
+                  1) CRM-set category order (app_settings 'category_order') when present;
+                  2) else a sensible default (Equities first, ETFs last);
+                  3) else natural order. CRM-numbered categories always sort ahead of
+                  un-numbered ones, so the CRM control wins whenever it's used. */}
               {[...new Set(filteredStrategies.map(s => s.sector || 'General'))]
                 .sort((a, b) => {
-                  const na = Number(categoryOrder[a]); const nb = Number(categoryOrder[b]);
-                  const oa = Number.isFinite(na) ? na : Infinity;
-                  const ob = Number.isFinite(nb) ? nb : Infinity;
-                  return oa - ob; // stable sort keeps natural order for ties/unset
+                  const DEFAULTS = { 'Equities': 0, 'Fixed Income': 1, 'General': 2, 'ETFs': 3 };
+                  const rank = (s) => {
+                    const crm = Number(categoryOrder[s]);
+                    if (Number.isFinite(crm)) return crm;               // CRM-set: use directly
+                    const d = DEFAULTS[s];                              // else fallback default,
+                    return (d != null ? d : 50) + 1000;                // pushed after CRM-numbered
+                  };
+                  return rank(a) - rank(b);
                 })
                 .map((sector) => {
                 const sectorStrategies = filteredStrategies.filter(s => (s.sector || 'General') === sector);

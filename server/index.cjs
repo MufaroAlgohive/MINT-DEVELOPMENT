@@ -768,7 +768,7 @@ async function verifyBankLetterWithVision(base64Content, mimeType, accountNumber
 
 const SUPABASE_URL = readEnv('SUPABASE_URL') || readEnv('VITE_SUPABASE_URL');
 const SUPABASE_ANON_KEY = readEnv('SUPABASE_ANON_KEY') || readEnv('VITE_SUPABASE_ANON_KEY');
-const SUPABASE_SERVICE_ROLE_KEY = readEnv('SUPABASE_SERVICE_ROLE_KEY');
+const SUPABASE_SERVICE_ROLE_KEY = readEnv('SUPABASE_SERVICE_ROLE_KEY') || readEnv('SUPABASE_SERVICE_KEY');
 
 console.log('[startup] Supabase URL set:', !!SUPABASE_URL);
 console.log('[startup] Supabase anon key set:', !!SUPABASE_ANON_KEY);
@@ -5724,6 +5724,156 @@ app.post("/api/user/ensure-mint-number", async (req, res) => {
   } catch (e) {
     console.error('[mint] ensure-mint-number error:', e.message);
     return res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+/**
+ * Reliably resolves the email for a known user ID.
+ * Priority:
+ *  1. Email already in the profiles row (fastest, no extra call)
+ *  2. Direct SQL query against auth.users via pgPool (reliable, bypasses API rate-limits)
+ *  3. supabaseAdmin.auth.admin.getUserById with up to 3 attempts (REST fallback)
+ * Returns null only when all three strategies fail.
+ */
+async function resolveUserEmail(profileId, profileEmail) {
+  if (profileEmail) return profileEmail;
+
+  // Strategy 2 — direct DB query (most reliable, immune to Supabase API blips)
+  if (pgPool) {
+    try {
+      const { rows } = await pgPool.query(
+        'SELECT email FROM auth.users WHERE id = $1 LIMIT 1',
+        [profileId]
+      );
+      if (rows[0]?.email) {
+        console.log(`[lookup] Resolved email via pgPool for ${profileId}`);
+        return rows[0].email;
+      }
+    } catch (e) {
+      console.warn('[lookup] pgPool auth.users query failed:', e.message);
+    }
+  }
+
+  // Strategy 3 — Supabase admin API with retries
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const { data: authUser, error } = await supabaseAdmin.auth.admin.getUserById(profileId);
+      if (authUser?.user?.email) {
+        console.log(`[lookup] Resolved email via admin API (attempt ${attempt}) for ${profileId}`);
+        return authUser.user.email;
+      }
+      if (error) console.warn(`[lookup] admin.getUserById attempt ${attempt} error:`, error.message);
+    } catch (e) {
+      console.warn(`[lookup] admin.getUserById attempt ${attempt} threw:`, e.message);
+    }
+    if (attempt < 3) await new Promise(r => setTimeout(r, attempt * 200));
+  }
+
+  return null;
+}
+
+app.get("/api/user/lookup-by-mint", async (req, res) => {
+  try {
+    if (!supabaseAdmin) {
+      return res.status(500).json({ error: "Admin database client not configured" });
+    }
+    const { user, error: authError } = await authenticateUser(req);
+    if (authError || !user) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+    const mintNumber = (req.query.mint_number || "").trim();
+    if (!mintNumber || mintNumber.length < 3) {
+      return res.status(400).json({ error: "Mint number too short" });
+    }
+
+    // Use supabaseAdmin so RLS never blocks cross-user lookups
+    // Use limit(1) instead of maybeSingle() to handle duplicate rows gracefully
+    const { data: profiles, error: profileError } = await supabaseAdmin
+      .from('profiles')
+      .select('id, first_name, last_name, mint_number, email')
+      .ilike('mint_number', mintNumber)
+      .limit(1);
+
+    if (profileError) {
+      console.error('[mint] lookup-by-mint profile error:', profileError.message);
+      return res.status(500).json({ error: "Lookup failed" });
+    }
+    const profile = profiles?.[0] || null;
+    if (!profile) {
+      return res.status(404).json({ error: "No user found with that Mint number" });
+    }
+    if (profile.id === user.id) {
+      return res.status(400).json({ error: "You cannot gift to yourself" });
+    }
+
+    const email = await resolveUserEmail(profile.id, profile.email);
+    if (!email) {
+      console.error('[mint] lookup-by-mint: profile found but email unresolvable for', profile.id);
+      return res.status(503).json({ error: "Could not retrieve user details — please try again" });
+    }
+    return res.json({
+      user: {
+        first_name: profile.first_name || "",
+        last_name: profile.last_name || "",
+        email,
+        mint_number: profile.mint_number,
+      },
+    });
+  } catch (e) {
+    console.error('[mint] lookup-by-mint error:', e.message);
+    return res.status(500).json({ error: e.message });
+  }
+});
+
+app.get("/api/user/lookup-by-id", async (req, res) => {
+  try {
+    if (!supabaseAdmin) {
+      return res.status(500).json({ error: "Admin database client not configured" });
+    }
+    const { user, error: authError } = await authenticateUser(req);
+    if (authError || !user) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+    const idNumber = (req.query.id_number || "").replace(/\D/g, "").trim();
+    if (!/^\d{13}$/.test(idNumber)) {
+      return res.status(400).json({ error: "Please enter a valid 13-digit SA ID number" });
+    }
+
+    // Use limit(1) instead of maybeSingle() to handle duplicate rows gracefully
+    const { data: idProfiles, error: profileError } = await supabaseAdmin
+      .from('profiles')
+      .select('id, first_name, last_name, mint_number, email, id_number')
+      .eq('id_number', idNumber)
+      .limit(1);
+
+    if (profileError) {
+      console.error('[id] lookup-by-id profile error:', profileError.message);
+      return res.status(500).json({ error: "Lookup failed" });
+    }
+    const profile = idProfiles?.[0] || null;
+    if (!profile) {
+      return res.status(404).json({ error: "No user found with that ID number" });
+    }
+    if (profile.id === user.id) {
+      return res.status(400).json({ error: "You cannot gift to yourself" });
+    }
+
+    const email = await resolveUserEmail(profile.id, profile.email);
+    if (!email) {
+      console.error('[id] lookup-by-id: profile found but email unresolvable for', profile.id);
+      return res.status(503).json({ error: "Could not retrieve user details — please try again" });
+    }
+    return res.json({
+      user: {
+        first_name: profile.first_name || "",
+        last_name: profile.last_name || "",
+        email,
+        mint_number: profile.mint_number || null,
+      },
+    });
+  } catch (e) {
+    console.error('[id] lookup-by-id error:', e.message);
+    return res.status(500).json({ error: e.message });
   }
 });
 

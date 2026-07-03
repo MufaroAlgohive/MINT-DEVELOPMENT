@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, X, ChevronDown, ChevronUp, Download, Wallet, BarChart3 } from "lucide-react";
+import { ArrowLeft, X, ChevronDown, ChevronUp, Download, Wallet, BarChart3, AlertCircle } from "lucide-react";
 import { formatCurrency } from "../lib/formatCurrency";
 import PdfViewer from "./PdfViewer";
 import OcrScanModal from "./OcrScanModal";
@@ -10,6 +10,7 @@ import { calculateMinInvestmentSync, buildHoldingsBySymbol, getHoldingsArray } f
 import GiftToggleV2 from "./GiftToggleV2";
 import { useDiscretionType } from "../lib/useDiscretionType";
 import { useFees } from "../lib/useFees";
+import { isAdminPreview } from "../lib/adminPreview";
 
 const fmt = (n) => Number(n).toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -22,6 +23,7 @@ export default function AdultInvestModal({
 }) {
   const currency = strategy?.currency || "R";
   const isAdditionalStrategy = !!strategy?.isAdditionalStrategy;
+  const readOnly = isAdminPreview();
   const { isLimited: isLimitedDiscretion } = useDiscretionType();
   const { ISIN_FEE_PER_ASSET, BROKER_FEE_RATE, TRANSACTION_FEE_RATE, CASH_BUFFER_RATE } = useFees();
   const [showDiscretionModal, setShowDiscretionModal] = useState(false);
@@ -31,6 +33,8 @@ export default function AdultInvestModal({
   const [units, setUnits] = useState(1);
   const [feeExpanded, setFeeExpanded] = useState(false);
   const [agreementChecked, setAgreementChecked] = useState(false);
+  const [agreementError, setAgreementError] = useState(false);
+  const [shakeAgreement, setShakeAgreement] = useState(false);
   const [showMandateModal, setShowMandateModal] = useState(false);
   const [walletBalance, setWalletBalance] = useState(null);
   const [isGift, setIsGift] = useState(false);
@@ -47,6 +51,8 @@ export default function AdultInvestModal({
     setUnits(1);
     setFeeExpanded(false);
     setAgreementChecked(false);
+    setAgreementError(false);
+    setShakeAgreement(false);
     setShowMandateModal(false);
     setIsGift(false);
     // Gate the sheet until we know whether to show the ID-document scan. The scan
@@ -151,6 +157,16 @@ export default function AdultInvestModal({
   // Scan done (or skipped) → reveal the invest sheet so the user can continue.
   const finishOcr = () => { setGate("open"); };
 
+  const handleGiftToggle = (val) => {
+    if (val && !agreementChecked && !isLimitedDiscretion) {
+      setAgreementError(true);
+      setShakeAgreement(true);
+      setTimeout(() => setShakeAgreement(false), 500);
+      return;
+    }
+    setIsGift(val);
+  };
+
   const portalTarget = document.getElementById("modal-root") || document.body;
 
   return createPortal(
@@ -190,7 +206,7 @@ export default function AdultInvestModal({
             className="fixed inset-x-0 bottom-0 mx-auto flex w-full max-w-md flex-col rounded-t-[28px] bg-white shadow-2xl overflow-hidden"
             style={{ zIndex: 9999, maxHeight: "92dvh", paddingBottom: "env(safe-area-inset-bottom)" }}
             initial={{ y: "100%" }}
-            animate={{ y: 0 }}
+            animate={{ y: isGift ? "110%" : 0 }}
             exit={{ y: "100%" }}
             transition={{ type: "spring", damping: 28, stiffness: 320 }}
           >
@@ -319,12 +335,16 @@ export default function AdultInvestModal({
 
 
               {/* Agreement */}
-              <div className="mb-4 rounded-2xl border border-slate-100 bg-white p-4">
+              <motion.div
+                className={`mb-4 rounded-2xl border p-4 ${agreementError && !agreementChecked ? "border-red-300 bg-red-50" : "border-slate-100 bg-white"}`}
+                animate={shakeAgreement ? { x: [0, -8, 8, -6, 6, -3, 3, 0] } : { x: 0 }}
+                transition={{ duration: 0.45, ease: "easeInOut" }}
+              >
                 <label className="flex items-start gap-3 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={agreementChecked}
-                    onChange={e => setAgreementChecked(e.target.checked)}
+                    onChange={e => { setAgreementChecked(e.target.checked); if (e.target.checked) setAgreementError(false); }}
                     className="mt-0.5 h-4 w-4 rounded border-slate-300 text-violet-600 focus:ring-violet-500 flex-shrink-0"
                   />
                   <div>
@@ -343,14 +363,19 @@ export default function AdultInvestModal({
                     </p>
                   </div>
                 </label>
-              </div>
+                {agreementError && !agreementChecked && (
+                  <p className="mt-2 flex items-center gap-1.5 text-[11px] font-semibold text-red-500">
+                    <AlertCircle size={11} />Please tick this box before sending a gift
+                  </p>
+                )}
+              </motion.div>
 
 
               {/* Send as a gift */}
               <div className="mb-5">
                 <GiftToggleV2
                   enabled={isGift}
-                  onToggle={setIsGift}
+                  onToggle={handleGiftToggle}
                   onDone={() => { setIsGift(false); onClose?.(); }}
                   security={{ id: strategy?.id, name: strategy?.name, symbol: strategy?.name }}
                   totalCostCents={totalCostCents}
@@ -364,8 +389,8 @@ export default function AdultInvestModal({
                 <button
                   type="button"
                   onClick={handleConfirm}
-                  disabled={isLimitedDiscretion ? false : (!agreementChecked || !minimum)}
-                  className="w-full rounded-2xl py-4 text-sm font-bold text-white shadow-lg active:scale-[0.98] transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                  disabled={readOnly || (isLimitedDiscretion ? false : (!agreementChecked || !minimum))}
+                  className={`w-full rounded-2xl py-4 text-sm font-bold text-white shadow-lg active:scale-[0.98] transition-all disabled:opacity-40 disabled:cursor-not-allowed${readOnly ? " opacity-40 cursor-not-allowed pointer-events-none" : ""}`}
                   style={{ background: "linear-gradient(135deg,#4f46e5,#7c3aed)" }}
                 >
                   Continue

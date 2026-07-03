@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { useProfile } from "../lib/useProfile";
 import { supabase } from "../lib/supabase";
+import { isAdminPreview } from "../lib/adminPreview";
 import ChildResponsibilityAgreement from "../components/ChildResponsibilityAgreement";
 import MinorProofOfAddressDeclaration from "../components/MinorProofOfAddressDeclaration";
 
@@ -1488,8 +1489,9 @@ export default function FamilyDashboardPage({ onBack, userId, onOpenChildDashboa
               ) : (
                 <motion.button
                   whileTap={{ scale: 0.98 }}
-                  onClick={() => setAddingType("spouse")}
-                  className="w-full flex items-center gap-4 rounded-2xl border-2 border-dashed border-[#DDD6FE] bg-white px-5 py-4 text-left hover:border-purple-400 hover:bg-[#F5F3FF] transition-all group"
+                  onClick={() => { if (!isAdminPreview()) setAddingType("spouse"); }}
+                  disabled={isAdminPreview()}
+                  className={`w-full flex items-center gap-4 rounded-2xl border-2 border-dashed border-[#DDD6FE] bg-white px-5 py-4 text-left hover:border-purple-400 hover:bg-[#F5F3FF] transition-all group${isAdminPreview() ? " opacity-40 cursor-not-allowed pointer-events-none" : ""}`}
                   style={{ boxShadow: "0 1px 8px rgba(91,33,182,0.05)" }}
                 >
                   <div className="h-12 w-12 rounded-full border-2 border-dashed border-[#DDD6FE] group-hover:border-purple-400 flex items-center justify-center flex-shrink-0 transition-all">
@@ -1573,7 +1575,7 @@ export default function FamilyDashboardPage({ onBack, userId, onOpenChildDashboa
                             <Settings className="h-4 w-4" />
                           </button>
                         )}
-                        {isOwner && (
+                        {isOwner && !isAdminPreview() && (
                           <button onClick={() => {
                             setConfirmRemove(confirmRemove?.id === child.id ? null : child);
                             setRemovePassword("");
@@ -1612,8 +1614,9 @@ export default function FamilyDashboardPage({ onBack, userId, onOpenChildDashboa
                 {/* Add another child */}
                 <motion.button
                   whileTap={{ scale: 0.98 }}
-                  onClick={() => setAddingType("child")}
-                  className="w-full flex items-center gap-4 rounded-2xl border-2 border-dashed border-[#DDD6FE] bg-white px-5 py-4 text-left hover:border-purple-400 hover:bg-[#F5F3FF] transition-all group"
+                  onClick={() => { if (!isAdminPreview()) setAddingType("child"); }}
+                  disabled={isAdminPreview()}
+                  className={`w-full flex items-center gap-4 rounded-2xl border-2 border-dashed border-[#DDD6FE] bg-white px-5 py-4 text-left hover:border-purple-400 hover:bg-[#F5F3FF] transition-all group${isAdminPreview() ? " opacity-40 cursor-not-allowed pointer-events-none" : ""}`}
                   style={{ boxShadow: "0 1px 8px rgba(91,33,182,0.05)" }}
                 >
                   <div className="h-12 w-12 rounded-full border-2 border-dashed border-[#DDD6FE] group-hover:border-purple-400 flex items-center justify-center flex-shrink-0 transition-all">
@@ -1637,8 +1640,9 @@ export default function FamilyDashboardPage({ onBack, userId, onOpenChildDashboa
               <p className="text-[17px] font-bold text-slate-900">No children added yet</p>
               <p className="text-sm text-slate-500 mt-2 leading-relaxed max-w-[220px] mx-auto">Add your children's accounts and manage the whole family from one place.</p>
               <button
-                onClick={() => setAddingType("child")}
-                className="mt-6 inline-flex items-center gap-2 rounded-2xl px-6 py-3 text-sm font-bold text-white transition active:scale-[0.98]"
+                onClick={() => { if (!isAdminPreview()) setAddingType("child"); }}
+                disabled={isAdminPreview()}
+                className={`mt-6 inline-flex items-center gap-2 rounded-2xl px-6 py-3 text-sm font-bold text-white transition active:scale-[0.98]${isAdminPreview() ? " opacity-40 cursor-not-allowed pointer-events-none" : ""}`}
                 style={{ background: `linear-gradient(135deg, ${P2}, ${P})` }}
               >
                 <Plus className="h-4 w-4" /> Add Child

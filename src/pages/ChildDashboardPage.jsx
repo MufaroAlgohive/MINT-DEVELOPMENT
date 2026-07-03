@@ -18,6 +18,7 @@ import SwipeableBalanceCard from "../components/SwipeableBalanceCard";
 import Skeleton from "../components/Skeleton";
 import { useProfile } from "../lib/useProfile";
 import { supabase } from "../lib/supabase";
+import { isAdminPreview } from "../lib/adminPreview";
 import { useFees } from "../lib/useFees";
 import MinorProofOfAddressDeclaration from "../components/MinorProofOfAddressDeclaration";
 import ChildResponsibilityAgreement from "../components/ChildResponsibilityAgreement";
@@ -877,8 +878,8 @@ function InvestModal({ child, onInvest, onClose, onOpenFactsheet }) {
             <div className="mt-6 space-y-3">
               <button
                 onClick={() => setStep("amount")}
-                disabled={!selectedStrategyMinimum}
-                className="w-full rounded-2xl bg-gradient-to-r from-[#5b21b6] to-[#7c3aed] py-4 font-semibold text-white shadow-lg transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={!selectedStrategyMinimum || isAdminPreview()}
+                className={`w-full rounded-2xl bg-gradient-to-r from-[#5b21b6] to-[#7c3aed] py-4 font-semibold text-white shadow-lg transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed${isAdminPreview() ? " opacity-40 cursor-not-allowed pointer-events-none" : ""}`}
               >
                 Invest Now
               </button>
@@ -2949,8 +2950,8 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
           {activeChildTab !== "portfolio" && <motion.div variants={item}>
             <div className="grid grid-cols-3 gap-2 text-[11px] font-medium">
               {[
-                { label: "Invest", icon: LayoutGrid, onClick: openInvestModal },
-                { label: "Deposit", icon: ArrowDownToLine, onClick: openTransferModal, disabled: openingTransfer },
+                { label: "Invest", icon: LayoutGrid, onClick: openInvestModal, disabled: isAdminPreview() },
+                { label: "Deposit", icon: ArrowDownToLine, onClick: openTransferModal, disabled: openingTransfer || isAdminPreview() },
                 { label: "Goals", icon: Target, onClick: () => setShowGoalsModal(true) },
               ].map((btn, i) => {
                 const Icon = btn.icon;
@@ -3689,7 +3690,8 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
                         placeholder="e.g. New Car, Holiday"
                         value={newGoal.name}
                         onChange={(e) => setNewGoal(prev => ({ ...prev, name: e.target.value }))}
-                        className="w-full rounded-2xl border border-slate-100 bg-slate-50 p-4 text-sm font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-violet-500/20"
+                        readOnly={isAdminPreview()}
+                        className={`w-full rounded-2xl border border-slate-100 bg-slate-50 p-4 text-sm font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-violet-500/20${isAdminPreview() ? " pointer-events-none opacity-60" : ""}`}
                         required
                       />
                     </div>
@@ -3702,7 +3704,8 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
                         placeholder="0.00"
                         value={newGoal.target_amount}
                         onChange={(e) => setNewGoal(prev => ({ ...prev, target_amount: e.target.value }))}
-                        className="w-full rounded-2xl border border-slate-100 bg-slate-50 p-4 text-sm font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-violet-500/20"
+                        readOnly={isAdminPreview()}
+                        className={`w-full rounded-2xl border border-slate-100 bg-slate-50 p-4 text-sm font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-violet-500/20${isAdminPreview() ? " pointer-events-none opacity-60" : ""}`}
                         required
                       />
                     </div>
@@ -3714,14 +3717,15 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
                         type="date"
                         value={newGoal.target_date}
                         onChange={(e) => setNewGoal(prev => ({ ...prev, target_date: e.target.value }))}
-                        className="w-full rounded-2xl border border-slate-100 bg-slate-50 p-4 text-sm font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-violet-500/20"
+                        readOnly={isAdminPreview()}
+                        className={`w-full rounded-2xl border border-slate-100 bg-slate-50 p-4 text-sm font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-violet-500/20${isAdminPreview() ? " pointer-events-none opacity-60" : ""}`}
                       />
                     </div>
                     <div className="flex flex-col gap-3 pt-2">
                       <button
                         type="submit"
-                        disabled={loadingGoals}
-                        className="w-full rounded-2xl bg-[#31005e] py-4 font-bold uppercase tracking-widest text-white shadow-lg transition-active active:scale-95"
+                        disabled={loadingGoals || isAdminPreview()}
+                        className={`w-full rounded-2xl bg-[#31005e] py-4 font-bold uppercase tracking-widest text-white shadow-lg transition-active active:scale-95${isAdminPreview() ? " opacity-40 cursor-not-allowed pointer-events-none" : ""}`}
                       >
                         {editingGoalId ? "Update Goal" : "Save Goal"}
                       </button>
@@ -3729,7 +3733,8 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
                         <button
                           type="button"
                           onClick={() => handleDeleteGoal(editingGoalId)}
-                          className="w-full rounded-2xl bg-rose-50 py-4 text-xs font-bold uppercase tracking-widest text-rose-600 transition-active active:scale-95"
+                          disabled={isAdminPreview()}
+                          className={`w-full rounded-2xl bg-rose-50 py-4 text-xs font-bold uppercase tracking-widest text-rose-600 transition-active active:scale-95${isAdminPreview() ? " opacity-40 cursor-not-allowed pointer-events-none" : ""}`}
                         >
                           Delete Goal
                         </button>
@@ -3766,8 +3771,9 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
                             </div>
                             <button
                               type="button"
-                              onClick={() => handleEditClick(goal)}
-                              className="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-50 text-slate-400 hover:bg-violet-50 hover:text-violet-600"
+                              onClick={() => { if (!isAdminPreview()) handleEditClick(goal); }}
+                              disabled={isAdminPreview()}
+                              className={`flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-50 text-slate-400 hover:bg-violet-50 hover:text-violet-600${isAdminPreview() ? " opacity-40 cursor-not-allowed pointer-events-none" : ""}`}
                             >
                               <FileSignature size={18} />
                             </button>

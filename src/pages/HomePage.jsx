@@ -25,6 +25,7 @@ import {
   Clock3,
 } from "lucide-react";
 import { useProfile } from "../lib/useProfile";
+import { isAdminPreview } from "../lib/adminPreview";
 import { useNotificationsContext } from "../lib/NotificationsContext.jsx";
 import NavigationPill from "../components/NavigationPill";
 import { useRequiredActions } from "../lib/useRequiredActions";
@@ -1805,8 +1806,9 @@ const HomePage = ({
               </div>
             </div>
             <button
-              onClick={() => setShowGoalsModal(true)}
-              className="mb-1 text-xs font-semibold text-violet-600 active:opacity-70 transition-colors"
+              onClick={() => { if (!isAdminPreview()) setShowGoalsModal(true); }}
+              disabled={isAdminPreview()}
+              className={`mb-1 text-xs font-semibold text-violet-600 active:opacity-70 transition-colors${isAdminPreview() ? " opacity-40 cursor-not-allowed pointer-events-none" : ""}`}
             >
               Manage
             </button>
@@ -1834,8 +1836,9 @@ const HomePage = ({
                   <button
                     key={goal.id}
                     type="button"
-                    onClick={() => handleEditClick(goal)}
-                    className="flex w-full items-center gap-3 px-5 py-4 text-left transition-colors active:bg-slate-50"
+                    onClick={() => { if (!isAdminPreview()) handleEditClick(goal); }}
+                    disabled={isAdminPreview()}
+                    className={`flex w-full items-center gap-3 px-5 py-4 text-left transition-colors active:bg-slate-50${isAdminPreview() ? " opacity-60 cursor-not-allowed pointer-events-none" : ""}`}
                   >
                     <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-violet-50 text-violet-600 flex-shrink-0">
                       <Target className="h-5 w-5" />
@@ -1884,8 +1887,9 @@ const HomePage = ({
                 <p className="text-xs text-slate-500 mb-6">Set investment goals to track your progress</p>
                 <button
                   type="button"
-                  onClick={() => setShowGoalsModal(true)}
-                  className="inline-flex items-center justify-center rounded-full bg-slate-900 px-6 py-2.5 text-xs font-semibold uppercase tracking-[0.15em] text-white shadow-lg shadow-slate-900/20 transition hover:-translate-y-0.5"
+                  onClick={() => { if (!isAdminPreview()) setShowGoalsModal(true); }}
+                  disabled={isAdminPreview()}
+                  className={`inline-flex items-center justify-center rounded-full bg-slate-900 px-6 py-2.5 text-xs font-semibold uppercase tracking-[0.15em] text-white shadow-lg shadow-slate-900/20 transition hover:-translate-y-0.5${isAdminPreview() ? " opacity-40 cursor-not-allowed pointer-events-none" : ""}`}
                 >
                   Create Goal
                 </button>
@@ -2024,6 +2028,10 @@ const HomePage = ({
 
           // Inject a simulated pending order during the coach tour or right after a payment
           const coachSimName = sessionStorage.getItem('mint_coach_pending_sim');
+          if (coachSimName) {
+            // During the coach tour suppress real pending orders — only the mock should show
+            stratGroups.splice(0);
+          }
           if (coachSimName && !stratGroups.find(g => g.key === 'coach-sim')) {
             const realStrat = safeStrategies.find(s =>
               (s.name || '').toLowerCase() === coachSimName.toLowerCase() ||
@@ -2054,7 +2062,8 @@ const HomePage = ({
             });
           }
 
-          const totalGroups = stratGroups.length + pendingAssetItems.length;
+          const visiblePendingAssetItems = coachSimName ? [] : pendingAssetItems;
+          const totalGroups = stratGroups.length + visiblePendingAssetItems.length;
           if (totalGroups === 0) return null;
 
           const fmtDate = (tx) => {
@@ -2186,7 +2195,7 @@ const HomePage = ({
                 })}
 
                 {/* Single-security pending items */}
-                {pendingAssetItems.map(item => {
+                {visiblePendingAssetItems.map(item => {
                   const isStack = item.batches.length > 1;
                   const isExpanded = expandedPendingKey === item.key;
 
@@ -2822,7 +2831,8 @@ const HomePage = ({
                         placeholder="e.g. New Car, Holiday"
                         value={newGoal.name}
                         onChange={(e) => setNewGoal(prev => ({ ...prev, name: e.target.value }))}
-                        className="w-full rounded-2xl border border-slate-100 bg-slate-50 p-4 text-sm font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-violet-500/20"
+                        readOnly={isAdminPreview()}
+                        className={`w-full rounded-2xl border border-slate-100 bg-slate-50 p-4 text-sm font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-violet-500/20${isAdminPreview() ? " pointer-events-none opacity-60" : ""}`}
                         required
                       />
                     </div>
@@ -2835,7 +2845,8 @@ const HomePage = ({
                         placeholder="0.00"
                         value={newGoal.target_amount}
                         onChange={(e) => setNewGoal(prev => ({ ...prev, target_amount: e.target.value }))}
-                        className="w-full rounded-2xl border border-slate-100 bg-slate-50 p-4 text-sm font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-violet-500/20"
+                        readOnly={isAdminPreview()}
+                        className={`w-full rounded-2xl border border-slate-100 bg-slate-50 p-4 text-sm font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-violet-500/20${isAdminPreview() ? " pointer-events-none opacity-60" : ""}`}
                         required
                       />
                     </div>
@@ -2847,14 +2858,15 @@ const HomePage = ({
                         type="date"
                         value={newGoal.target_date}
                         onChange={(e) => setNewGoal(prev => ({ ...prev, target_date: e.target.value }))}
-                        className="w-full rounded-2xl border border-slate-100 bg-slate-50 p-4 text-sm font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-violet-500/20"
+                        readOnly={isAdminPreview()}
+                        className={`w-full rounded-2xl border border-slate-100 bg-slate-50 p-4 text-sm font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-violet-500/20${isAdminPreview() ? " pointer-events-none opacity-60" : ""}`}
                       />
                     </div>
                     <div className="flex flex-col gap-3 pt-2">
                       <button
                         type="submit"
-                        disabled={loadingGoals}
-                        className="w-full rounded-2xl bg-[#31005e] py-4 font-bold uppercase tracking-widest text-white shadow-lg transition-active active:scale-95"
+                        disabled={loadingGoals || isAdminPreview()}
+                        className={`w-full rounded-2xl bg-[#31005e] py-4 font-bold uppercase tracking-widest text-white shadow-lg transition-active active:scale-95${isAdminPreview() ? " opacity-40 cursor-not-allowed pointer-events-none" : ""}`}
                       >
                         {editingGoalId ? "Update Goal" : "Save Goal"}
                       </button>

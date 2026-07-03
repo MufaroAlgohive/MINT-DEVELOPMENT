@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { TrendingUp, Pencil } from "lucide-react";
+import { isAdminPreview } from "../lib/adminPreview";
 import { useProfile } from "../lib/useProfile";
 import { useInvestments } from "../lib/useFinancialData";
 import { supabase } from "../lib/supabase";
@@ -314,8 +315,8 @@ const InvestmentsPage = ({ onOpenNotifications, onOpenInvest }) => {
                   )}
                   <button
                     type="submit"
-                    disabled={savingGoal}
-                    className="flex-1 rounded-2xl bg-gradient-to-r from-black to-purple-600 py-3 text-sm font-semibold uppercase tracking-[0.2em] text-white shadow-lg transition-all active:scale-95 disabled:opacity-50"
+                    disabled={savingGoal || isAdminPreview()}
+                    className={`flex-1 rounded-2xl bg-gradient-to-r from-black to-purple-600 py-3 text-sm font-semibold uppercase tracking-[0.2em] text-white shadow-lg transition-all active:scale-95 disabled:opacity-50${isAdminPreview() ? " cursor-not-allowed pointer-events-none" : ""}`}
                   >
                     {savingGoal ? "Saving..." : editingGoalId ? "Update goal" : "Add goal"}
                   </button>

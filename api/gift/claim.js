@@ -30,24 +30,66 @@ async function fetchLatestIntradayPrices(db, securityIds) {
 
 function buildClaimedHtml({ recipientName, senderName, assetName, amountRands }) {
   const fmt = (v) => `R${Number(v).toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://app.mymint.co.za";
   return `<!DOCTYPE html>
-<html><head><meta charset="utf-8"></head>
-<body style="margin:0;padding:0;background:#f8f6fa;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
-<div style="max-width:480px;margin:0 auto;padding:40px 24px;">
-  <div style="background:white;border-radius:24px;padding:40px 32px;">
-    <div style="text-align:center;margin-bottom:32px;">
-      <div style="font-size:28px;font-weight:800;color:#1e1b4b;">mint</div>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  body {
+    font-family: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+    background-color: #ffffff;
+    margin: 0;
+    padding: 0;
+    -webkit-font-smoothing: antialiased;
+  }
+</style>
+</head>
+<body style="margin:0;padding:40px 20px;background:#ffffff;font-family:'Outfit', sans-serif">
+
+<div style="max-width:520px;margin:0 auto;background:#ffffff;overflow:hidden;">
+
+  <!-- HEADER BLOCK (Gold border is at the bottom of this entire wrapper) -->
+  <div style="background:#31005E; border-bottom:3px solid #DDC357;">
+    
+    <!-- Text Section -->
+    <div style="padding:32px 36px; text-align:center;">
+      <p style="font-family:'Outfit', sans-serif; font-size:11px; font-weight:600; color:#DDC357; margin:0 0 10px; text-transform:uppercase; letter-spacing:3px;">Gift Claimed</p>
+      <h1 style="font-family:'Inter', sans-serif; font-size:28px; font-weight:300; color:#ffffff; margin:0; letter-spacing:-0.5px; line-height:1.2;">Your portfolio just grew.</h1>
     </div>
-    <p style="color:#334155;font-size:15px;">Hi ${recipientName},</p>
-    <p style="color:#334155;font-size:15px;line-height:1.6;">
-      You've successfully claimed <strong style="color:#7c3aed;">${fmt(amountRands)}</strong> in <strong>${assetName}</strong> — gifted by <strong>${senderName}</strong>. It's now in your portfolio!
-    </p>
-    <div style="text-align:center;margin-top:28px;">
-      <a href="https://mymint.co.za" style="display:inline-block;background:linear-gradient(135deg,#1e1b4b,#312e81);color:white;padding:14px 40px;border-radius:14px;text-decoration:none;font-weight:700;font-size:15px;">View My Portfolio</a>
-    </div>
-    <p style="color:#94a3b8;font-size:11px;text-align:center;margin-top:24px;">Mint — Smart investing for South African families</p>
+    
+    <!-- FULL WIDTH BANNER IMAGE (Sits above the gold border) -->
+    <img src="https://mfxnghmuccevsxwcetej.supabase.co/storage/v1/object/public/Emailer%20Ads/GIFT%20CLAIMED.jpg" alt="Gift Claimed" style="width:100%; height:auto; display:block; margin:0;">
+    
   </div>
-</div></body></html>`;
+
+  <!-- BODY CONTENT -->
+  <div style="padding:40px 36px 36px;">
+    
+    <p style="font-family:'Outfit', sans-serif; font-size:16px; color:#3A3448; line-height:1.6; margin:0 0 24px; font-weight:300;">Hi ${recipientName},</p>
+    
+    <p style="font-family:'Outfit', sans-serif; font-size:16px; color:#3A3448; line-height:1.6; margin:0 0 36px; font-weight:300;">
+      You have successfully claimed <strong>${fmt(amountRands)}</strong> in <strong>${assetName}</strong> — gifted to you by <strong>${senderName}</strong>. It is now securely reflecting in your MINT portfolio.
+    </p>
+
+    <!-- CTA BUTTON -->
+    <a href="${APP_URL}" style="display:block; background:#31005E; color:#DDC357; text-decoration:none; text-align:center; padding:18px 24px; border-radius:6px; font-family:'Outfit', sans-serif; font-size:13px; font-weight:600; letter-spacing:2px; text-transform:uppercase; margin-bottom:32px; transition: opacity 0.2s ease;">View My Portfolio</a>
+
+    <!-- FOOTER DISCLAIMER -->
+    <div style="text-align:center; border-top:1px solid #F0EDF5; padding-top:24px;">
+      <p style="font-family:'Outfit', sans-serif; font-size:11px; color:#8A8398; line-height:1.6; margin:0; font-weight:300;">
+        MINT - Money In Transit.<br>
+        MINT Platforms(Pty) Ltd is an authorised Financial Services Provider (FSP 55118) regulated by the Financial Sector Conduct Authority and a registered Credit Provider (NCRCP22892) under the National Credit Act.
+      </p>
+    </div>
+
+  </div>
+</div>
+
+</body>
+</html>`;
 }
 
 async function allocateStrategyHoldings(db, userId, strategyId, strategyHoldings, amountCents, transactionId) {

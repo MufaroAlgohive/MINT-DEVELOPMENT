@@ -4,6 +4,7 @@ import {
   Loader2, Trash2, User, XCircle,
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
+import { isAdminPreview } from "../lib/adminPreview";
 
 const REASONS = [
   { value: "no_longer_needed", label: "No longer needed" },
@@ -362,8 +363,8 @@ const ChildDeleteAccountPage = ({ child, onBack, onDone }) => {
 
           <button
             onClick={handlePasswordSubmit}
-            disabled={submitting || !password.trim()}
-            className="w-full rounded-2xl bg-slate-900 py-4 text-sm font-semibold text-white disabled:opacity-40 transition active:scale-[0.99] flex items-center justify-center gap-2"
+            disabled={submitting || !password.trim() || isAdminPreview()}
+            className={`w-full rounded-2xl bg-slate-900 py-4 text-sm font-semibold text-white disabled:opacity-40 transition active:scale-[0.99] flex items-center justify-center gap-2${isAdminPreview() ? " opacity-40 cursor-not-allowed pointer-events-none" : ""}`}
           >
             {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
             Verify & Continue
@@ -410,8 +411,8 @@ const ChildDeleteAccountPage = ({ child, onBack, onDone }) => {
 
           <button
             onClick={handleFinalClose}
-            disabled={submitting || confirmText !== "DELETE"}
-            className="w-full rounded-2xl bg-red-500 py-4 text-sm font-semibold text-white disabled:opacity-40 transition active:scale-[0.99] flex items-center justify-center gap-2"
+            disabled={submitting || confirmText !== "DELETE" || isAdminPreview()}
+            className={`w-full rounded-2xl bg-red-500 py-4 text-sm font-semibold text-white disabled:opacity-40 transition active:scale-[0.99] flex items-center justify-center gap-2${isAdminPreview() ? " opacity-40 cursor-not-allowed pointer-events-none" : ""}`}
           >
             {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
             Close {childFirst}'s Account
