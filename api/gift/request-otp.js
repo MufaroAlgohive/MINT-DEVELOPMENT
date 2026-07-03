@@ -12,6 +12,70 @@ function getResend() {
   return new Resend(process.env.RESEND_API_KEY);
 }
 
+function buildOtpHtml({ firstName, code }) {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  body {
+    font-family: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+    background-color: #ffffff;
+    margin: 0;
+    padding: 0;
+    -webkit-font-smoothing: antialiased;
+  }
+</style>
+</head>
+<body style="margin:0;padding:40px 20px;background:#ffffff;font-family:'Outfit', sans-serif">
+
+<div style="max-width:520px;margin:0 auto;background:#ffffff;overflow:hidden;">
+
+  <div style="background:#31005E; border-bottom:3px solid #DDC357;">
+    
+    <div style="padding:32px 36px; text-align:center;">
+      <p style="font-family:'Outfit', sans-serif; font-size:11px; font-weight:600; color:#DDC357; margin:0 0 10px; text-transform:uppercase; letter-spacing:3px;">Security Verification</p>
+      <h1 style="font-family:'Inter', sans-serif; font-size:28px; font-weight:300; color:#ffffff; margin:0; letter-spacing:-0.5px; line-height:1.2;">Your Claim Code.</h1>
+    </div>
+    
+  </div>
+
+  <div style="padding:40px 36px 36px;">
+    
+    <p style="font-family:'Outfit', sans-serif; font-size:16px; color:#3A3448; line-height:1.6; margin:0 0 24px; font-weight:300;">Hi ${firstName},</p>
+    
+    <p style="font-family:'Outfit', sans-serif; font-size:16px; color:#3A3448; line-height:1.6; margin:0 0 36px; font-weight:300;">
+      Use the code below to confirm your investment gift. <strong>It expires in 10 minutes.</strong>
+    </p>
+
+    <div style="background:#F9F8FB; border:1px solid #E4E0EC; border-radius:8px; padding:32px; margin-bottom:36px; text-align:center;">
+      <span style="font-family:'Inter', sans-serif; font-size:40px; font-weight:800; letter-spacing:12px; color:#5C3BCF;">${code}</span>
+    </div>
+
+    <!-- EXPIRATION NOTICE -->
+    <div style="border-left:3px solid #DDC357; padding:8px 0 8px 20px; margin-bottom:32px;">
+      <p style="font-family:'Outfit', sans-serif; font-size:13.5px; color:#3A3448; margin:0; line-height:1.6; font-weight:300;">
+        If you didn't request this, you can safely ignore this email.
+      </p>
+    </div>
+
+    <!-- FOOTER DISCLAIMER -->
+    <div style="text-align:center; border-top:1px solid #F0EDF5; padding-top:24px;">
+      <p style="font-family:'Outfit', sans-serif; font-size:11px; color:#8A8398; line-height:1.6; margin:0; font-weight:300;">
+        MINT - Money In Transit.<br>
+        MINT Platforms(Pty) Ltd is an authorised Financial Services Provider (FSP 55118) regulated by the Financial Sector Conduct Authority and a registered Credit Provider (NCRCP22892) under the National Credit Act.
+      </p>
+    </div>
+
+  </div>
+</div>
+
+</body>
+</html>`;
+}
+
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
@@ -40,14 +104,7 @@ export default async function handler(req, res) {
         from: process.env.RESEND_FROM || "Mint <onboarding@resend.dev>",
         to: [otpTo],
         subject: `Your Mint gift verification code: ${code}`,
-        html: `<div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px 24px">
-          <h2 style="font-size:22px;font-weight:700;color:#0f172a;margin-bottom:8px">Gift verification</h2>
-          <p style="color:#475569;font-size:15px;margin-bottom:24px">Hi ${firstName}, use the code below to confirm your investment gift. It expires in 10 minutes.</p>
-          <div style="background:#f1f5f9;border-radius:16px;padding:24px 32px;text-align:center;margin-bottom:24px">
-            <span style="font-size:40px;font-weight:800;letter-spacing:12px;color:#7c3aed">${code}</span>
-          </div>
-          <p style="color:#94a3b8;font-size:13px">If you didn't request this, you can safely ignore this email.</p>
-        </div>`,
+        html: buildOtpHtml({ firstName, code }),
       });
       if (otpResult?.error) {
         console.warn("[gift/request-otp] Email delivery failed:", otpResult.error.message);
