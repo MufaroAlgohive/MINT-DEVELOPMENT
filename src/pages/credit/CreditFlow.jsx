@@ -238,6 +238,13 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
   // without a contactable number, same as it does without an ID number.
   const [phone, setPhone] = useState("");
   const [phoneOnFile, setPhoneOnFile] = useState("");
+  // Last-resort phone capture on the offers step: an invest-verified borrower who
+  // skipped credit KYC and has no phone on file anywhere must still provide one
+  // before we can route the application to a lender (it would otherwise be sent
+  // empty and rejected at intake).
+  const [needPhone, setNeedPhone] = useState(false);
+  const [phoneErr, setPhoneErr] = useState("");
+  const [savingPhone, setSavingPhone] = useState(false);
 
   const handleIdCheck = useCallback(async () => {
     setIdError("");
@@ -451,6 +458,9 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
       const borrowerIdNumber = (idOnFile || idNumber || profile?.idNumber || profile?.id_number || "").replace(/\D/g, "");
       const borrowerPhone = normalizeZaPhone(phoneOnFile || phone || profile?.phone || profile?.cellphone || profile?.mobile || profile?.phone_number || "");
       const loanPurpose = app.purpose || app.loan_purpose || "Personal loan";
+      // Never route an application with no contactable number — the lender intake
+      // rejects it. Prompt for it inline instead (finally clears the loader).
+      if (!borrowerPhone) { setNeedPhone(true); return; }
       const res = await fetch(`${ALGOLEND_URL}/api/marketplace/evaluate`, {
         method: "POST",
         headers: {
@@ -487,12 +497,45 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
     }
   }, [score, profile, monthlyIncome, idOnFile, idNumber, phoneOnFile, phone]);
 
+  // Save the number entered on the offers step's last-resort prompt, then retry
+  // the evaluation so offers load with the borrower now fully contactable.
+  const saveOffersPhone = useCallback(async () => {
+    setPhoneErr("");
+    const clean = normalizeZaPhone(phone);
+    if (!clean) { setPhoneErr("Please enter a valid South African mobile number (e.g. 082 123 4567)."); return; }
+    setSavingPhone(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const uid = session?.user?.id;
+      if (uid) {
+        const { data: rows } = await supabase.from("user_onboarding").select("id, sumsub_raw").eq("user_id", uid).order("created_at", { ascending: false }).limit(1);
+        const row = rows?.[0];
+        let raw = {};
+        try { raw = typeof row?.sumsub_raw === "string" ? JSON.parse(row.sumsub_raw) : (row?.sumsub_raw || {}); } catch {}
+        raw.contact_details = { ...(raw.contact_details || {}), phone: clean, phone_saved_at: new Date().toISOString() };
+        raw.credit_phone = clean;
+        if (row?.id) await supabase.from("user_onboarding").update({ sumsub_raw: raw }).eq("id", row.id);
+        else await supabase.from("user_onboarding").insert({ user_id: uid, sumsub_raw: raw });
+      }
+      setPhone(clean);
+      setPhoneOnFile(clean);
+      setNeedPhone(false);
+      if (activeApplication) await evaluateWithAlgoLend(activeApplication);
+    } catch (e) {
+      setPhoneErr(e?.message || "Couldn't save your number. Please try again.");
+    } finally {
+      setSavingPhone(false);
+    }
+  }, [phone, activeApplication, evaluateWithAlgoLend]);
+
   const openApplication = useCallback((app) => {
     setActiveApplication(app);
     setAdjustAmount(Number(app.requested_amount) || 0); // seed the lower-amount control
     const existing = Array.isArray(app.selected_providers) ? app.selected_providers : [];
     setProviderSel(new Set(existing.map((p) => p.provider_id)));
     setProviderSubmitted(existing.length > 0);
+    setNeedPhone(false);
+    setPhoneErr("");
     setStep("marketplaceOffers");
     evaluateWithAlgoLend(app);
   }, [evaluateWithAlgoLend]);
@@ -1713,24 +1756,55 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
 
             {/* BODY */}
             <div className="px-5 pt-5 pb-12">
-              {!algolendLoading && count > 0 && (
+              {/* Last-resort phone capture — shown only when we couldn't resolve a
+                  number for this borrower (invest-verified, skipped credit KYC,
+                  none on file). Blocks the offers until a valid number is saved. */}
+              {needPhone && (
+                <div className="rounded-3xl border border-slate-100 bg-white p-6 shadow-sm">
+                  <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-violet-50 text-violet-600">
+                    <IdCard className="h-6 w-6" />
+                  </div>
+                  <h2 className="text-base font-semibold text-slate-900">One last thing</h2>
+                  <p className="mt-2 text-sm text-slate-500">We need a mobile number to send with your application — lenders use it to contact you about your offer.</p>
+                  <label className="mt-4 block text-[11px] font-semibold uppercase tracking-wider text-slate-400">Mobile number</label>
+                  <input
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value.replace(/[^\d+ ]/g, "").slice(0, 16))}
+                    inputMode="tel"
+                    type="tel"
+                    placeholder="082 123 4567"
+                    className="mt-1.5 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none focus:border-violet-400"
+                  />
+                  {phoneErr && <p className="mt-2 text-xs font-medium text-red-500">{phoneErr}</p>}
+                  <button
+                    type="button"
+                    onClick={saveOffersPhone}
+                    disabled={savingPhone}
+                    className="mt-5 w-full rounded-2xl bg-violet-600 py-3.5 text-sm font-semibold text-white active:scale-[0.99] disabled:opacity-60"
+                  >
+                    {savingPhone ? "Saving…" : "Continue to offers"}
+                  </button>
+                </div>
+              )}
+
+              {!needPhone && !algolendLoading && count > 0 && (
                 <p className="mb-3 text-xs text-slate-400">Showing <b className="font-semibold text-slate-600">{count} offer{count !== 1 ? "s" : ""}</b> · ranked best first · tap to select</p>
               )}
 
-              {algolendLoading && (
+              {!needPhone && algolendLoading && (
                 <div className="flex flex-col items-center justify-center py-12 text-slate-400">
                   <Loader2 className="h-6 w-6 animate-spin text-violet-500" />
                   <p className="mt-3 text-xs">Finding lenders for you…</p>
                 </div>
               )}
-              {algolendError && (
+              {!needPhone && algolendError && (
                 <div className="rounded-2xl border border-red-100 bg-red-50 p-4 text-center">
                   <p className="text-sm font-medium text-red-600">{algolendError}</p>
                   <button type="button" onClick={() => evaluateWithAlgoLend(activeApplication)} className="mt-2 text-xs font-semibold text-violet-600">Try again</button>
                 </div>
               )}
               {/* Empty: distinguish "no lenders on AlgoLend yet" from "none matched". */}
-              {!algolendLoading && !algolendError && count === 0 && algolendDeclines.length === 0 && (
+              {!needPhone && !algolendLoading && !algolendError && count === 0 && algolendDeclines.length === 0 && (
                 <div className="rounded-3xl border border-slate-100 bg-white p-8 text-center shadow-sm">
                   <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-violet-50 text-violet-500"><Store className="h-6 w-6" /></div>
                   <p className="text-sm font-semibold text-slate-700">
@@ -1747,14 +1821,14 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
                   <button type="button" onClick={() => evaluateWithAlgoLend(activeApplication)} className="mt-4 block w-full rounded-2xl border border-slate-200 py-2.5 text-xs font-semibold text-violet-600">Refresh</button>
                 </div>
               )}
-              {!algolendLoading && !algolendError && count === 0 && algolendDeclines.length > 0 && (
+              {!needPhone && !algolendLoading && !algolendError && count === 0 && algolendDeclines.length > 0 && (
                 <p className="mb-3 rounded-2xl bg-amber-50 px-4 py-3 text-center text-xs font-medium text-amber-700">No lender made an offer for R {Number(activeApplication.requested_amount || 0).toLocaleString("en-ZA")} yet — here's where each one stands.</p>
               )}
 
               {/* No offers → let the client LOWER their requested amount. The new,
                   lower figure becomes the official requested_amount, then we
                   re-evaluate against it. */}
-              {!algolendLoading && !algolendError && count === 0 && Number(activeApplication.requested_amount) > 100 && (
+              {!needPhone && !algolendLoading && !algolendError && count === 0 && Number(activeApplication.requested_amount) > 100 && (
                 <div className="mb-3 rounded-3xl border border-slate-100 bg-white p-5 shadow-sm">
                   <p className="text-sm font-semibold text-slate-800">Try a lower amount</p>
                   <p className="mt-1 text-xs text-slate-500">Lowering your request can unlock offers. This becomes your official requested amount.</p>
