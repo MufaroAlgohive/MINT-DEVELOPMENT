@@ -316,32 +316,12 @@ export default function GiftToggleV2({
     setConfirmBackStep("form");
   }
 
-  useEffect(() => {
-    console.log(`%c[GiftToggleV2] MOUNT`, "color:#7c3aed;font-weight:bold");
-    return () => console.log(`%c[GiftToggleV2] UNMOUNT`, "color:#ef4444;font-weight:bold");
-  }, []);
-
-  useEffect(() => {
-    console.log(`[GiftToggleV2] enabled -> ${enabled} | step=${step}`);
-    if (!enabled) {
-      // Give framer-motion's exit animation a moment to finish, then scan the
-      // DOM for any leftover fixed-position, high z-index nodes that could be
-      // sitting on top of everything and silently eating clicks.
-      const t1 = setTimeout(() => window.__gtvScanOverlays?.("t+50ms after enabled=false"), 50);
-      const t2 = setTimeout(() => window.__gtvScanOverlays?.("t+400ms after enabled=false"), 400);
-      const t3 = setTimeout(() => window.__gtvScanOverlays?.("t+1000ms after enabled=false"), 1000);
-      return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
-    }
-  }, [enabled, step]);
-
   function handleToggle(val) {
-    console.log(`[GiftToggleV2] handleToggle(${val}) called | prevStep=${step}`);
     if (!val) resetForm();
     onToggle?.(val);
   }
 
   function handleClose() {
-    console.log(`[GiftToggleV2] handleClose() called | step=${step} :: ${new Error("stack").stack?.split("\n").slice(0, 4).join(" | ")}`);
     resetForm();
     onToggle?.(false);
   }
