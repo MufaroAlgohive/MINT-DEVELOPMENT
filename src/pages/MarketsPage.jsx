@@ -7,7 +7,7 @@ import { getMarketsSecuritiesWithMetrics, getSecurityPrices, clearMarketDataCach
 import { useRealtimePrices } from "../lib/useRealtimePrices";
 import { getStrategiesWithMetrics, getPublicStrategies, formatChangePct, formatChangeAbs, getChangeColor } from "../lib/strategyData.js";
 import { useProfile } from "../lib/useProfile";
-import { TrendingUp, Search, SlidersHorizontal, X, ChevronRight, Star, PlayCircle } from "lucide-react";
+import { TrendingUp, Search, SlidersHorizontal, X, ChevronRight, Bookmark, PlayCircle } from "lucide-react";
 import ChildInvestModal from "../components/ChildInvestModal.jsx";
 import { saveMarketsInvestFilters, loadMarketsInvestFilters, saveMarketsStrategyFilters, loadMarketsStrategyFilters, buildInvestChips, buildChipsFromFilters } from "../lib/usePersistedFilters.js";
 import NotificationBell from "../components/NotificationBell";
@@ -274,7 +274,7 @@ const SecuritySparklineCard = ({ security, onClick, onToggleWatchlist, isWatched
             onClick={(e) => { e.stopPropagation(); onToggleWatchlist(e, security.symbol); }}
             className="flex-shrink-0 p-1"
           >
-            <Star className={`h-5 w-5 ${isWatched ? "fill-yellow-400 text-yellow-400" : "text-slate-300"}`} />
+            <Bookmark className={`h-5 w-5 ${isWatched ? "fill-yellow-400 text-yellow-400" : "text-slate-300"}`} />
           </div>
           <ChevronRight className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
         </div>
@@ -1482,7 +1482,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                 }}
                 className="relative flex h-10 w-10 items-center justify-center rounded-full border border-white/30 bg-white/10 text-white backdrop-blur-md"
               >
-                <Star className={`h-5 w-5 ${watchedSecurities.length > 0 ? "fill-yellow-400 text-yellow-400" : ""}`} />
+                <Bookmark className={`h-5 w-5 ${watchedSecurities.length > 0 ? "fill-yellow-400 text-yellow-400" : ""}`} />
               </button>
               <NotificationBell onClick={onOpenNotifications} />
             </div>
@@ -1866,7 +1866,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                             )}
                           </div>
                           <div onClick={(e) => toggleWatchlist(e, security.symbol)} className="ml-2 flex-shrink-0">
-                            <Star className={`h-5 w-5 ${watchlist.includes(security.symbol) ? "fill-yellow-400 text-yellow-400" : "text-slate-300"}`} />
+                            <Bookmark className={`h-5 w-5 ${watchlist.includes(security.symbol) ? "fill-yellow-400 text-yellow-400" : "text-slate-300"}`} />
                           </div>
                         </div>
 
@@ -1962,7 +1962,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                                 )}
                               </div>
                               <div onClick={(e) => toggleWatchlist(e, security.symbol)} className="ml-2 flex-shrink-0">
-                                <Star className={`h-5 w-5 ${watchlist.includes(security.symbol) ? "fill-yellow-400 text-yellow-400" : "text-slate-300"}`} />
+                                <Bookmark className={`h-5 w-5 ${watchlist.includes(security.symbol) ? "fill-yellow-400 text-yellow-400" : "text-slate-300"}`} />
                               </div>
                             </div>
 
