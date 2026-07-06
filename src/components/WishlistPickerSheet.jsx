@@ -27,10 +27,9 @@ export default function WishlistPickerSheet({ itemKey, onClose, onSaved, onCreat
 
   useEffect(() => {
     async function load() {
-      // 1. Sync regular wishlists
-      const cloudLists = await syncWishlistsFromCloud().catch(() => getWishlists());
-
-      // 2. Also pull gift registries from Supabase so they appear as choices
+      // For authenticated users, the source of truth is gift registries from the API.
+      // mint_wishlists localStorage is just a legacy cache and can contain ghost entries,
+      // so we only fall back to it when the user is not signed in.
       try {
         const { supabaseReady } = await import("../lib/supabase.js");
         const sb = await supabaseReady;
@@ -43,26 +42,24 @@ export default function WishlistPickerSheet({ itemKey, onClose, onSaved, onCreat
             });
             if (res.ok) {
               const { registries } = await res.json();
-              if (Array.isArray(registries) && registries.length > 0) {
-                const existingIds = new Set(cloudLists.map((l) => String(l.id)));
-                const registryLists = registries
-                  .filter((r) => !existingIds.has(String(r.id)))
-                  .map((r) => ({
-                    id: r.id,
-                    name: r.title,
-                    items: (r.items || []).map((i) => i.isin || i.id).filter(Boolean),
-                  }));
-                setWishlists([...cloudLists, ...registryLists]);
+              if (Array.isArray(registries)) {
+                const registryLists = registries.map((r) => ({
+                  id: r.id,
+                  name: r.title,
+                  items: (r.items || []).map((i) => i.isin || i.id).filter(Boolean),
+                }));
+                setWishlists(registryLists);
                 return;
               }
             }
           }
         }
       } catch {
-        // fall through
+        // fall through to local cache
       }
 
-      setWishlists(cloudLists);
+      // Unauthenticated fallback
+      syncWishlistsFromCloud().then(setWishlists).catch(() => setWishlists(getWishlists()));
     }
     load();
   }, []);
