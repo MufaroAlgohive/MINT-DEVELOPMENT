@@ -16,7 +16,8 @@ const CARD_GRADIENTS = [
 const year = new Date().getFullYear();
 
 export default function WishlistPickerSheet({ itemKey, onClose, onSaved, onCreateNew }) {
-  const [wishlists, setWishlists] = useState(() => getWishlists());
+  const [wishlists, setWishlists] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(null);
   const [savedId, setSavedId] = useState(null);
 
@@ -49,6 +50,7 @@ export default function WishlistPickerSheet({ itemKey, onClose, onSaved, onCreat
                   items: (r.items || []).map((i) => i.isin || i.id).filter(Boolean),
                 }));
                 setWishlists(registryLists);
+                setLoading(false);
                 return;
               }
             }
@@ -59,7 +61,14 @@ export default function WishlistPickerSheet({ itemKey, onClose, onSaved, onCreat
       }
 
       // Unauthenticated fallback
-      syncWishlistsFromCloud().then(setWishlists).catch(() => setWishlists(getWishlists()));
+      try {
+        const lists = await syncWishlistsFromCloud();
+        setWishlists(lists);
+      } catch {
+        setWishlists(getWishlists());
+      } finally {
+        setLoading(false);
+      }
     }
     load();
   }, []);
@@ -148,7 +157,12 @@ export default function WishlistPickerSheet({ itemKey, onClose, onSaved, onCreat
             <X size={15} />
           </button>
 
-          {hasWishlists ? (
+          {loading ? (
+            /* ── Loading: spinner while API fetch completes ── */
+            <div className="flex items-center justify-center py-16">
+              <div className="h-6 w-6 rounded-full border-2 border-slate-200 border-t-[#6B21A8] animate-spin" />
+            </div>
+          ) : hasWishlists ? (
             /* ── Has wishlists: show grid + create button ── */
             <>
               {/* Header */}
