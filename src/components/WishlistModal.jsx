@@ -40,7 +40,7 @@ export function removeFromWishlist(itemKey) {
   saveWishlists(updated);
 }
 
-export default function WishlistModal({ itemKey, onClose, onSaved, onViewWishlists }) {
+export default function WishlistModal({ itemKey, onClose, onSaved, onViewWishlists, onContinueToRegistry }) {
   const year = new Date().getFullYear();
   const [step, setStep] = useState(1);
   const [name, setName] = useState(`My Wishlist ${year}`);
@@ -61,6 +61,11 @@ export default function WishlistModal({ itemKey, onClose, onSaved, onViewWishlis
   function handleViewWishlists() {
     onClose();
     onViewWishlists?.();
+  }
+
+  function handleContinueToRegistry() {
+    onClose();
+    onContinueToRegistry?.(itemKey);
   }
 
   const modal = (
@@ -174,17 +179,18 @@ export default function WishlistModal({ itemKey, onClose, onSaved, onViewWishlis
 
                 <div className="mt-6 space-y-3">
                   <button
-                    onClick={handleViewWishlists}
+                    onClick={handleContinueToRegistry}
                     className="flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-900 py-4 text-sm font-bold text-white transition-all active:scale-95 hover:bg-slate-800"
+                  >
+                    <ArrowRight size={16} />
+                    Build my registry
+                  </button>
+                  <button
+                    onClick={handleViewWishlists}
+                    className="flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-100 py-3.5 text-sm font-semibold text-slate-700 transition-all active:scale-95 hover:bg-slate-200"
                   >
                     <List size={16} />
                     View My Wishlists
-                  </button>
-                  <button
-                    onClick={handleDone}
-                    className="flex w-full items-center justify-center rounded-2xl bg-slate-100 py-3.5 text-sm font-semibold text-slate-700 transition-all active:scale-95 hover:bg-slate-200"
-                  >
-                    Done
                   </button>
                 </div>
               </motion.div>

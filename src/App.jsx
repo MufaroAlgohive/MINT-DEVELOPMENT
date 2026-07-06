@@ -1497,6 +1497,7 @@ const App = () => {
                   onNavigateToHome={() => { navigationHistory.current = []; setPreviousPageName(null); setCurrentPage("home"); }}
                   onNavigateToInvest={() => { navigationHistory.current = []; setPreviousPageName(null); setCurrentPage("markets"); }}
                   onOpenMyWishlists={() => navigateTo("giftRegistryDashboard")}
+                  onContinueToRegistry={(itemKey) => { setGiftRegistryNavState(s => ({ ...s, pendingItemKey: itemKey })); navigateTo("giftRegistryCreate"); }}
                 />
               </AppLayout>
             )}
@@ -2872,6 +2873,7 @@ const App = () => {
           <GiftRegistryCreatePage
             onBack={goBack}
             onNavigate={(page, state) => { if (state) setGiftRegistryNavState(s => ({ ...s, ...state })); navigateTo(page); }}
+            pendingItemKey={giftRegistryNavState.pendingItemKey}
           />
         </Suspense>
       </SwipeBackWrapper>
@@ -2887,6 +2889,7 @@ const App = () => {
             registry={giftRegistryNavState.registry}
             onBack={goBack}
             onNavigate={(page, state) => { if (state) setGiftRegistryNavState(s => ({ ...s, ...state })); navigateTo(page); }}
+            pendingItemKey={giftRegistryNavState.pendingItemKey}
           />
         </Suspense>
       </SwipeBackWrapper>

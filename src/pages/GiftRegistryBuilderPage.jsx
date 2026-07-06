@@ -112,9 +112,12 @@ function SecurityCard({ sec, quantityMap, setQuantityMap, onAdd, addingId }) {
   );
 }
 
-export default function GiftRegistryBuilderPage({ registryId, registry: initialRegistry, onNavigate, onBack }) {
+export default function GiftRegistryBuilderPage({ registryId, registry: initialRegistry, onNavigate, onBack, pendingItemKey }) {
   const { registry, loading, reload } = useRegistryDetail(registryId);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(() => {
+    if (!pendingItemKey || pendingItemKey.startsWith("strategy:")) return "";
+    return pendingItemKey;
+  });
   const [category, setCategory] = useState("ALL");
   const [searchResults, setSearchResults] = useState([]);
   const [topSecurities, setTopSecurities] = useState([]);
