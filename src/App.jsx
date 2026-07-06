@@ -220,6 +220,7 @@ const App = () => {
   const [selectedStrategy, setSelectedStrategy] = useState(null);
   const [selectedArticleId, setSelectedArticleId] = useState(null);
   const [selectedFamilyChild, setSelectedFamilyChild] = useState(null);
+  const [giftWishlistAutoOpen, setGiftWishlistAutoOpen] = useState(false);
   const [withdrawChild, setWithdrawChild] = useState(null); // child whose holdings the Withdraw page is scoped to (null = parent)
   const [funeralCoverInitialDependents, setFuneralCoverInitialDependents] = useState([]);
   const [marketsInitialView, setMarketsInitialView] = useState(null);
@@ -572,11 +573,14 @@ const App = () => {
 
   useEffect(() => {
     const handleNavigationEvent = (e) => {
-      const { page, member, child } = e.detail || {};
+      const { page, member, child, openWishlistCreate } = e.detail || {};
       // Withdrawals temporarily disabled (CEO) — never route to the withdraw page.
       if (page === 'withdraw') return;
       if (page) {
         let normalizedPage = page === 'family' ? 'familyDashboard' : page;
+        if (page === 'giftStrategies') {
+          setGiftWishlistAutoOpen(!!openWishlistCreate);
+        }
         const selectedChild = child || member || null;
         if (selectedChild && (page === 'childDashboard' || page === 'memberPortfolio')) {
           setSelectedFamilyChild(selectedChild);
@@ -2812,7 +2816,9 @@ const App = () => {
           <Suspense fallback={<div className="min-h-screen bg-slate-50" />}>
             <GiftStrategyPickerPage
               onBack={goBack}
+              autoOpenWishlist={giftWishlistAutoOpen}
               onNavigate={(page, params) => {
+                setGiftWishlistAutoOpen(false);
                 if (page === "giftStrategyInvest") {
                   setPageParams(params);
                   navigateTo("giftStrategyInvest");

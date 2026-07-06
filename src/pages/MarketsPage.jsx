@@ -7,7 +7,7 @@ import { getMarketsSecuritiesWithMetrics, getSecurityPrices, clearMarketDataCach
 import { useRealtimePrices } from "../lib/useRealtimePrices";
 import { getStrategiesWithMetrics, getPublicStrategies, formatChangePct, formatChangeAbs, getChangeColor } from "../lib/strategyData.js";
 import { useProfile } from "../lib/useProfile";
-import { TrendingUp, Search, SlidersHorizontal, X, ChevronRight, Bookmark, PlayCircle } from "lucide-react";
+import { TrendingUp, Search, SlidersHorizontal, X, ChevronRight, Bookmark, PlayCircle, Gift } from "lucide-react";
 import ChildInvestModal from "../components/ChildInvestModal.jsx";
 import { saveMarketsInvestFilters, loadMarketsInvestFilters, saveMarketsStrategyFilters, loadMarketsStrategyFilters, buildInvestChips, buildChipsFromFilters } from "../lib/usePersistedFilters.js";
 import NotificationBell from "../components/NotificationBell";
@@ -490,6 +490,23 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
   });
 
   const [watchlist, setWatchlist] = useState([]);
+  const [showWishlistMenu, setShowWishlistMenu] = useState(false);
+  const wishlistMenuRef = useRef(null);
+
+  useEffect(() => {
+    if (!showWishlistMenu) return;
+    function handleClickOutside(e) {
+      if (wishlistMenuRef.current && !wishlistMenuRef.current.contains(e.target)) {
+        setShowWishlistMenu(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("touchstart", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("touchstart", handleClickOutside);
+    };
+  }, [showWishlistMenu]);
 
   useEffect(() => { setPortalTarget(document.body); }, []);
 
@@ -1484,18 +1501,52 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
             )}
             <h1 className="text-sm font-bold tracking-[0.18em] uppercase">{childFilter ? "Child Market" : "Markets"}</h1>
             <div className="flex items-center gap-2">
-              <button
-                type="button"
-                aria-label="Wishlist"
-                onClick={() => {
-                  setExpandedSections((prev) => new Set([...prev, "watchlist"]));
-                  expandedRef.current = new Set([...expandedRef.current, "watchlist"]);
-                  secRefWatchlist.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-                }}
-                className="relative flex h-10 w-10 items-center justify-center rounded-full border border-white/30 bg-white/10 text-white backdrop-blur-md"
-              >
-                <Bookmark className={`h-5 w-5 ${watchedSecurities.length > 0 ? "fill-yellow-400 text-yellow-400" : ""}`} />
-              </button>
+              <div className="relative" ref={wishlistMenuRef}>
+                <button
+                  type="button"
+                  aria-label="Wishlist"
+                  onClick={() => setShowWishlistMenu((v) => !v)}
+                  className="relative flex h-10 w-10 items-center justify-center rounded-full border border-white/30 bg-white/10 text-white backdrop-blur-md"
+                >
+                  <Bookmark className="h-5 w-5" />
+                </button>
+
+                <AnimatePresence>
+                  {showWishlistMenu && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -8, scale: 0.95 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: -8, scale: 0.95 }}
+                      transition={{ duration: 0.15 }}
+                      className="absolute right-0 top-12 z-50 w-44 overflow-hidden rounded-2xl bg-white text-slate-900 shadow-xl ring-1 ring-black/5"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowWishlistMenu(false);
+                          window.dispatchEvent(new CustomEvent("navigate-within-app", { detail: { page: "giftRegistryDashboard" } }));
+                        }}
+                        className="flex w-full items-center gap-2.5 px-4 py-3 text-left text-sm font-medium text-slate-700 hover:bg-slate-50"
+                      >
+                        <Bookmark className="h-4 w-4 text-violet-600" />
+                        My Wishlist
+                      </button>
+                      <div className="h-px bg-slate-100" />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowWishlistMenu(false);
+                          window.dispatchEvent(new CustomEvent("navigate-within-app", { detail: { page: "giftStrategies", openWishlistCreate: true } }));
+                        }}
+                        className="flex w-full items-center gap-2.5 px-4 py-3 text-left text-sm font-medium text-slate-700 hover:bg-slate-50"
+                      >
+                        <Gift className="h-4 w-4 text-violet-600" />
+                        New Wishlist
+                      </button>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
               <NotificationBell onClick={onOpenNotifications} />
             </div>
           </header>

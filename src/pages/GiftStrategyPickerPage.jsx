@@ -180,7 +180,7 @@ function CategoryPill({ label, active, onClick }) {
   );
 }
 
-export default function GiftStrategyPickerPage({ onBack, onNavigate }) {
+export default function GiftStrategyPickerPage({ onBack, onNavigate, autoOpenWishlist }) {
   const [strategies, setStrategies] = useState([]);
   const [ytdMap, setYtdMap] = useState({});
   const [securitiesMap, setSecuritiesMap] = useState(new Map());
@@ -256,6 +256,10 @@ export default function GiftStrategyPickerPage({ onBack, onNavigate }) {
   useEffect(() => {
     if (showSearch && searchRef.current) searchRef.current.focus();
   }, [showSearch]);
+
+  useEffect(() => {
+    if (autoOpenWishlist) setShowRegistrySheet(true);
+  }, [autoOpenWishlist]);
 
   const sectors = ["All", ...new Set(strategies.map(s => s.sector || "General"))];
 
