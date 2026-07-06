@@ -508,9 +508,6 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
   const [strategyWatchlist, setStrategyWatchlist] = useState(() => {
     try { return JSON.parse(localStorage.getItem(STRATEGY_WL_KEY) || "[]"); } catch { return []; }
   });
-  // Which item has the wishlist modal open (null = closed)
-  const [wishlistModalKey, setWishlistModalKey] = useState(null);
-
   const toggleWishlistItem = (e, itemKey) => {
     e.stopPropagation();
     if (wishlistedKeys.has(itemKey)) {
@@ -519,15 +516,11 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
       next.delete(itemKey);
       setWishlistedKeys(next);
     } else {
-      // Open the name-your-wishlist modal instead of navigating away
-      setWishlistModalKey(itemKey);
+      // Optimistically fill the heart, then open the registry create sheet directly
+      setWishlistedKeys(prev => new Set([...prev, itemKey]));
+      onContinueToRegistry?.(itemKey);
     }
   };
-
-  function handleMarketsWishlistSaved(key, listName) {
-    setWishlistedKeys(prev => new Set([...prev, key]));
-    // Modal stays open so the user can see step 2 ("Saved!") and choose next action
-  }
 
   const toggleStrategyWatchlist = (e, strategyId) => {
     e.stopPropagation();
@@ -3297,22 +3290,6 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
         </div>
       , portalTarget)}
 
-      {/* Wishlist naming modal — shown when user taps ❤️ on a stock or strategy */}
-      {wishlistModalKey && (
-        <WishlistModal
-          itemKey={wishlistModalKey}
-          onClose={() => setWishlistModalKey(null)}
-          onSaved={handleMarketsWishlistSaved}
-          onViewWishlists={() => {
-            setWishlistModalKey(null);
-            onOpenMyWishlists?.();
-          }}
-          onContinueToRegistry={(itemKey) => {
-            setWishlistModalKey(null);
-            onContinueToRegistry?.(itemKey);
-          }}
-        />
-      )}
     </div>
   );
 };

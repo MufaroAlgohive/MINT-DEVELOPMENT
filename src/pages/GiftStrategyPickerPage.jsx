@@ -8,7 +8,7 @@ import { getPublicStrategies, formatChangePct } from "../lib/strategyData";
 import { calculateMinInvestmentSync, enrichSecuritiesWithIntradayPrices, buildHoldingsBySymbol } from "../lib/strategyUtils";
 import { supabase } from "../lib/supabase";
 import { formatCurrency } from "../lib/formatCurrency";
-import WishlistModal, { isInAnyWishlist, removeFromWishlist } from "../components/WishlistModal.jsx";
+import { isInAnyWishlist, removeFromWishlist } from "../components/WishlistModal.jsx";
 import WishlistToast from "../components/WishlistToast.jsx";
 
 const HOME_BG = {
@@ -211,7 +211,6 @@ export default function GiftStrategyPickerPage({ onBack, onNavigate, autoOpenWis
   const [showRegistrySheet, setShowRegistrySheet] = useState(false);
   const [showWishlistMenu, setShowWishlistMenu] = useState(false);
   // Wishlist (heart) state
-  const [wishlistModal, setWishlistModal] = useState(null);
   const [wishlistedKeys, setWishlistedKeys] = useState(() => {
     try {
       const lists = JSON.parse(localStorage.getItem("mint_wishlists") || "[]");
@@ -235,16 +234,10 @@ export default function GiftStrategyPickerPage({ onBack, onNavigate, autoOpenWis
       removeFromWishlist(key);
       setWishlistedKeys(prev => { const n = new Set(prev); n.delete(key); return n; });
     } else {
-      setWishlistModal(key);
+      // Optimistically fill the heart, then open the registry create sheet directly
+      setWishlistedKeys(prev => new Set([...prev, key]));
+      setShowRegistrySheet(true);
     }
-  }
-
-  function handleWishlistSaved(key, listName) {
-    setWishlistedKeys(prev => new Set([...prev, key]));
-    setWishlistModal(null);        // close the naming modal
-    setShowRegistrySheet(true);    // continue into the gift registry creation flow
-    setToastMsg(`Saved to "${listName}"`);
-    setToastVisible(true);
   }
 
   function toggleGiftStrategyWatchlist(e, id) {
@@ -615,17 +608,6 @@ export default function GiftStrategyPickerPage({ onBack, onNavigate, autoOpenWis
         onClose={() => setShowRegistrySheet(false)}
         onNavigate={onNavigate}
       />
-
-      {/* Airbnb-style wishlist modal */}
-      {wishlistModal && (
-        <WishlistModal
-          itemKey={wishlistModal}
-          onClose={() => setWishlistModal(null)}
-          onSaved={handleWishlistSaved}
-          onViewWishlists={() => onNavigate?.("giftRegistryDashboard")}
-          skipStep2
-        />
-      )}
 
       {/* Wishlist saved toast */}
       <WishlistToast
