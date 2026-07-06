@@ -3300,10 +3300,10 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
             setWishlistedKeys(prev => new Set([...prev, savedItemKey]));
             setWishlistPickerKey(null);
           }}
-          onCreateNew={() => {
+          onCreateNew={(name) => {
             const key = wishlistPickerKey;
             setWishlistPickerKey(null);
-            onContinueToRegistry?.(key);
+            onContinueToRegistry?.(key, name || null);
           }}
         />
       )}

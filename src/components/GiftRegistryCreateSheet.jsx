@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -120,11 +120,11 @@ function addDays(isoDate, n) {
   return d.toISOString().split("T")[0];
 }
 
-export default function GiftRegistryCreateSheet({ open, onClose, onSaved, pendingItemKey }) {
+export default function GiftRegistryCreateSheet({ open, onClose, onSaved, pendingItemKey, initialTitle, initialStep }) {
   const year = new Date().getFullYear();
-  const [step, setStep]   = useState(1);
+  const [step, setStep]   = useState(initialStep || 1);
   const [form, setForm]   = useState({
-    title: `My Wishlist ${year}`,
+    title: initialTitle?.trim() || `My Wishlist ${year}`,
     beneficiaryType: "SELF", beneficiaryDisplayName: "",
     eventDate: "", expiryAt: "", closeDuration: null,
     message: "",
@@ -132,6 +132,17 @@ export default function GiftRegistryCreateSheet({ open, onClose, onSaved, pendin
   const [showCustomClose, setShowCustomClose] = useState(false);
   const [saving, setSaving]                   = useState(false);
   const [error, setError]                     = useState(null);
+
+  // Re-sync when the sheet is opened fresh with a pre-filled name (e.g. from the
+  // wishlist Step-1 form), so it lands directly on the beneficiary step.
+  const prevOpen = useRef(false);
+  useEffect(() => {
+    if (open && !prevOpen.current) {
+      setStep(initialStep || 1);
+      setForm(f => ({ ...f, title: initialTitle?.trim() || f.title || `My Wishlist ${year}` }));
+    }
+    prevOpen.current = open;
+  }, [open, initialTitle, initialStep, year]);
 
   const set = useCallback((k, v) => setForm(f => ({ ...f, [k]: v })), []);
 
@@ -189,8 +200,8 @@ export default function GiftRegistryCreateSheet({ open, onClose, onSaved, pendin
   }
 
   function handleClose() {
-    setStep(1);
-    setForm({ title: `My Wishlist ${year}`, beneficiaryType: "SELF", beneficiaryDisplayName: "", eventDate: "", expiryAt: "", closeDuration: null, message: "" });
+    setStep(initialStep || 1);
+    setForm({ title: initialTitle?.trim() || `My Wishlist ${year}`, beneficiaryType: "SELF", beneficiaryDisplayName: "", eventDate: "", expiryAt: "", closeDuration: null, message: "" });
     setError(null);
     onClose?.();
   }

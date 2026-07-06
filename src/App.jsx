@@ -1502,7 +1502,7 @@ const App = () => {
                   onNavigateToHome={() => { navigationHistory.current = []; setPreviousPageName(null); setCurrentPage("home"); }}
                   onNavigateToInvest={() => { navigationHistory.current = []; setPreviousPageName(null); setCurrentPage("markets"); }}
                   onOpenMyWishlists={() => navigateTo("giftRegistryDashboard")}
-                  onContinueToRegistry={(itemKey) => { setGiftRegistryNavState(s => ({ ...s, pendingItemKey: itemKey })); setShowRegistryCreateSheet(true); }}
+                  onContinueToRegistry={(itemKey, name) => { setGiftRegistryNavState(s => ({ ...s, pendingItemKey: itemKey, pendingTitle: name || null })); setShowRegistryCreateSheet(true); }}
                 />
               </AppLayout>
             )}
@@ -1605,11 +1605,13 @@ const App = () => {
           <GiftRegistryCreateSheet
             open={showRegistryCreateSheet}
             pendingItemKey={giftRegistryNavState.pendingItemKey}
-            onClose={() => setShowRegistryCreateSheet(false)}
+            initialTitle={giftRegistryNavState.pendingTitle}
+            initialStep={giftRegistryNavState.pendingTitle ? 2 : 1}
+            onClose={() => { setShowRegistryCreateSheet(false); setGiftRegistryNavState(s => ({ ...s, pendingTitle: null })); }}
             onSaved={(registry, title) => {
               setShowRegistryCreateSheet(false);
+              setGiftRegistryNavState(s => ({ ...s, pendingTitle: null, ...(registry?.id ? { registryId: registry.id, registry } : {}) }));
               if (registry?.id) {
-                setGiftRegistryNavState(s => ({ ...s, registryId: registry.id, registry }));
                 navigateTo("giftRegistryBuilder");
               } else {
                 setRegistrySavedToastMsg(`"${title}" saved!`);
@@ -2163,11 +2165,13 @@ const App = () => {
         <GiftRegistryCreateSheet
           open={showRegistryCreateSheet}
           pendingItemKey={giftRegistryNavState.pendingItemKey}
-          onClose={() => setShowRegistryCreateSheet(false)}
+          initialTitle={giftRegistryNavState.pendingTitle}
+          initialStep={giftRegistryNavState.pendingTitle ? 2 : 1}
+          onClose={() => { setShowRegistryCreateSheet(false); setGiftRegistryNavState(s => ({ ...s, pendingTitle: null })); }}
           onSaved={(registry, title) => {
             setShowRegistryCreateSheet(false);
+            setGiftRegistryNavState(s => ({ ...s, pendingTitle: null, ...(registry?.id ? { registryId: registry.id, registry } : {}) }));
             if (registry?.id) {
-              setGiftRegistryNavState(s => ({ ...s, registryId: registry.id, registry }));
               navigateTo("giftRegistryBuilder");
             } else {
               setRegistrySavedToastMsg(`"${title}" saved!`);

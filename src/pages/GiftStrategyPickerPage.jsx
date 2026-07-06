@@ -231,6 +231,7 @@ export default function GiftStrategyPickerPage({ onBack, onNavigate, autoOpenWis
 
   const [wishlistPickerKey, setWishlistPickerKey] = useState(null); // itemKey awaiting picker
   const [pendingRegistryItem, setPendingRegistryItem] = useState(null); // preserved when transitioning picker → create sheet
+  const [pendingRegistryTitle, setPendingRegistryTitle] = useState(null); // name entered in the empty-state Step-1 form
 
   function toggleWishlistItem(e, key) {
     e.preventDefault(); e.stopPropagation();
@@ -616,10 +617,11 @@ export default function GiftStrategyPickerPage({ onBack, onNavigate, autoOpenWis
             setToastMsg(`Saved to "${listName}"`);
             setToastVisible(true);
           }}
-          onCreateNew={() => {
+          onCreateNew={(name) => {
             const key = wishlistPickerKey;
             setWishlistPickerKey(null);
             setPendingRegistryItem(key);
+            setPendingRegistryTitle(name || null);
             setShowRegistrySheet(true);
           }}
         />
@@ -629,7 +631,9 @@ export default function GiftStrategyPickerPage({ onBack, onNavigate, autoOpenWis
       <GiftRegistryCreateSheet
         open={showRegistrySheet}
         pendingItemKey={pendingRegistryItem}
-        onClose={() => { setShowRegistrySheet(false); setPendingRegistryItem(null); }}
+        initialTitle={pendingRegistryTitle}
+        initialStep={pendingRegistryTitle ? 2 : 1}
+        onClose={() => { setShowRegistrySheet(false); setPendingRegistryItem(null); setPendingRegistryTitle(null); }}
         onSaved={(registry, title) => {
           setShowRegistrySheet(false);
           // Mark the pending item as wishlisted now that it's been saved to a new wishlist

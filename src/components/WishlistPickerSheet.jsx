@@ -51,15 +51,16 @@ export default function WishlistPickerSheet({ itemKey, onClose, onSaved, onCreat
     }
   }
 
-  // Called from the inline Step-1 form (empty state)
+  // Called from the inline Step-1 form (empty state) — first wishlist ever created.
+  // Save the name, then hand off to Step 2 of the gift registry flow instead of
+  // just closing, so the user continues straight into building their registry.
   async function handleSaveNew() {
     if (savingNew) return;
     setSavingNew(true);
     try {
       const trimmed = name.trim() || `My Wishlist ${year}`;
-      await addToWishlist(trimmed, itemKey);
-      onSaved?.(itemKey, trimmed);
       onClose();
+      onCreateNew?.(trimmed);
     } finally {
       setSavingNew(false);
     }
@@ -67,7 +68,7 @@ export default function WishlistPickerSheet({ itemKey, onClose, onSaved, onCreat
 
   function handleCreateNew() {
     onClose();
-    onCreateNew?.();
+    onCreateNew?.(null);
   }
 
   const portalTarget = document.getElementById("modal-root") || document.body;
