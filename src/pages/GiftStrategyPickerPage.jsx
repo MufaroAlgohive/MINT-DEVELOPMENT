@@ -107,20 +107,22 @@ function StrategyCard({ strategy, ytd, holdingsBySymbol, onGift, featured, isWis
           </div>
         )}
 
-        {/* Heart + Watchlist icons */}
+        {/* Bookmark + Heart icons — bottom-right */}
         <div className="absolute bottom-4 right-4 flex items-center gap-1.5 z-10">
-          <div
-            onClick={(e) => { e.stopPropagation(); onToggleWatchlist?.(e, strategy.id); }}
-            className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-100/90 backdrop-blur-sm hover:bg-slate-200 transition-colors"
+          <button
+            type="button"
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); onToggleWatchlist?.(e, strategy.id); }}
+            className="flex h-9 w-9 items-center justify-center rounded-full bg-white/80 backdrop-blur-sm shadow-sm active:scale-90 transition-transform"
           >
-            <Bookmark className={`h-3.5 w-3.5 ${isWatchlisted ? "fill-yellow-400 text-yellow-400" : "text-slate-500"}`} />
-          </div>
-          <div
-            onClick={(e) => { e.stopPropagation(); onToggleWishlist?.(e, `gift:${strategy.id}`); }}
-            className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-100/90 backdrop-blur-sm hover:bg-slate-200 transition-colors"
+            <Bookmark className={`h-5 w-5 ${isWatchlisted ? "fill-yellow-400 text-yellow-400" : "text-slate-400"}`} />
+          </button>
+          <button
+            type="button"
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); onToggleWishlist?.(e, `gift:${strategy.id}`); }}
+            className="flex h-9 w-9 items-center justify-center rounded-full bg-white/80 backdrop-blur-sm shadow-sm active:scale-90 transition-transform"
           >
-            <Heart className={`h-3.5 w-3.5 ${isWishlisted ? "fill-red-500 text-red-500" : "text-slate-500"}`} />
-          </div>
+            <Heart className={`h-5 w-5 ${isWishlisted ? "fill-red-500 text-red-500" : "text-slate-400"}`} />
+          </button>
         </div>
 
         <div className="p-4">

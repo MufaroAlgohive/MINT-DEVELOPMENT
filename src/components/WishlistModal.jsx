@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
+import ReactDOM from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Heart } from "lucide-react";
 
@@ -46,14 +47,15 @@ export default function WishlistModal({ itemKey, onClose, onSaved }) {
   function handleSave() {
     const trimmed = name.trim() || `My Wishlist ${year}`;
     addToWishlist(trimmed, itemKey);
-    onSaved?.(trimmed);
+    onSaved?.(itemKey, trimmed);
     onClose();
   }
 
-  return (
+  const modal = (
     <AnimatePresence>
       <motion.div
-        className="fixed inset-0 z-[60] flex items-end justify-center"
+        className="fixed inset-0 flex items-end justify-center"
+        style={{ zIndex: 99999 }}
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
@@ -63,7 +65,8 @@ export default function WishlistModal({ itemKey, onClose, onSaved }) {
           onClick={onClose}
         />
         <motion.div
-          className="relative z-10 w-full max-w-sm rounded-t-3xl bg-white px-6 pt-5 pb-10 shadow-2xl"
+          className="relative w-full max-w-sm rounded-t-3xl bg-white px-6 pt-5 pb-10 shadow-2xl"
+          style={{ zIndex: 100000 }}
           initial={{ y: "100%" }}
           animate={{ y: 0 }}
           exit={{ y: "100%" }}
@@ -108,4 +111,6 @@ export default function WishlistModal({ itemKey, onClose, onSaved }) {
       </motion.div>
     </AnimatePresence>
   );
+
+  return ReactDOM.createPortal(modal, document.body);
 }

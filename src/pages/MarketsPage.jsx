@@ -276,18 +276,6 @@ const SecuritySparklineCard = ({ security, onClick, onToggleWatchlist, onToggleW
             </div>
           )}
           <span className="flex-1 truncate text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-900">{security.symbol}</span>
-          <div
-            onClick={(e) => { e.stopPropagation(); onToggleWatchlist(e, security.symbol); }}
-            className="flex-shrink-0 p-0.5"
-          >
-            <Bookmark className={`h-4 w-4 ${isWatched ? "fill-yellow-400 text-yellow-400" : "text-slate-300"}`} />
-          </div>
-          <div
-            onClick={(e) => { e.stopPropagation(); onToggleWishlist?.(e, security.symbol); }}
-            className="flex-shrink-0 p-0.5"
-          >
-            <Heart className={`h-4 w-4 ${isWishlisted ? "fill-red-500 text-red-500" : "text-slate-300"}`} />
-          </div>
         </div>
 
         {/* Change % */}
@@ -308,6 +296,24 @@ const SecuritySparklineCard = ({ security, onClick, onToggleWatchlist, onToggleW
             <span className="text-sm text-slate-400">—</span>
           )}
         </p>
+      </div>
+
+      {/* Bookmark + Heart — bottom-right overlay */}
+      <div className="absolute bottom-2 right-2 flex items-center gap-1 z-10">
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onToggleWatchlist(e, security.symbol); }}
+          className="flex h-8 w-8 items-center justify-center rounded-full bg-white/70 backdrop-blur-sm shadow-sm active:scale-90 transition-transform"
+        >
+          <Bookmark className={`h-5 w-5 ${isWatched ? "fill-yellow-400 text-yellow-400" : "text-slate-400"}`} />
+        </button>
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onToggleWishlist?.(e, security.symbol); }}
+          className="flex h-8 w-8 items-center justify-center rounded-full bg-white/70 backdrop-blur-sm shadow-sm active:scale-90 transition-transform"
+        >
+          <Heart className={`h-5 w-5 ${isWishlisted ? "fill-red-500 text-red-500" : "text-slate-400"}`} />
+        </button>
       </div>
 
       {/* Sparkline chart */}
@@ -1950,7 +1956,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                   <button
                     key={security.id}
                     onClick={() => onOpenStockDetail(security)}
-                    className="w-full rounded-3xl border border-slate-100/80 bg-white/90 backdrop-blur-sm p-4 text-left shadow-[0_2px_16px_-2px_rgba(0,0,0,0.08)] transition-all hover:shadow-[0_4px_24px_-4px_rgba(0,0,0,0.12)] active:scale-[0.97]"
+                    className="relative w-full rounded-3xl border border-slate-100/80 bg-white/90 backdrop-blur-sm p-4 text-left shadow-[0_2px_16px_-2px_rgba(0,0,0,0.08)] transition-all hover:shadow-[0_4px_24px_-4px_rgba(0,0,0,0.12)] active:scale-[0.97]"
                   >
                     <div className="flex items-start gap-3">
                       {security.logo_url ? (
@@ -1994,14 +2000,6 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                               <p className="text-xs text-slate-500">No pricing data</p>
                             )}
                           </div>
-                          <div className="flex items-center gap-1 ml-2 flex-shrink-0">
-                            <div onClick={(e) => toggleWatchlist(e, security.symbol)}>
-                              <Bookmark className={`h-5 w-5 ${watchlist.includes(security.symbol) ? "fill-yellow-400 text-yellow-400" : "text-slate-300"}`} />
-                            </div>
-                            <div onClick={(e) => toggleWishlistItem(e, security.symbol)}>
-                              <Heart className={`h-5 w-5 ${wishlistedKeys.has(security.symbol) ? "fill-red-500 text-red-500" : "text-slate-300"}`} />
-                            </div>
-                          </div>
                         </div>
 
                         <div className="mt-3 flex items-center gap-2">
@@ -2022,6 +2020,24 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                               YTD {formatChangePct(security.returns.ytd)}
                             </span>
                           )}
+                        </div>
+
+                        {/* Bookmark + Heart — bottom-right */}
+                        <div className="absolute bottom-3 right-3 flex items-center gap-1.5 z-10">
+                          <button
+                            type="button"
+                            onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleWatchlist(e, security.symbol); }}
+                            className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 shadow-sm active:scale-90 transition-transform"
+                          >
+                            <Bookmark className={`h-5 w-5 ${watchlist.includes(security.symbol) ? "fill-yellow-400 text-yellow-400" : "text-slate-400"}`} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleWishlistItem(e, security.symbol); }}
+                            className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 shadow-sm active:scale-90 transition-transform"
+                          >
+                            <Heart className={`h-5 w-5 ${wishlistedKeys.has(security.symbol) ? "fill-red-500 text-red-500" : "text-slate-400"}`} />
+                          </button>
                         </div>
                       </div>
                     </div>
@@ -2051,7 +2067,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                       <button
                         key={security.id}
                         onClick={() => onOpenStockDetail(security)}
-                        className="w-full rounded-3xl border border-slate-100/80 bg-white/90 backdrop-blur-sm p-4 text-left shadow-[0_2px_16px_-2px_rgba(0,0,0,0.08)] transition-all hover:shadow-[0_4px_24px_-4px_rgba(0,0,0,0.12)] active:scale-[0.97]"
+                        className="relative w-full rounded-3xl border border-slate-100/80 bg-white/90 backdrop-blur-sm p-4 text-left shadow-[0_2px_16px_-2px_rgba(0,0,0,0.08)] transition-all hover:shadow-[0_4px_24px_-4px_rgba(0,0,0,0.12)] active:scale-[0.97]"
                       >
                         <div className="flex items-start gap-3">
                           {security.logo_url ? (
@@ -2095,14 +2111,6 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                                   <p className="text-xs text-slate-400">—</p>
                                 )}
                               </div>
-                              <div className="flex items-center gap-1 ml-2 flex-shrink-0">
-                                <div onClick={(e) => toggleWatchlist(e, security.symbol)}>
-                                  <Bookmark className={`h-5 w-5 ${watchlist.includes(security.symbol) ? "fill-yellow-400 text-yellow-400" : "text-slate-300"}`} />
-                                </div>
-                                <div onClick={(e) => toggleWishlistItem(e, security.symbol)}>
-                                  <Heart className={`h-5 w-5 ${wishlistedKeys.has(security.symbol) ? "fill-red-500 text-red-500" : "text-slate-300"}`} />
-                                </div>
-                              </div>
                             </div>
 
                             <div className="mt-3 flex items-center gap-2">
@@ -2116,6 +2124,24 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                                   P/E {Number(security.pe).toFixed(2)}
                                 </span>
                               )}
+                            </div>
+
+                            {/* Bookmark + Heart — bottom-right */}
+                            <div className="absolute bottom-3 right-3 flex items-center gap-1.5 z-10">
+                              <button
+                                type="button"
+                                onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleWatchlist(e, security.symbol); }}
+                                className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 shadow-sm active:scale-90 transition-transform"
+                              >
+                                <Bookmark className={`h-5 w-5 ${watchlist.includes(security.symbol) ? "fill-yellow-400 text-yellow-400" : "text-slate-400"}`} />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleWishlistItem(e, security.symbol); }}
+                                className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 shadow-sm active:scale-90 transition-transform"
+                              >
+                                <Heart className={`h-5 w-5 ${wishlistedKeys.has(security.symbol) ? "fill-red-500 text-red-500" : "text-slate-400"}`} />
+                              </button>
                             </div>
                           </div>
                         </div>
@@ -2205,20 +2231,22 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                         data-coach-desc={truncatedDescription || ''}
                         className="relative flex-shrink-0 w-80 rounded-2xl border border-slate-100 bg-white shadow-sm hover:shadow-md hover:border-slate-200 p-4 transition-all snap-center"
                       >
-                        {/* Heart + Watchlist icons */}
-                        <div className="absolute top-3 right-3 flex items-center gap-1 z-10">
-                          <div
-                            onClick={(e) => toggleStrategyWatchlist(e, strategy.id)}
-                            className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-50 hover:bg-slate-100 transition-colors"
+                        {/* Bookmark + Heart icons — bottom-right */}
+                        <div className="absolute bottom-3 right-3 flex items-center gap-1.5 z-10">
+                          <button
+                            type="button"
+                            onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleStrategyWatchlist(e, strategy.id); }}
+                            className="flex h-9 w-9 items-center justify-center rounded-full bg-white/80 backdrop-blur-sm shadow-sm active:scale-90 transition-transform"
                           >
-                            <Bookmark className={`h-3.5 w-3.5 ${strategyWatchlist.includes(strategy.id) ? "fill-yellow-400 text-yellow-400" : "text-slate-400"}`} />
-                          </div>
-                          <div
-                            onClick={(e) => toggleWishlistItem(e, `strategy:${strategy.id}`)}
-                            className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-50 hover:bg-slate-100 transition-colors"
+                            <Bookmark className={`h-5 w-5 ${strategyWatchlist.includes(strategy.id) ? "fill-yellow-400 text-yellow-400" : "text-slate-400"}`} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleWishlistItem(e, `strategy:${strategy.id}`); }}
+                            className="flex h-9 w-9 items-center justify-center rounded-full bg-white/80 backdrop-blur-sm shadow-sm active:scale-90 transition-transform"
                           >
-                            <Heart className={`h-3.5 w-3.5 ${wishlistedKeys.has(`strategy:${strategy.id}`) ? "fill-red-500 text-red-500" : "text-slate-400"}`} />
-                          </div>
+                            <Heart className={`h-5 w-5 ${wishlistedKeys.has(`strategy:${strategy.id}`) ? "fill-red-500 text-red-500" : "text-slate-400"}`} />
+                          </button>
                         </div>
                         <div className="flex items-start gap-3">
                           <div className="flex-1 flex items-start justify-between gap-4">
