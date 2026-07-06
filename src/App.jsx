@@ -11,6 +11,7 @@ import { SplashScreen } from '@capacitor/splash-screen';
 import { Keyboard } from '@capacitor/keyboard';
 import SwipeBackWrapper from "./components/SwipeBackWrapper.jsx";
 import GiftRegistryCreateSheet from "./components/GiftRegistryCreateSheet.jsx";
+import WishlistToast from "./components/WishlistToast.jsx";
 import AppLayout from "./layouts/AppLayout.jsx";
 import { useProfile } from "./lib/useProfile";
 import { NotificationsProvider, createWelcomeNotification, useNotificationsContext } from "./lib/NotificationsContext.jsx";
@@ -56,7 +57,6 @@ const SentGiftsPageV2 = lazy(() => import("./pages/SentGiftsPageV2.jsx"));
 const GiftStrategyPickerPage = lazy(() => import("./pages/GiftStrategyPickerPage.jsx"));
 const MyWishlistsPage = lazy(() => import("./pages/MyWishlistsPage.jsx"));
 const GiftRegistryCreatePage = lazy(() => import("./pages/GiftRegistryCreatePage.jsx"));
-const GiftRegistryBuilderPage = lazy(() => import("./pages/GiftRegistryBuilderPage.jsx"));
 const GiftRegistryPreviewPage = lazy(() => import("./pages/GiftRegistryPreviewPage.jsx"));
 const GiftRegistryDetailPage = lazy(() => import("./pages/GiftRegistryDetailPage.jsx"));
 const GiftRegistryPublicPage = lazy(() => import("./pages/GiftRegistryPublicPage.jsx"));
@@ -252,6 +252,8 @@ const App = () => {
   // Gift Registry navigation state
   const [giftRegistryNavState, setGiftRegistryNavState] = useState({});  // { registryId, registry, token, pendingItemKey }
   const [showRegistryCreateSheet, setShowRegistryCreateSheet] = useState(false);
+  const [registrySavedToastMsg, setRegistrySavedToastMsg] = useState("");
+  const [registrySavedToastVisible, setRegistrySavedToastVisible] = useState(false);
 
   const isAuthenticated = !['welcome', 'auth', 'linkExpired'].includes(currentPage);
 
@@ -1603,11 +1605,16 @@ const App = () => {
             open={showRegistryCreateSheet}
             pendingItemKey={giftRegistryNavState.pendingItemKey}
             onClose={() => setShowRegistryCreateSheet(false)}
-            onNavigate={(page, state) => {
+            onSaved={(title) => {
               setShowRegistryCreateSheet(false);
-              if (state) setGiftRegistryNavState(s => ({ ...s, ...state }));
-              navigateTo(page);
+              setRegistrySavedToastMsg(`"${title}" saved!`);
+              setRegistrySavedToastVisible(true);
             }}
+          />
+          <WishlistToast
+            message={registrySavedToastMsg}
+            visible={registrySavedToastVisible}
+            onHide={() => setRegistrySavedToastVisible(false)}
           />
         </>
       </Suspense>
@@ -2151,11 +2158,16 @@ const App = () => {
           open={showRegistryCreateSheet}
           pendingItemKey={giftRegistryNavState.pendingItemKey}
           onClose={() => setShowRegistryCreateSheet(false)}
-          onNavigate={(page, state) => {
+          onSaved={(title) => {
             setShowRegistryCreateSheet(false);
-            if (state) setGiftRegistryNavState(s => ({ ...s, ...state }));
-            navigateTo(page);
+            setRegistrySavedToastMsg(`"${title}" saved!`);
+            setRegistrySavedToastVisible(true);
           }}
+        />
+        <WishlistToast
+          message={registrySavedToastMsg}
+          visible={registrySavedToastVisible}
+          onHide={() => setRegistrySavedToastVisible(false)}
         />
       </>
     );
@@ -2850,7 +2862,7 @@ const App = () => {
                 if (page === "giftStrategyInvest") {
                   setPageParams(params);
                   navigateTo("giftStrategyInvest");
-                } else if (page === "giftRegistryBuilder" || page === "giftRegistryCreate" || page === "giftRegistryDetail" || page === "giftRegistryPreview" || page === "giftRegistryPublic" || page === "giftRegistryDashboard" || page === "giftRegistryLookup") {
+                } else if (page === "giftRegistryCreate" || page === "giftRegistryDetail" || page === "giftRegistryPreview" || page === "giftRegistryPublic" || page === "giftRegistryDashboard" || page === "giftRegistryLookup") {
                   if (params) setGiftRegistryNavState(s => ({ ...s, ...params }));
                   navigateTo(page);
                 } else {
@@ -2906,21 +2918,6 @@ const App = () => {
     );
   }
 
-  if (currentPage === "giftRegistryBuilder") {
-    return (
-      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
-        <Suspense fallback={<div className="min-h-screen bg-[#f8f9fc]" />}>
-          <GiftRegistryBuilderPage
-            registryId={giftRegistryNavState.registryId}
-            registry={giftRegistryNavState.registry}
-            onBack={goBack}
-            onNavigate={(page, state) => { if (state) setGiftRegistryNavState(s => ({ ...s, ...state })); navigateTo(page); }}
-            pendingItemKey={giftRegistryNavState.pendingItemKey}
-          />
-        </Suspense>
-      </SwipeBackWrapper>
-    );
-  }
 
   if (currentPage === "giftRegistryPreview") {
     return (

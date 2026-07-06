@@ -8,8 +8,7 @@ import { useRealtimePrices } from "../lib/useRealtimePrices";
 import { getStrategiesWithMetrics, getPublicStrategies, formatChangePct, formatChangeAbs, getChangeColor } from "../lib/strategyData.js";
 import { useProfile } from "../lib/useProfile";
 import { TrendingUp, Search, SlidersHorizontal, X, ChevronRight, Bookmark, PlayCircle, Gift, Heart } from "lucide-react";
-import WishlistModal, { isInAnyWishlist, getWishlistNameForItem, removeFromWishlist } from "../components/WishlistModal.jsx";
-import WishlistToast from "../components/WishlistToast.jsx";
+import { isInAnyWishlist, getWishlistNameForItem, removeFromWishlist } from "../components/WishlistModal.jsx";
 import ChildInvestModal from "../components/ChildInvestModal.jsx";
 import { saveMarketsInvestFilters, loadMarketsInvestFilters, saveMarketsStrategyFilters, loadMarketsStrategyFilters, buildInvestChips, buildChipsFromFilters } from "../lib/usePersistedFilters.js";
 import NotificationBell from "../components/NotificationBell";
@@ -498,7 +497,6 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
 
   // Wishlist (heart) state
   const STRATEGY_WL_KEY = "mint_strategy_watchlist";
-  const [wishlistModal, setWishlistModal] = useState(null);
   const [wishlistedKeys, setWishlistedKeys] = useState(() => {
     try {
       const lists = JSON.parse(localStorage.getItem("mint_wishlists") || "[]");
@@ -510,9 +508,6 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
   const [strategyWatchlist, setStrategyWatchlist] = useState(() => {
     try { return JSON.parse(localStorage.getItem(STRATEGY_WL_KEY) || "[]"); } catch { return []; }
   });
-  const [toastMsg, setToastMsg] = useState("");
-  const [toastVisible, setToastVisible] = useState(false);
-
   const toggleWishlistItem = (e, itemKey) => {
     e.stopPropagation();
     if (wishlistedKeys.has(itemKey)) {
@@ -521,16 +516,11 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
       next.delete(itemKey);
       setWishlistedKeys(next);
     } else {
-      setWishlistModal(itemKey);
+      const next = new Set(wishlistedKeys);
+      next.add(itemKey);
+      setWishlistedKeys(next);
+      onContinueToRegistry?.(itemKey);
     }
-  };
-
-  const handleWishlistSaved = (key, listName) => {
-    const next = new Set(wishlistedKeys);
-    next.add(key);
-    setWishlistedKeys(next);
-    // Do NOT close the modal here — WishlistModal advances to step 2 itself
-    // and the user needs to see the "Build my registry" CTA before dismissing
   };
 
   const toggleStrategyWatchlist = (e, strategyId) => {
@@ -1499,23 +1489,6 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
     <div className="min-h-screen bg-slate-50 pb-[env(safe-area-inset-bottom)] text-slate-900">
       {showOpenStrategiesMaintenance && <MaintenanceModal onClose={() => setShowOpenStrategiesMaintenance(false)} />}
 
-      {/* Wishlist name modal (Airbnb-style) */}
-      {wishlistModal && (
-        <WishlistModal
-          itemKey={wishlistModal}
-          onClose={() => setWishlistModal(null)}
-          onSaved={handleWishlistSaved}
-          onViewWishlists={onOpenMyWishlists}
-          onContinueToRegistry={(key) => { setWishlistModal(null); onContinueToRegistry?.(key); }}
-        />
-      )}
-
-      {/* Wishlist saved toast */}
-      <WishlistToast
-        message={toastMsg}
-        visible={toastVisible}
-        onHide={() => setToastVisible(false)}
-      />
 
       {showBasketsExplainer && (
         <MintBasketsExplainer

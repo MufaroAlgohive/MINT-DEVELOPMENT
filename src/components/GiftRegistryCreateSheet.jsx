@@ -2,20 +2,10 @@ import React, { useState, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  X, Cake, Heart, Baby, GraduationCap, Sparkles, PenLine,
+  X, Heart,
   ChevronLeft, ChevronRight, User, Users, UserPlus,
 } from "lucide-react";
 import { supabaseReady } from "../lib/supabase.js";
-
-// ─── Occasion config ──────────────────────────────────────────────────────────
-const OCCASIONS = [
-  { key: "BIRTHDAY",   label: "Birthday",       Icon: Cake },
-  { key: "WEDDING",    label: "Wedding",         Icon: Heart },
-  { key: "BABY",       label: "New Baby",        Icon: Baby },
-  { key: "GRADUATION", label: "Graduation",      Icon: GraduationCap },
-  { key: "FESTIVE",    label: "Festive Season",  Icon: Sparkles },
-  { key: "CUSTOM",     label: "Custom",          Icon: PenLine },
-];
 
 const MONTHS = [
   "January","February","March","April","May","June",
@@ -24,7 +14,6 @@ const MONTHS = [
 
 const DAY_HEADERS = ["Mo","Tu","We","Th","Fr","Sa","Su"];
 
-// ─── Custom date picker ───────────────────────────────────────────────────────
 function MiniCalendar({ value, onChange, minDate }) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -36,7 +25,6 @@ function MiniCalendar({ value, onChange, minDate }) {
 
   const firstDay = new Date(yr, mo, 1);
   const lastDay  = new Date(yr, mo + 1, 0);
-  // Monday-first offset
   let offset = firstDay.getDay() - 1;
   if (offset < 0) offset = 6;
 
@@ -58,7 +46,6 @@ function MiniCalendar({ value, onChange, minDate }) {
 
   return (
     <div className="select-none">
-      {/* Month nav */}
       <div className="flex items-center justify-between mb-3">
         <button
           type="button"
@@ -80,14 +67,12 @@ function MiniCalendar({ value, onChange, minDate }) {
         </button>
       </div>
 
-      {/* Day headers */}
       <div className="grid grid-cols-7 mb-1">
         {DAY_HEADERS.map(d => (
           <div key={d} className="text-center text-[10px] font-medium text-slate-400 py-0.5">{d}</div>
         ))}
       </div>
 
-      {/* Day cells */}
       <div className="grid grid-cols-7 gap-y-0.5">
         {cells.map((d, i) => {
           if (!d) return <div key={`e${i}`} />;
@@ -121,7 +106,6 @@ function MiniCalendar({ value, onChange, minDate }) {
   );
 }
 
-// ─── Close-date duration picker ───────────────────────────────────────────────
 const DURATIONS = [
   { label: "+7 days",  days: 7 },
   { label: "+14 days", days: 14 },
@@ -136,12 +120,12 @@ function addDays(isoDate, n) {
   return d.toISOString().split("T")[0];
 }
 
-// ─── Main sheet ───────────────────────────────────────────────────────────────
-export default function GiftRegistryCreateSheet({ open, onClose, onNavigate, pendingItemKey }) {
+export default function GiftRegistryCreateSheet({ open, onClose, onSaved, pendingItemKey }) {
+  const year = new Date().getFullYear();
   const [step, setStep]   = useState(1);
   const [form, setForm]   = useState({
-    occasion: "", customOccasion: "",
-    beneficiaryType: "SELF", beneficiaryDisplayName: "", title: "",
+    title: `My Wishlist ${year}`,
+    beneficiaryType: "SELF", beneficiaryDisplayName: "",
     eventDate: "", expiryAt: "", closeDuration: null,
     message: "",
   });
@@ -150,17 +134,6 @@ export default function GiftRegistryCreateSheet({ open, onClose, onNavigate, pen
   const [error, setError]                     = useState(null);
 
   const set = useCallback((k, v) => setForm(f => ({ ...f, [k]: v })), []);
-
-  function autoTitle() {
-    const name = form.beneficiaryDisplayName.trim();
-    if (!name || !form.occasion) return "";
-    if (form.occasion === "BIRTHDAY")   return `${name}'s Birthday`;
-    if (form.occasion === "WEDDING")    return `${name}'s Wedding`;
-    if (form.occasion === "BABY")       return `Baby ${name}`;
-    if (form.occasion === "GRADUATION") return `${name}'s Graduation`;
-    if (form.occasion === "FESTIVE")    return `${name}'s Festive Wishlist`;
-    return `${name} – ${form.customOccasion || "Custom"}`;
-  }
 
   function handleDuration(days) {
     set("closeDuration", days);
@@ -172,7 +145,7 @@ export default function GiftRegistryCreateSheet({ open, onClose, onNavigate, pen
     }
   }
 
-  const canStep1 = !!form.occasion && (form.occasion !== "CUSTOM" || form.customOccasion.trim());
+  const canStep1 = form.title.trim().length >= 2;
   const canStep2 = form.beneficiaryDisplayName.trim().length >= 2;
   const canStep3 =
     !!form.eventDate &&
@@ -189,11 +162,11 @@ export default function GiftRegistryCreateSheet({ open, onClose, onNavigate, pen
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({
-          occasion:                form.occasion,
-          customOccasion:          form.customOccasion,
+          occasion:                "CUSTOM",
+          customOccasion:          "",
           beneficiaryType:         form.beneficiaryType,
           beneficiaryDisplayName:  form.beneficiaryDisplayName.trim(),
-          title:                   form.title || autoTitle(),
+          title:                   form.title.trim(),
           eventDate:               form.eventDate,
           expiryAt:                form.expiryAt,
           message:                 form.message.trim() || null,
@@ -202,7 +175,7 @@ export default function GiftRegistryCreateSheet({ open, onClose, onNavigate, pen
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Could not create wishlist");
       onClose?.();
-      onNavigate?.("giftRegistryBuilder", { registryId: json.registry.id, registry: json.registry, pendingItemKey: pendingItemKey || null });
+      onSaved?.(form.title.trim());
     } catch (e) {
       setError(e.message);
     } finally {
@@ -215,13 +188,19 @@ export default function GiftRegistryCreateSheet({ open, onClose, onNavigate, pen
     else setStep(s => s - 1);
   }
 
+  function handleClose() {
+    setStep(1);
+    setForm({ title: `My Wishlist ${year}`, beneficiaryType: "SELF", beneficiaryDisplayName: "", eventDate: "", expiryAt: "", closeDuration: null, message: "" });
+    setError(null);
+    onClose?.();
+  }
+
   const portalTarget = document.getElementById("modal-root") || document.body;
 
   return createPortal(
     <AnimatePresence>
       {open && (
         <>
-          {/* Backdrop */}
           <motion.div
             key="registry-sheet-backdrop"
             className="fixed inset-0"
@@ -230,10 +209,9 @@ export default function GiftRegistryCreateSheet({ open, onClose, onNavigate, pen
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
-            onClick={onClose}
+            onClick={handleClose}
           />
 
-          {/* Sheet */}
           <motion.div
             key="registry-sheet"
             className="fixed inset-x-0 bottom-0 mx-auto flex w-full max-w-md flex-col rounded-t-[28px] bg-white shadow-2xl overflow-hidden"
@@ -243,15 +221,12 @@ export default function GiftRegistryCreateSheet({ open, onClose, onNavigate, pen
             exit={{ y: "100%" }}
             transition={{ type: "spring", damping: 28, stiffness: 320 }}
           >
-            {/* Gradient accent strip */}
             <div className="h-1 w-full flex-shrink-0" style={{ background: "linear-gradient(90deg,#7c3aed,#6366f1,#8b5cf6)" }} />
 
-            {/* Drag handle */}
             <div className="flex justify-center pt-2.5 pb-1 flex-shrink-0">
               <div className="h-[3px] w-9 rounded-full bg-slate-200" />
             </div>
 
-            {/* Header */}
             <div className="flex items-center justify-between px-5 py-3 flex-shrink-0">
               <div>
                 <h2 className="text-[15px] font-bold text-slate-900 leading-tight">New Wishlist</h2>
@@ -259,14 +234,13 @@ export default function GiftRegistryCreateSheet({ open, onClose, onNavigate, pen
               </div>
               <button
                 type="button"
-                onClick={onClose}
+                onClick={handleClose}
                 className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 transition"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
 
-            {/* Progress bar */}
             <div className="flex gap-1.5 px-5 pb-3 flex-shrink-0">
               {[1, 2, 3].map(n => (
                 <div
@@ -277,54 +251,30 @@ export default function GiftRegistryCreateSheet({ open, onClose, onNavigate, pen
               ))}
             </div>
 
-            {/* Scrollable body */}
             <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-5 pb-6" style={{ WebkitOverflowScrolling: "touch" }}>
 
-              {/* ── Step 1: Occasion ── */}
+              {/* ── Step 1: Name your wishlist ── */}
               {step === 1 && (
                 <div className="space-y-4 pt-1">
-                  <p className="text-[13px] font-semibold text-slate-700">What's the occasion?</p>
-
-                  <div className="grid grid-cols-3 gap-2.5">
-                    {OCCASIONS.map(({ key, label, Icon }) => {
-                      const active = form.occasion === key;
-                      return (
-                        <button
-                          key={key}
-                          type="button"
-                          onClick={() => set("occasion", key)}
-                          className={[
-                            "flex flex-col items-center gap-2 rounded-2xl border-2 py-4 px-2 transition-all",
-                            active
-                              ? "border-[#6B21A8] bg-violet-50"
-                              : "border-slate-200 bg-white hover:border-violet-200",
-                          ].join(" ")}
-                        >
-                          <div className={[
-                            "flex h-9 w-9 items-center justify-center rounded-xl",
-                            active ? "bg-[#6B21A8]" : "bg-slate-100",
-                          ].join(" ")}>
-                            <Icon size={18} className={active ? "text-white" : "text-slate-500"} />
-                          </div>
-                          <span className={[
-                            "text-[11px] font-medium text-center leading-tight",
-                            active ? "text-[#6B21A8]" : "text-slate-600",
-                          ].join(" ")}>
-                            {label}
-                          </span>
-                        </button>
-                      );
-                    })}
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-red-50 flex-shrink-0">
+                      <Heart size={22} className="fill-red-500 text-red-500" />
+                    </div>
+                    <div>
+                      <p className="text-[15px] font-bold text-slate-900 leading-tight">Name your wishlist</p>
+                      <p className="text-xs text-slate-400 mt-0.5">You can rename it anytime</p>
+                    </div>
                   </div>
 
-                  {form.occasion === "CUSTOM" && (
-                    <input
-                      className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-300 focus:border-transparent"
-                      placeholder="Describe the occasion"
-                      value={form.customOccasion}
-                      onChange={e => set("customOccasion", e.target.value)}
-                    />
-                  )}
+                  <input
+                    type="text"
+                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3.5 text-[15px] font-medium text-slate-900 focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100 transition placeholder:text-slate-400"
+                    placeholder={`My Wishlist ${year}`}
+                    value={form.title}
+                    onChange={e => set("title", e.target.value)}
+                    autoFocus
+                    onKeyDown={e => e.key === "Enter" && canStep1 && setStep(2)}
+                  />
 
                   <button
                     type="button"
@@ -342,7 +292,6 @@ export default function GiftRegistryCreateSheet({ open, onClose, onNavigate, pen
                 <div className="space-y-4 pt-1">
                   <p className="text-[13px] font-semibold text-slate-700">Who is this wishlist for?</p>
 
-                  {/* Type selector */}
                   <div className="flex gap-2">
                     {[
                       { k: "SELF",  label: "Myself",       Icon: User },
@@ -374,7 +323,6 @@ export default function GiftRegistryCreateSheet({ open, onClose, onNavigate, pen
                     })}
                   </div>
 
-                  {/* Name */}
                   <div>
                     <label className="text-[11px] font-medium text-slate-500 block mb-1.5">
                       {form.beneficiaryType === "SELF" ? "Your first name" : "Their first name"}
@@ -385,19 +333,6 @@ export default function GiftRegistryCreateSheet({ open, onClose, onNavigate, pen
                       placeholder="First name only"
                       value={form.beneficiaryDisplayName}
                       onChange={e => set("beneficiaryDisplayName", e.target.value)}
-                    />
-                  </div>
-
-                  {/* Title */}
-                  <div>
-                    <label className="text-[11px] font-medium text-slate-500 block mb-1.5">
-                      Wishlist title <span className="font-normal text-slate-400">— optional, auto-generated if left blank</span>
-                    </label>
-                    <input
-                      className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-300 focus:border-transparent"
-                      placeholder={autoTitle() || "Wishlist title"}
-                      value={form.title}
-                      onChange={e => set("title", e.target.value)}
                     />
                   </div>
 
@@ -415,7 +350,6 @@ export default function GiftRegistryCreateSheet({ open, onClose, onNavigate, pen
               {/* ── Step 3: Dates ── */}
               {step === 3 && (
                 <div className="space-y-5 pt-1">
-                  {/* Event date */}
                   <div>
                     <p className="text-[13px] font-semibold text-slate-700 mb-3">When is the occasion?</p>
                     <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
@@ -423,7 +357,6 @@ export default function GiftRegistryCreateSheet({ open, onClose, onNavigate, pen
                         value={form.eventDate}
                         onChange={v => {
                           set("eventDate", v);
-                          // Re-apply duration if one was selected
                           if (form.closeDuration !== null && form.closeDuration !== undefined) {
                             set("expiryAt", addDays(v, form.closeDuration));
                           }
@@ -432,7 +365,6 @@ export default function GiftRegistryCreateSheet({ open, onClose, onNavigate, pen
                     </div>
                   </div>
 
-                  {/* Close date */}
                   <div>
                     <p className="text-[11px] font-semibold text-slate-500 mb-2 uppercase tracking-wide">Wishlist closes</p>
                     <div className="flex flex-wrap gap-2">
@@ -462,7 +394,6 @@ export default function GiftRegistryCreateSheet({ open, onClose, onNavigate, pen
                       <p className="text-[10px] text-slate-400 mt-1.5">Select an event date first</p>
                     )}
 
-                    {/* Custom close calendar */}
                     {showCustomClose && (
                       <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
                         <MiniCalendar
@@ -473,7 +404,6 @@ export default function GiftRegistryCreateSheet({ open, onClose, onNavigate, pen
                       </div>
                     )}
 
-                    {/* Show computed close date */}
                     {form.expiryAt && !showCustomClose && (
                       <p className="text-[11px] text-slate-500 mt-2">
                         Closes on{" "}
@@ -486,7 +416,6 @@ export default function GiftRegistryCreateSheet({ open, onClose, onNavigate, pen
                     )}
                   </div>
 
-                  {/* Message */}
                   <div>
                     <label className="text-[11px] font-medium text-slate-500 block mb-1.5">
                       Note for your guests <span className="font-normal text-slate-400">— optional</span>
@@ -516,7 +445,6 @@ export default function GiftRegistryCreateSheet({ open, onClose, onNavigate, pen
               )}
             </div>
 
-            {/* Back link */}
             <div className="flex-shrink-0 px-5 pt-1 pb-3">
               <button
                 type="button"
