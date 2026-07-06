@@ -510,7 +510,7 @@ export default function GiftRegistryCreateSheet({ open, onClose, onNavigate }) {
                     disabled={!canStep3 || saving}
                     className="w-full py-4 rounded-2xl bg-[#6B21A8] text-white font-semibold text-sm disabled:opacity-40 transition"
                   >
-                    {saving ? "Creating…" : "Create & add shares →"}
+                    {saving ? "Saving…" : "Save Wishlist"}
                   </button>
                 </div>
               )}

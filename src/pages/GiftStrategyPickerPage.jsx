@@ -1,5 +1,5 @@
 import React, { useEffect, useId, useMemo, useRef, useState } from "react";
-import { ArrowLeft, BookMarked, Gift, Search, Sparkles, TrendingUp, X } from "lucide-react";
+import { ArrowLeft, BookMarked, Bookmark, Gift, Heart, Search, Sparkles, TrendingUp, X } from "lucide-react";
 import GiftRegistryCreateSheet from "../components/GiftRegistryCreateSheet.jsx";
 import { AreaChart, Area, LineChart, Line, ResponsiveContainer } from "recharts";
 import { motion, AnimatePresence } from "framer-motion";
@@ -8,6 +8,8 @@ import { getPublicStrategies, formatChangePct } from "../lib/strategyData";
 import { calculateMinInvestmentSync, enrichSecuritiesWithIntradayPrices, buildHoldingsBySymbol } from "../lib/strategyUtils";
 import { supabase } from "../lib/supabase";
 import { formatCurrency } from "../lib/formatCurrency";
+import WishlistModal, { isInAnyWishlist, removeFromWishlist } from "../components/WishlistModal.jsx";
+import WishlistToast from "../components/WishlistToast.jsx";
 
 const HOME_BG = {
   backgroundColor: '#f8f6fa',
@@ -68,7 +70,7 @@ function MiniSparkline({ strategyId, positive }) {
   );
 }
 
-function StrategyCard({ strategy, ytd, holdingsBySymbol, onGift, featured }) {
+function StrategyCard({ strategy, ytd, holdingsBySymbol, onGift, featured, isWishlisted, isWatchlisted, onToggleWishlist, onToggleWatchlist }) {
   const currency = strategy.base_currency || "R";
   const calcMin = calculateMinInvestmentSync(strategy, holdingsBySymbol);
   const minInvest = calcMin ? formatCurrency(calcMin * 1.08, currency) : null;
@@ -104,6 +106,22 @@ function StrategyCard({ strategy, ytd, holdingsBySymbol, onGift, featured }) {
             </div>
           </div>
         )}
+
+        {/* Heart + Watchlist icons */}
+        <div className="absolute bottom-4 right-4 flex items-center gap-1.5 z-10">
+          <div
+            onClick={(e) => { e.stopPropagation(); onToggleWatchlist?.(e, strategy.id); }}
+            className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-100/90 backdrop-blur-sm hover:bg-slate-200 transition-colors"
+          >
+            <Bookmark className={`h-3.5 w-3.5 ${isWatchlisted ? "fill-yellow-400 text-yellow-400" : "text-slate-500"}`} />
+          </div>
+          <div
+            onClick={(e) => { e.stopPropagation(); onToggleWishlist?.(e, `gift:${strategy.id}`); }}
+            className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-100/90 backdrop-blur-sm hover:bg-slate-200 transition-colors"
+          >
+            <Heart className={`h-3.5 w-3.5 ${isWishlisted ? "fill-red-500 text-red-500" : "text-slate-500"}`} />
+          </div>
+        </div>
 
         <div className="p-4">
           {/* Top row: logos + chart */}
@@ -190,8 +208,50 @@ export default function GiftStrategyPickerPage({ onBack, onNavigate, autoOpenWis
   const [showSearch, setShowSearch] = useState(false);
   const [showRegistrySheet, setShowRegistrySheet] = useState(false);
   const [showWishlistMenu, setShowWishlistMenu] = useState(false);
+  // Wishlist (heart) state
+  const [wishlistModal, setWishlistModal] = useState(null);
+  const [wishlistedKeys, setWishlistedKeys] = useState(() => {
+    try {
+      const lists = JSON.parse(localStorage.getItem("mint_wishlists") || "[]");
+      const keys = new Set();
+      lists.forEach(l => (l.items || []).forEach(k => keys.add(k)));
+      return keys;
+    } catch { return new Set(); }
+  });
+  const [giftStrategyWatchlist, setGiftStrategyWatchlist] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("mint_gift_strategy_watchlist") || "[]"); } catch { return []; }
+  });
+  const [toastMsg, setToastMsg] = useState("");
+  const [toastVisible, setToastVisible] = useState(false);
+
   const searchRef = useRef(null);
   const wishlistMenuRef = useRef(null);
+
+  function toggleWishlistItem(e, key) {
+    e.preventDefault(); e.stopPropagation();
+    if (wishlistedKeys.has(key)) {
+      removeFromWishlist(key);
+      setWishlistedKeys(prev => { const n = new Set(prev); n.delete(key); return n; });
+    } else {
+      setWishlistModal(key);
+    }
+  }
+
+  function handleWishlistSaved(key, listName) {
+    setWishlistedKeys(prev => new Set([...prev, key]));
+    setWishlistModal(null);
+    setToastMsg(`Saved to "${listName}"`);
+    setToastVisible(true);
+  }
+
+  function toggleGiftStrategyWatchlist(e, id) {
+    e.preventDefault(); e.stopPropagation();
+    setGiftStrategyWatchlist(prev => {
+      const next = prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id];
+      localStorage.setItem("mint_gift_strategy_watchlist", JSON.stringify(next));
+      return next;
+    });
+  }
 
   useEffect(() => {
     if (!showWishlistMenu) return;
@@ -492,6 +552,10 @@ export default function GiftStrategyPickerPage({ onBack, onNavigate, autoOpenWis
                         holdingsBySymbol={securitiesMap}
                         onGift={handleGift}
                         featured
+                        isWishlisted={wishlistedKeys.has(`gift:${strategy.id}`)}
+                        isWatchlisted={giftStrategyWatchlist.includes(strategy.id)}
+                        onToggleWishlist={toggleWishlistItem}
+                        onToggleWatchlist={toggleGiftStrategyWatchlist}
                       />
                     </motion.div>
                   ))}
@@ -528,6 +592,10 @@ export default function GiftStrategyPickerPage({ onBack, onNavigate, autoOpenWis
                         holdingsBySymbol={securitiesMap}
                         onGift={handleGift}
                         featured={false}
+                        isWishlisted={wishlistedKeys.has(`gift:${strategy.id}`)}
+                        isWatchlisted={giftStrategyWatchlist.includes(strategy.id)}
+                        onToggleWishlist={toggleWishlistItem}
+                        onToggleWatchlist={toggleGiftStrategyWatchlist}
                       />
                     </motion.div>
                   ))}
@@ -543,6 +611,22 @@ export default function GiftStrategyPickerPage({ onBack, onNavigate, autoOpenWis
         open={showRegistrySheet}
         onClose={() => setShowRegistrySheet(false)}
         onNavigate={onNavigate}
+      />
+
+      {/* Airbnb-style wishlist modal */}
+      {wishlistModal && (
+        <WishlistModal
+          itemKey={wishlistModal}
+          onClose={() => setWishlistModal(null)}
+          onSaved={handleWishlistSaved}
+        />
+      )}
+
+      {/* Wishlist saved toast */}
+      <WishlistToast
+        message={toastMsg}
+        visible={toastVisible}
+        onHide={() => setToastVisible(false)}
       />
     </div>
   );
