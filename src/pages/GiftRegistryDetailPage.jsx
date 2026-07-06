@@ -43,7 +43,7 @@ export default function GiftRegistryDetailPage({ registryId, onNavigate, onBack 
         headers: { Authorization: `Bearer ${token}` },
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || `Could not ${action} registry`);
+      if (!res.ok) throw new Error(json.error || `Could not ${action} wishlist`);
       reload();
     } catch (e) {
       setActionError(e.message);
@@ -137,7 +137,7 @@ export default function GiftRegistryDetailPage({ registryId, onNavigate, onBack 
                 disabled={actionLoading}
                 className="flex-1 py-2.5 rounded-2xl border border-red-200 text-sm text-red-500 font-medium disabled:opacity-40"
               >
-                Cancel registry
+                Cancel wishlist
               </button>
             </div>
           </div>

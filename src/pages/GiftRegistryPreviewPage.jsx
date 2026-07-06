@@ -78,10 +78,10 @@ export default function GiftRegistryPreviewPage({ registryId, registry: initialR
           </button>
           <div>
             <h1 className="text-lg font-bold text-gray-800">
-              {isPublished ? "Registry" : "Preview"}
+              {isPublished ? "Wishlist" : "Preview"}
             </h1>
             <p className="text-xs text-gray-400">
-              {isPublished ? "Active registry" : "Review before publishing"}
+              {isPublished ? "Active wishlist" : "Review before publishing"}
             </p>
           </div>
           {isPublished && registry?.share_token && (
@@ -98,7 +98,7 @@ export default function GiftRegistryPreviewPage({ registryId, registry: initialR
       </div>
 
       <div className="px-5 pt-5 space-y-4">
-        {/* Registry hero card */}
+        {/* Wishlist hero card */}
         <div className="bg-gradient-to-br from-[#6B21A8] to-[#9333EA] rounded-3xl p-5 text-white shadow-lg">
           <p className="text-xs opacity-70 mb-1">{OCCASION_LABELS[registry?.occasion] || registry?.occasion}</p>
           <h2 className="text-xl font-bold mb-1">{registry?.title}</h2>
@@ -196,7 +196,7 @@ export default function GiftRegistryPreviewPage({ registryId, registry: initialR
             onClick={() => setShowShare(true)}
             className="w-full py-4 rounded-2xl bg-[#6B21A8] text-white font-semibold text-sm"
           >
-            Share registry link
+            Share wishlist link
           </button>
         </div>
       )}

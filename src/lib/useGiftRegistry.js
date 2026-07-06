@@ -81,7 +81,7 @@ export function usePublicRegistry(token) {
     try {
       const res = await fetch(`/api/gift-registry/public/${token}`);
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "Registry not found");
+      if (!res.ok) throw new Error(json.error || "Wishlist not found");
       setRegistry(json.registry);
     } catch (e) {
       setError(e.message);

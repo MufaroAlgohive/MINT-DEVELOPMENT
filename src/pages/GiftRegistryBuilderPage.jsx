@@ -111,7 +111,7 @@ export default function GiftRegistryBuilderPage({ registryId, registry: initialR
           </button>
           <div>
             <h1 className="text-lg font-bold text-gray-800">Add Shares</h1>
-            <p className="text-xs text-gray-400 truncate">{current?.title || "Your registry"}</p>
+            <p className="text-xs text-gray-400 truncate">{current?.title || "Your wishlist"}</p>
           </div>
         </div>
       </div>
@@ -199,7 +199,7 @@ export default function GiftRegistryBuilderPage({ registryId, registry: initialR
 
           {items.length === 0 && !loading && (
             <div className="text-center py-10 bg-white rounded-2xl border border-dashed border-gray-200">
-              <p className="text-gray-400 text-sm">Search above to add shares to your registry</p>
+              <p className="text-gray-400 text-sm">Search above to add shares to your wishlist</p>
             </div>
           )}
 

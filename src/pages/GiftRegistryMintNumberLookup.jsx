@@ -46,7 +46,7 @@ export default function GiftRegistryMintNumberLookup({ onNavigate, onBack }) {
             </svg>
           </button>
           <div>
-            <h1 className="text-lg font-bold text-gray-800">Find a Registry</h1>
+            <h1 className="text-lg font-bold text-gray-800">Find a Wishlist</h1>
             <p className="text-xs text-gray-400">Search by MINT number</p>
           </div>
         </div>
@@ -82,16 +82,16 @@ export default function GiftRegistryMintNumberLookup({ onNavigate, onBack }) {
         {results !== null && results.length === 0 && (
           <div className="text-center py-10">
             <p className="text-2xl mb-2">🔍</p>
-            <p className="font-medium text-gray-700">No active registries found</p>
+            <p className="font-medium text-gray-700">No active wishlists found</p>
             <p className="text-sm text-gray-400 mt-1">
-              This person may not have any open registries right now.
+              This person may not have any open wishlists right now.
             </p>
           </div>
         )}
 
         {results && results.length > 0 && (
           <div className="space-y-3">
-            <p className="text-xs text-gray-500 font-medium">{results.length} active registr{results.length === 1 ? "y" : "ies"} found</p>
+            <p className="text-xs text-gray-500 font-medium">{results.length} active wishlist{results.length === 1 ? "" : "s"} found</p>
             {results.map((reg) => {
               const progress = getRegistryProgress(reg.items || []);
               const eventDate = reg.event_date
@@ -118,7 +118,7 @@ export default function GiftRegistryMintNumberLookup({ onNavigate, onBack }) {
                     height="h-1.5"
                   />
                   <p className="text-[10px] text-purple-600 font-medium mt-1.5 text-right">
-                    View registry →
+                    View wishlist →
                   </p>
                 </button>
               );
@@ -128,7 +128,7 @@ export default function GiftRegistryMintNumberLookup({ onNavigate, onBack }) {
 
         <div className="text-center pt-4">
           <p className="text-xs text-gray-400">
-            Don't know the MINT number? Ask them to share their registry link directly.
+            Don't know the MINT number? Ask them to share their wishlist link directly.
           </p>
         </div>
       </div>

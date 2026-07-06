@@ -158,7 +158,7 @@ export default function GiftRegistryCreateSheet({ open, onClose, onNavigate }) {
     if (form.occasion === "WEDDING")    return `${name}'s Wedding`;
     if (form.occasion === "BABY")       return `Baby ${name}`;
     if (form.occasion === "GRADUATION") return `${name}'s Graduation`;
-    if (form.occasion === "FESTIVE")    return `${name}'s Festive Registry`;
+    if (form.occasion === "FESTIVE")    return `${name}'s Festive Wishlist`;
     return `${name} – ${form.customOccasion || "Custom"}`;
   }
 
@@ -200,7 +200,7 @@ export default function GiftRegistryCreateSheet({ open, onClose, onNavigate }) {
         }),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "Could not create registry");
+      if (!res.ok) throw new Error(json.error || "Could not create wishlist");
       onClose?.();
       onNavigate?.("giftRegistryBuilder", { registryId: json.registry.id, registry: json.registry });
     } catch (e) {
@@ -254,7 +254,7 @@ export default function GiftRegistryCreateSheet({ open, onClose, onNavigate }) {
             {/* Header */}
             <div className="flex items-center justify-between px-5 py-3 flex-shrink-0">
               <div>
-                <h2 className="text-[15px] font-bold text-slate-900 leading-tight">New Registry</h2>
+                <h2 className="text-[15px] font-bold text-slate-900 leading-tight">New Wishlist</h2>
                 <p className="text-[11px] text-slate-400 mt-0.5">Step {step} of 3</p>
               </div>
               <button
@@ -340,7 +340,7 @@ export default function GiftRegistryCreateSheet({ open, onClose, onNavigate }) {
               {/* ── Step 2: Beneficiary ── */}
               {step === 2 && (
                 <div className="space-y-4 pt-1">
-                  <p className="text-[13px] font-semibold text-slate-700">Who is this registry for?</p>
+                  <p className="text-[13px] font-semibold text-slate-700">Who is this wishlist for?</p>
 
                   {/* Type selector */}
                   <div className="flex gap-2">
@@ -378,7 +378,7 @@ export default function GiftRegistryCreateSheet({ open, onClose, onNavigate }) {
                   <div>
                     <label className="text-[11px] font-medium text-slate-500 block mb-1.5">
                       {form.beneficiaryType === "SELF" ? "Your first name" : "Their first name"}
-                      <span className="text-slate-400 font-normal ml-1">— shown on the public registry</span>
+                      <span className="text-slate-400 font-normal ml-1">— shown on the public wishlist</span>
                     </label>
                     <input
                       className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-300 focus:border-transparent"
@@ -391,11 +391,11 @@ export default function GiftRegistryCreateSheet({ open, onClose, onNavigate }) {
                   {/* Title */}
                   <div>
                     <label className="text-[11px] font-medium text-slate-500 block mb-1.5">
-                      Registry title <span className="font-normal text-slate-400">— optional, auto-generated if left blank</span>
+                      Wishlist title <span className="font-normal text-slate-400">— optional, auto-generated if left blank</span>
                     </label>
                     <input
                       className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-300 focus:border-transparent"
-                      placeholder={autoTitle() || "Registry title"}
+                      placeholder={autoTitle() || "Wishlist title"}
                       value={form.title}
                       onChange={e => set("title", e.target.value)}
                     />
@@ -434,7 +434,7 @@ export default function GiftRegistryCreateSheet({ open, onClose, onNavigate }) {
 
                   {/* Close date */}
                   <div>
-                    <p className="text-[11px] font-semibold text-slate-500 mb-2 uppercase tracking-wide">Registry closes</p>
+                    <p className="text-[11px] font-semibold text-slate-500 mb-2 uppercase tracking-wide">Wishlist closes</p>
                     <div className="flex flex-wrap gap-2">
                       {DURATIONS.map(({ label, days }) => {
                         const active = days === null

@@ -8,7 +8,7 @@ import { registryShareUrl } from "../lib/giftRegistryUtils.js";
 export default function GiftRegistryShareSheet({ token, title, onClose }) {
   const [copied, setCopied] = useState(false);
   const url = registryShareUrl(token);
-  const message = `🎁 ${title} — gift shares from my MINT registry!\n${url}`;
+  const message = `🎁 ${title} — gift shares from my MINT wishlist!\n${url}`;
 
   function handleCopy() {
     navigator.clipboard.writeText(url).then(() => {
@@ -26,7 +26,7 @@ export default function GiftRegistryShareSheet({ token, title, onClose }) {
 
   async function handleNativeShare() {
     try {
-      await navigator.share({ title, text: `Gift shares via my MINT registry!`, url });
+      await navigator.share({ title, text: `Gift shares via my MINT wishlist!`, url });
     } catch {
       handleCopy();
     }
@@ -38,7 +38,7 @@ export default function GiftRegistryShareSheet({ token, title, onClose }) {
         {/* Handle */}
         <div className="w-10 h-1 bg-gray-200 rounded-full mx-auto mb-5" />
 
-        <h3 className="text-base font-semibold text-gray-800 mb-1">Share your registry</h3>
+        <h3 className="text-base font-semibold text-gray-800 mb-1">Share your wishlist</h3>
         <p className="text-sm text-gray-500 mb-5">Anyone with the link can view and gift.</p>
 
         {/* URL pill */}

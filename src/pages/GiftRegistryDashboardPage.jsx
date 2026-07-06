@@ -32,7 +32,7 @@ export default function GiftRegistryDashboardPage({ onNavigate, onBack }) {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
           </button>
-          <h1 className="text-lg font-bold text-gray-800">My Gift Registries</h1>
+          <h1 className="text-lg font-bold text-gray-800">My Wishlist</h1>
         </div>
         <p className="text-sm text-gray-400 pl-9">Wishlists you've created for others to fund</p>
       </div>
@@ -58,7 +58,7 @@ export default function GiftRegistryDashboardPage({ onNavigate, onBack }) {
             <div className="w-20 h-20 bg-purple-50 rounded-full flex items-center justify-center mx-auto mb-4">
               <span className="text-4xl">🎁</span>
             </div>
-            <h3 className="font-semibold text-gray-700 mb-1">No registries yet</h3>
+            <h3 className="font-semibold text-gray-700 mb-1">No wishlists yet</h3>
             <p className="text-sm text-gray-400 mb-6">
               Create a wishlist of shares for family and friends to fund.
             </p>
@@ -123,7 +123,7 @@ export default function GiftRegistryDashboardPage({ onNavigate, onBack }) {
         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
         </svg>
-        New registry
+        New wishlist
       </button>
     </div>
   );

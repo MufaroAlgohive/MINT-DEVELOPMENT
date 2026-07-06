@@ -34,7 +34,7 @@ export default function GiftRegistryCreatePage({ onNavigate, onBack }) {
     if (form.occasion === "WEDDING") return `${name}'s Wedding`;
     if (form.occasion === "BABY") return `Baby ${name}`;
     if (form.occasion === "GRADUATION") return `${name}'s Graduation`;
-    if (form.occasion === "FESTIVE") return `${name}'s Festive Registry`;
+    if (form.occasion === "FESTIVE") return `${name}'s Festive Wishlist`;
     return `${name} – ${form.customOccasion || form.occasion}`;
   }
 
@@ -70,7 +70,7 @@ export default function GiftRegistryCreatePage({ onNavigate, onBack }) {
         }),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "Could not create registry");
+      if (!res.ok) throw new Error(json.error || "Could not create wishlist");
       if (typeof onNavigate === "function") {
         onNavigate("giftRegistryBuilder", { registryId: json.registry.id, registry: json.registry });
       }
@@ -102,7 +102,7 @@ export default function GiftRegistryCreatePage({ onNavigate, onBack }) {
             </svg>
           </button>
           <div>
-            <h1 className="text-lg font-bold text-gray-800">Create Registry</h1>
+            <h1 className="text-lg font-bold text-gray-800">Create Wishlist</h1>
             <p className="text-xs text-gray-400">Step {step} of 3</p>
           </div>
         </div>
@@ -189,7 +189,7 @@ export default function GiftRegistryCreatePage({ onNavigate, onBack }) {
 
             <div>
               <label className="text-xs text-gray-500 font-medium block mb-1.5">
-                {form.beneficiaryType === "SELF" ? "Your first name" : "Their first name"} (shown on the public registry)
+                {form.beneficiaryType === "SELF" ? "Your first name" : "Their first name"} (shown on the public wishlist)
               </label>
               <input
                 className="w-full border border-gray-200 rounded-2xl px-4 py-3 text-sm text-gray-800 bg-white focus:outline-none focus:ring-2 focus:ring-purple-300"
@@ -201,7 +201,7 @@ export default function GiftRegistryCreatePage({ onNavigate, onBack }) {
             </div>
 
             <div>
-              <label className="text-xs text-gray-500 font-medium block mb-1.5">Registry title (optional)</label>
+              <label className="text-xs text-gray-500 font-medium block mb-1.5">Wishlist title (optional)</label>
               <input
                 className="w-full border border-gray-200 rounded-2xl px-4 py-3 text-sm text-gray-800 bg-white focus:outline-none focus:ring-2 focus:ring-purple-300"
                 placeholder={autoTitle() || "e.g. Ncumolwethu's 4th Birthday"}
@@ -240,7 +240,7 @@ export default function GiftRegistryCreatePage({ onNavigate, onBack }) {
 
             <div>
               <label className="text-xs text-gray-500 font-medium block mb-1.5">
-                Registry closes on
+                Wishlist closes on
               </label>
               <input
                 type="date"

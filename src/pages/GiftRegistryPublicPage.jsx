@@ -62,9 +62,9 @@ export default function GiftRegistryPublicPage({
     return (
       <div className="min-h-screen bg-[#f8f9fc] flex flex-col items-center justify-center px-6 text-center">
         <span className="text-5xl mb-4">🔍</span>
-        <h2 className="font-bold text-gray-800 text-lg mb-2">Registry not found</h2>
+        <h2 className="font-bold text-gray-800 text-lg mb-2">Wishlist not found</h2>
         <p className="text-sm text-gray-500 mb-6">
-          This registry may have been removed or the link has expired.
+          This wishlist may have been removed or the link has expired.
         </p>
         {onBack && (
           <button onClick={onBack} className="text-sm text-[#6B21A8] font-semibold">
@@ -136,7 +136,7 @@ export default function GiftRegistryPublicPage({
       {isClosed && (
         <div className="mx-5 mt-4 bg-gray-100 rounded-2xl px-4 py-3 text-center">
           <p className="text-sm text-gray-600 font-medium">
-            {registry.status === "COMPLETED" ? "🎉 This registry is fully funded!" : "This registry is no longer accepting gifts."}
+            {registry.status === "COMPLETED" ? "🎉 This wishlist is fully funded!" : "This wishlist is no longer accepting gifts."}
           </p>
         </div>
       )}
@@ -152,7 +152,7 @@ export default function GiftRegistryPublicPage({
       {!user && !isClosed && (
         <div className="mx-5 mt-4 bg-purple-50 border border-purple-100 rounded-2xl px-4 py-3.5 text-center">
           <p className="text-sm text-[#6B21A8] font-medium">
-            Sign up to gift from this registry
+            Sign up to gift from this wishlist
           </p>
           <button
             onClick={onAuthPrompt}

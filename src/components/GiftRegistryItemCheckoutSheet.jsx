@@ -51,7 +51,7 @@ export default function GiftRegistryItemCheckoutSheet({ item, registryId, onSucc
         if (json.code === "SOLD_OUT") {
           setError(`Only ${json.remaining ?? 0} shares left — try a smaller quantity.`);
         } else if (json.code === "KYC_INCOMPLETE") {
-          setError("Complete your MINT verification to gift from a registry.");
+          setError("Complete your MINT verification to gift from a wishlist.");
         } else {
           setError(json.error || "Could not reserve. Please try again.");
         }

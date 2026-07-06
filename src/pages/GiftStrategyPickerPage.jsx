@@ -189,7 +189,24 @@ export default function GiftStrategyPickerPage({ onBack, onNavigate }) {
   const [activeCategory, setActiveCategory] = useState("All");
   const [showSearch, setShowSearch] = useState(false);
   const [showRegistrySheet, setShowRegistrySheet] = useState(false);
+  const [showWishlistMenu, setShowWishlistMenu] = useState(false);
   const searchRef = useRef(null);
+  const wishlistMenuRef = useRef(null);
+
+  useEffect(() => {
+    if (!showWishlistMenu) return;
+    function handleClickOutside(e) {
+      if (wishlistMenuRef.current && !wishlistMenuRef.current.contains(e.target)) {
+        setShowWishlistMenu(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("touchstart", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("touchstart", handleClickOutside);
+    };
+  }, [showWishlistMenu]);
 
   useEffect(() => {
     let cancelled = false;
@@ -295,14 +312,52 @@ export default function GiftStrategyPickerPage({ onBack, onNavigate }) {
               className="text-base tracking-wide text-white"
             />
             <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setShowRegistrySheet(true)}
-                className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 backdrop-blur-sm"
-                title="My registries"
-              >
-                <BookMarked className="h-4 w-4" />
-              </button>
+              <div className="relative" ref={wishlistMenuRef}>
+                <button
+                  type="button"
+                  onClick={() => setShowWishlistMenu((v) => !v)}
+                  className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 backdrop-blur-sm"
+                  title="Wishlist"
+                >
+                  <BookMarked className="h-4 w-4" />
+                </button>
+
+                <AnimatePresence>
+                  {showWishlistMenu && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -8, scale: 0.95 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: -8, scale: 0.95 }}
+                      transition={{ duration: 0.15 }}
+                      className="absolute right-0 top-12 z-50 w-44 overflow-hidden rounded-2xl bg-white shadow-xl ring-1 ring-black/5"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowWishlistMenu(false);
+                          onNavigate?.("giftRegistryDashboard");
+                        }}
+                        className="flex w-full items-center gap-2.5 px-4 py-3 text-left text-sm font-medium text-slate-700 hover:bg-slate-50"
+                      >
+                        <BookMarked className="h-4 w-4 text-violet-600" />
+                        My Wishlist
+                      </button>
+                      <div className="h-px bg-slate-100" />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowWishlistMenu(false);
+                          setShowRegistrySheet(true);
+                        }}
+                        className="flex w-full items-center gap-2.5 px-4 py-3 text-left text-sm font-medium text-slate-700 hover:bg-slate-50"
+                      >
+                        <Sparkles className="h-4 w-4 text-violet-600" />
+                        New Wishlist
+                      </button>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
               <button
                 type="button"
                 onClick={() => setShowSearch(!showSearch)}
@@ -479,7 +534,7 @@ export default function GiftStrategyPickerPage({ onBack, onNavigate }) {
         </div>
       </main>
 
-      {/* Registry creation bottom sheet */}
+      {/* Wishlist creation bottom sheet */}
       <GiftRegistryCreateSheet
         open={showRegistrySheet}
         onClose={() => setShowRegistrySheet(false)}
