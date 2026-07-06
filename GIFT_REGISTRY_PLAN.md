@@ -500,9 +500,9 @@ The `GET /api/gift-registry/public/:token` endpoint must have a strict allowlist
 
 | # | Decision | Options |
 |---|---|---|
-| 6 | Share split — auto-update wishlist quantity or pause for creator review? | **Option A:** Auto-scale quantity (e.g. 10 shares → 20 after a 2-for-1 split, same rand value). **Option B:** Pause the item, notify creator to update manually. |
+| 6 | Share split — auto-update wishlist quantity or pause for creator review? | ✅ **Option B confirmed:** Pause the item, notify the creator to review and update it manually. Do not auto-scale. |
 
-*This only matters if a company on someone's wishlist does a share split. It doesn't block Phases 1–3. Decide before Phase 4.*
+*Handle in Phase 4. When a corporate action (split/consolidation) is detected on an instrument that appears in an active registry item, set that item's status to `SUSPENDED`, fire a notification to the creator, and wait for them to update the target quantity and resume the item.*
 
 ---
 
