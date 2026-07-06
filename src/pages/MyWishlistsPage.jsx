@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { ArrowLeft, Heart, Trash2, X, Copy, Check, QrCode, Share2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { getWishlists, saveWishlists } from "../components/WishlistModal.jsx";
+import { getWishlists, saveWishlists, syncWishlistsFromCloud } from "../components/WishlistModal.jsx";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 function getShareUrl(list) {
@@ -338,7 +338,9 @@ export default function MyWishlistsPage({ onBack }) {
   const [wishlists, setWishlists] = useState([]);
 
   useEffect(() => {
+    // Show cached data immediately, then refresh from cloud
     setWishlists(getWishlists());
+    syncWishlistsFromCloud().then(setWishlists).catch(() => {});
   }, []);
 
   function removeItem(listId, itemKey) {

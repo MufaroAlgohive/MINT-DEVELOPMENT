@@ -2,15 +2,50 @@ import React, { useState } from "react";
 import ReactDOM from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Heart, ArrowRight, List } from "lucide-react";
+import { supabaseReady } from "../lib/supabase.js";
 
 const STORAGE_KEY = "mint_wishlists";
 
+// ─── Local cache helpers (sync) ───────────────────────────────────────────────
 export function getWishlists() {
   try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]"); } catch { return []; }
 }
 
+// ─── Cloud sync helpers (async) ───────────────────────────────────────────────
+
+/**
+ * Load wishlists from Supabase user metadata (source of truth).
+ * Falls back to localStorage when the user is signed out or offline.
+ * Also updates the local cache so subsequent sync-less reads are fresh.
+ */
+export async function syncWishlistsFromCloud() {
+  try {
+    const sb = await supabaseReady;
+    if (!sb) return getWishlists();
+    const { data, error } = await sb.auth.getUser();
+    if (error || !data?.user) return getWishlists();
+    const cloud = data.user.user_metadata?.wishlists;
+    if (Array.isArray(cloud)) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(cloud));
+      return cloud;
+    }
+  } catch {
+    // network or auth error — fall back silently
+  }
+  return getWishlists();
+}
+
+/**
+ * Persist wishlists to localStorage immediately and to Supabase in the background.
+ * Callers that previously used the sync version work unchanged.
+ */
 export function saveWishlists(lists) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(lists));
+  // Fire-and-forget cloud persist
+  supabaseReady.then((sb) => {
+    if (!sb) return;
+    sb.auth.updateUser({ data: { wishlists: lists } }).catch(() => {});
+  }).catch(() => {});
 }
 
 export function isInAnyWishlist(itemKey) {
