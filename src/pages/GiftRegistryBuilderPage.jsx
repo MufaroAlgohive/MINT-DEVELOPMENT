@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useId, useMemo } from "react";
 import { useRegistryDetail } from "../lib/useGiftRegistry.js";
-import { supabaseReady } from "../lib/supabase.js";
+import { supabaseReady, supabase as supabaseSync } from "../lib/supabase.js";
 import { centsToRand, calcMinTrancheForAsset } from "../lib/giftRegistryUtils.js";
 import GiftRegistryShareSheet from "../components/GiftRegistryShareSheet.jsx";
 import GiftRegistryProgressBar from "../components/GiftRegistryProgressBar.jsx";
@@ -130,23 +130,43 @@ export default function GiftRegistryBuilderPage({ registryId, registry: initialR
   const items = current?.items || [];
   const isPublished = ["ACTIVE", "PAUSED", "COMPLETED", "EXPIRED"].includes(current?.status);
 
+  // Query securities_c directly via Supabase (same pattern as MarketsPage)
+  async function fetchSecurities({ q = "", type = "ALL", limit = 20 } = {}) {
+    const db = (await supabaseReady) || supabaseSync;
+    if (!db) return [];
+    let query = db
+      .from("securities_c")
+      .select("id, isin, symbol, name, logo_url, last_price, instrument_type")
+      .limit(limit);
+    if (q) {
+      query = query.or(`name.ilike.%${q}%,symbol.ilike.%${q}%,isin.ilike.%${q}%`);
+    } else {
+      query = query.order("last_price", { ascending: false });
+    }
+    if (type && type !== "ALL") {
+      query = query.eq("instrument_type", type);
+    }
+    const { data, error } = await query;
+    if (error) {
+      // Fallback: retry without instrument_type filter if column doesn't exist
+      if (error.message?.includes("instrument_type") || error.code === "42703") {
+        let fb = db.from("securities_c").select("id, isin, symbol, name, logo_url, last_price").limit(limit);
+        if (q) fb = fb.or(`name.ilike.%${q}%,symbol.ilike.%${q}%,isin.ilike.%${q}%`);
+        else fb = fb.order("last_price", { ascending: false });
+        const { data: fbData } = await fb;
+        return (fbData || []).map(s => ({ ...s, ticker: s.symbol, type: "SHARE" }));
+      }
+      return [];
+    }
+    return (data || []).map(s => ({ ...s, ticker: s.symbol, type: s.instrument_type || "SHARE" }));
+  }
+
   // Fetch top securities for the selected category (shown when not searching)
   useEffect(() => {
     let cancelled = false;
-    (async () => {
-      try {
-        const session = await (await supabaseReady).auth.getSession();
-        const token = session?.data?.session?.access_token;
-        const typeParam = category !== "ALL" ? `&type=${category}` : "";
-        const res = await fetch(`/api/markets/search?q=&limit=20${typeParam}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        const json = await res.json();
-        if (!cancelled) setTopSecurities(json.results || json.securities || []);
-      } catch {
-        if (!cancelled) setTopSecurities([]);
-      }
-    })();
+    fetchSecurities({ type: category, limit: 20 }).then(results => {
+      if (!cancelled) setTopSecurities(results);
+    });
     return () => { cancelled = true; };
   }, [category]);
 
@@ -156,14 +176,8 @@ export default function GiftRegistryBuilderPage({ registryId, registry: initialR
     const timer = setTimeout(async () => {
       setSearching(true);
       try {
-        const session = await (await supabaseReady).auth.getSession();
-        const token = session?.data?.session?.access_token;
-        const typeParam = category !== "ALL" ? `&type=${category}` : "";
-        const res = await fetch(`/api/markets/search?q=${encodeURIComponent(search)}&limit=15${typeParam}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        const json = await res.json();
-        setSearchResults(json.results || json.securities || []);
+        const results = await fetchSecurities({ q: search.trim(), type: category, limit: 15 });
+        setSearchResults(results);
       } catch {
         setSearchResults([]);
       } finally {
