@@ -2362,6 +2362,23 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
     fetchTransactions();
   }
 
+  // A child purchase can be placed from surfaces that don't own this page's
+  // state (Markets child-filter → ChildInvestModal). The modal broadcasts
+  // "mint:child-invested" on success; refetch here so the pending card shows
+  // IMMEDIATELY — previously it only appeared after leaving and re-entering,
+  // which read as "the buy didn't work" and caused double purchases.
+  useEffect(() => {
+    const onChildInvested = (e) => {
+      const d = e?.detail || {};
+      if (d.familyMemberId && child?.id && d.familyMemberId !== child.id) return;
+      if (d.child_balance !== undefined) setChild(prev => ({ ...prev, available_balance: d.child_balance }));
+      fetchHoldings();
+      fetchTransactions();
+    };
+    window.addEventListener("mint:child-invested", onChildInvested);
+    return () => window.removeEventListener("mint:child-invested", onChildInvested);
+  }, [child?.id]);
+
   async function fetchGoals() {
     if (!child?.id) return;
     setLoadingGoals(true);
@@ -3076,7 +3093,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
                                   <span className="text-[10px] font-semibold rounded-full px-2 py-0.5 bg-violet-100 text-violet-700 border border-violet-200">{sc.risk_level}</span>
                                 )}
                                 {isFilling && (
-                                  <span className="text-[10px] font-semibold rounded-full px-2 py-0.5 bg-amber-100 text-amber-700 border border-amber-200">Filling</span>
+                                  <span className="text-[10px] font-semibold rounded-full px-2 py-0.5 bg-violet-100 text-violet-700 border border-violet-200">Filling</span>
                                 )}
                               </div>
                             </div>
@@ -3084,8 +3101,8 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
                           <div className="flex flex-col items-end flex-shrink-0">
                             {isFilling ? (
                               <>
-                                <p className="text-sm font-bold text-amber-700">Pending</p>
-                                <p className="text-xs font-semibold text-amber-600">Awaiting fill</p>
+                                <p className="text-sm font-bold text-violet-700">Pending</p>
+                                <p className="text-xs font-semibold text-violet-600">Awaiting fill</p>
                               </>
                             ) : (
                               <>
@@ -3224,7 +3241,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
                                   : '0 2px 6px rgba(0,0,0,0.04)',
                               }}
                             >
-                              <div className="bg-white border border-amber-200 rounded-2xl p-4 h-full pointer-events-none" style={{ boxShadow: i === 0 ? '0 0 0 1px rgba(251,191,36,0.15)' : 'none' }}>
+                              <div className="bg-white border border-violet-200 rounded-2xl p-4 h-full pointer-events-none" style={{ boxShadow: i === 0 ? '0 0 0 1px rgba(139,92,246,0.15)' : 'none' }}>
                                 {/* Header row always visible */}
                                 <div className="flex items-start justify-between gap-3">
                                   <div className="flex items-center gap-3 min-w-0">
@@ -3239,14 +3256,14 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
                                           <span className="text-[10px] font-semibold rounded-full px-2 py-0.5 bg-violet-50 text-violet-600 border border-violet-100">{sc.risk_level}</span>
                                         )}
                                         {sc.isFilling && (
-                                          <span className="text-[10px] font-semibold rounded-full px-2 py-0.5 bg-amber-100 text-amber-700 border border-amber-200">Filling</span>
+                                          <span className="text-[10px] font-semibold rounded-full px-2 py-0.5 bg-violet-100 text-violet-700 border border-violet-200">Filling</span>
                                         )}
                                       </div>
                                     </div>
                                   </div>
                                   <div className="text-right flex-shrink-0">
                                     {sc.isFilling ? (
-                                      <p className="text-sm font-bold text-amber-700">Pending</p>
+                                      <p className="text-sm font-bold text-violet-700">Pending</p>
                                     ) : (
                                       <>
                                         <p className="text-sm font-bold text-slate-900 tabular-nums">{fmt(sc.totalValue)}</p>

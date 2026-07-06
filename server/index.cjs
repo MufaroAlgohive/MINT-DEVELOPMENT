@@ -10208,13 +10208,16 @@ app.post('/api/child-invest', async (req, res) => {
       await db.from('transactions').insert({
         user_id: parentUserId,
         family_member_id: family_member_id,
-        name: `${strategy.name} investment`,
+        // Match the Vercel function's naming so activity feeds classify it as a BUY.
+        name: `Strategy Investment: ${strategy.name}`,
         direction: 'debit',
         amount: amount,
         description: `${strategy.name} investment for ${child.first_name}`,
         store_reference: ref,
         currency: 'ZAR',
-        status: 'completed',
+        // 'completed' is not a valid transaction_status enum value — the insert
+        // failed silently for every dev child buy. Valid values: pending/posted.
+        status: 'posted',
         transaction_date: now,
         created_at: now,
       });

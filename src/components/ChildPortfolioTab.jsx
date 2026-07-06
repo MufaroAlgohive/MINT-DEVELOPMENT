@@ -964,7 +964,7 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest, onWithdraw, 
                                       <div className="text-right flex-shrink-0">
                                         <p className="text-sm font-bold text-slate-900">{stock.isPending ? "—" : fmt(stock.currentValue)}</p>
                                         {stock.isPending ? (
-                                          <p className="text-xs text-amber-500 font-semibold">Pending</p>
+                                          <p className="text-xs text-violet-600 font-semibold">Pending</p>
                                         ) : (
                                           <p className={`text-xs font-semibold ${changePnl >= 0 ? "text-emerald-500" : "text-rose-500"}`}>
                                             {changePnl >= 0 ? "+" : ""}{changePnl.toFixed(1)}% Total Return
@@ -994,7 +994,7 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest, onWithdraw, 
                                   <div className="text-right flex-shrink-0">
                                     <p className="text-sm font-bold text-slate-900">{stock.isPending ? "—" : fmt(stock.currentValue)}</p>
                                     {stock.isPending ? (
-                                      <p className="text-xs text-amber-500 font-semibold">Pending</p>
+                                      <p className="text-xs text-violet-600 font-semibold">Pending</p>
                                     ) : (
                                       <p className={`text-xs font-semibold ${changePnl >= 0 ? "text-emerald-500" : "text-rose-500"}`}>
                                         {changePnl >= 0 ? "+" : ""}{changePnl.toFixed(1)}%

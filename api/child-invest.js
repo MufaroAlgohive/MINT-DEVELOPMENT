@@ -42,13 +42,15 @@ export default async function handler(req, res) {
   const db = supabaseAdmin || supabase;
   if (!db) return res.status(500).json({ error: "Database not available." });
 
-  const { family_member_id, strategy_id, amount, base_amount } = req.body || {};
+  const { family_member_id, strategy_id, amount, base_amount, units, force } = req.body || {};
 
   if (!family_member_id) return res.status(400).json({ error: "family_member_id is required." });
   if (!strategy_id) return res.status(400).json({ error: "strategy_id is required." });
   if (!amount || typeof amount !== "number" || amount <= 0) {
     return res.status(400).json({ error: "Amount must be a positive number (in cents)." });
   }
+  // Whole baskets bought — scales every holding's quantity. Default 1.
+  const unitsN = Math.max(1, Math.floor(Number(units) || 1));
 
   // Authenticate parent — authenticateUser returns { user, error }
   let parentUserId;
@@ -69,6 +71,7 @@ export default async function handler(req, res) {
   if (!parentUserId) return res.status(401).json({ error: "Could not identify parent." });
 
   let originalChildBalance = null;
+  let childTxId = null;
 
   try {
     // 1. Verify child belongs to parent
@@ -85,7 +88,28 @@ export default async function handler(req, res) {
       return res.status(403).json({ error: "You can only invest for your own children." });
     }
 
-    // 2. Check child balance
+    // 2. Duplicate-pending guard: if this child already has an UNFILLED buy of
+    // the same strategy, warn instead of silently double-purchasing — the first
+    // order just hasn't been filled by the desk yet, which is easy to mistake
+    // for "it didn't go through". The client can re-submit with force:true.
+    if (!force) {
+      const { data: pendingRows } = await db
+        .from("stock_holdings_c")
+        .select("id")
+        .eq("family_member_id", family_member_id)
+        .eq("strategy_id", strategy_id)
+        .eq("Status", "active")
+        .or("avg_fill.is.null,avg_fill.eq.0")
+        .limit(1);
+      if (pendingRows && pendingRows.length) {
+        return res.status(409).json({
+          pending_exists: true,
+          error: "This basket already has a pending purchase awaiting broker fill.",
+        });
+      }
+    }
+
+    // 3. Check child balance
     originalChildBalance = child.available_balance || 0;
     if (originalChildBalance < amount) {
       return res.status(400).json({ error: "Insufficient funds in child's wallet. Transfer funds first." });
@@ -122,7 +146,6 @@ export default async function handler(req, res) {
 
     // Insert transaction first so we can stamp its UUID on every holdings row.
     const ref = `CHILD-INV-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    let childTxId = null;
 
     // Server-authoritative fee breakdown. base_amount arrives in cents (raw,
     // pre-buffer, pre-fees) from ChildInvestModal. Fall back to deriving it
@@ -133,29 +156,34 @@ export default async function handler(req, res) {
     const feeConfig = await getFeeConfig(db);
     const fees = computeFees(baseRandsForFees, numAssetsForFees, feeConfig);
 
-    try {
-      const txInsert = await db.from("transactions").insert({
-        user_id: parentUserId,
-        family_member_id: family_member_id,
-        name: `Strategy Investment: ${strategy.name}`,
-        direction: "debit",
-        amount: amount,
-        base_amount_cents:     fees.baseCents,
-        buffer_cents:          fees.bufferCents,
-        buffer_consumed_cents: 0,
-        broker_fee_cents:      fees.brokerFeeCents,
-        isin_fee_cents:        fees.isinFeeCents,
-        transaction_fee_cents: fees.transactionFeeCents,
-        description: `${strategy.name} investment for ${child.first_name}`,
-        store_reference: ref,
-        currency: "ZAR",
-        status: "posted",
-        transaction_date: new Date().toISOString(),
-      }).select("id").single();
-      childTxId = txInsert.data?.id || null;
-      if (txInsert.error) console.error("[child-invest] tx insert returned error:", txInsert.error);
-      else console.log("[child-invest] tx inserted for child:", family_member_id, "ref:", ref);
-    } catch (e) { console.error("[child-invest] tx insert threw:", e.message); }
+    // The ledger record is NOT optional: without it the buy is invisible in
+    // transaction history and the holdings carry no transaction_id (which the
+    // orderbook uses to keep separate purchases separate). Abort + rollback on
+    // failure instead of continuing silently.
+    const nowIso = new Date().toISOString();
+    const txInsert = await db.from("transactions").insert({
+      user_id: parentUserId,
+      family_member_id: family_member_id,
+      name: `Strategy Investment: ${strategy.name}`,
+      direction: "debit",
+      amount: amount,
+      base_amount_cents:     fees.baseCents,
+      buffer_cents:          fees.bufferCents,
+      buffer_consumed_cents: 0,
+      broker_fee_cents:      fees.brokerFeeCents,
+      isin_fee_cents:        fees.isinFeeCents,
+      transaction_fee_cents: fees.transactionFeeCents,
+      description: `${strategy.name} investment for ${child.first_name}`,
+      store_reference: ref,
+      currency: "ZAR",
+      status: "posted",
+      transaction_date: nowIso,
+      created_at: nowIso,
+    }).select("id").single();
+    if (txInsert.error || !txInsert.data?.id) {
+      throw new Error("Transaction record failed: " + (txInsert.error?.message || "no id returned"));
+    }
+    childTxId = txInsert.data.id;
 
     if (holdings.length > 0) {
       // Fetch security prices
@@ -174,8 +202,8 @@ export default async function handler(req, res) {
         const sec = secMap[h.symbol];
         if (!sec?.last_price) continue;
 
-        // Use the exact basket quantity defined in strategies_c.holdings.
-        const qty = Math.floor(Number(h.quantity || h.shares || 0));
+        // Basket quantity from strategies_c.holdings × units (whole baskets).
+        const qty = Math.floor(Number(h.quantity || h.shares || 0)) * unitsN;
         if (qty <= 0) continue;
 
         // Child strategy orders start as pending holdings until real fills arrive.
@@ -192,15 +220,27 @@ export default async function handler(req, res) {
               unrealized_pnl: 0,
               as_of_date: null,
               strategy_id: strategy_id,
+              strategy_name_snapshot: strategy.name,
+              trade_side: "BUY",
+              is_active: true,
               Status: "active",
               transaction_id: childTxId,
-              Expected_fill: intradayPrices[sec.id] ?? null,
+              // Price the client saw at click time (rands): intraday preferred,
+              // else securities_c.last_price (cents) / 100.
+              Expected_fill: intradayPrices[sec.id] ?? (Number(sec.last_price) > 0 ? Number(sec.last_price) / 100 : null),
+              created_at: nowIso,
+              updated_at: nowIso,
             });
           holdingsCreated++;
         } catch (e) {
           console.warn(`[child-invest] pending holding insert for ${h.symbol}:`, e.message);
         }
       }
+    }
+
+    // Never leave the child charged with nothing positioned — undo everything.
+    if (holdingsCreated === 0) {
+      throw new Error("No holdings could be created for this basket.");
     }
 
     return res.json({
@@ -213,7 +253,11 @@ export default async function handler(req, res) {
   } catch (e) {
     console.error("[child-invest] error:", e.message);
 
-    // Rollback child balance if we deducted
+    // Rollback: void the ledger record (if created), then restore the balance.
+    if (childTxId) {
+      try { await db.from("transactions").delete().eq("id", childTxId); }
+      catch (rb) { console.error("[child-invest] tx rollback failed:", rb.message); }
+    }
     if (originalChildBalance !== null) {
       try {
         await db
