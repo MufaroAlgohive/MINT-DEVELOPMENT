@@ -2860,7 +2860,7 @@ const App = () => {
         <Suspense fallback={<div className="min-h-screen bg-[#f8f9fc]" />}>
           <GiftRegistryDashboardPage
             onBack={goBack}
-            onNavigate={(page, state) => { if (state) setGiftRegistryNavState(state); navigateTo(page); }}
+            onNavigate={(page, state) => { if (state) setGiftRegistryNavState(s => ({ ...s, ...state })); navigateTo(page); }}
           />
         </Suspense>
       </SwipeBackWrapper>
