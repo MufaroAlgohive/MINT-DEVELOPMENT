@@ -529,9 +529,8 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
     const next = new Set(wishlistedKeys);
     next.add(key);
     setWishlistedKeys(next);
-    setToastMsg(`Saved to "${listName}"`);
-    setToastVisible(true);
-    setWishlistModal(null);
+    // Do NOT close the modal here — WishlistModal advances to step 2 itself
+    // and the user needs to see the "Build my registry" CTA before dismissing
   };
 
   const toggleStrategyWatchlist = (e, strategyId) => {
