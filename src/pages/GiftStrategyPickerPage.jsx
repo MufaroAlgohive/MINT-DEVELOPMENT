@@ -241,8 +241,8 @@ export default function GiftStrategyPickerPage({ onBack, onNavigate, autoOpenWis
 
   function handleWishlistSaved(key, listName) {
     setWishlistedKeys(prev => new Set([...prev, key]));
-    // Do NOT close the modal here — let the user see step 2 and choose where to go next.
-    // The modal closes itself via onClose once the user taps a button in step 2.
+    setWishlistModal(null);        // close the naming modal
+    setShowRegistrySheet(true);    // continue into the gift registry creation flow
     setToastMsg(`Saved to "${listName}"`);
     setToastVisible(true);
   }
@@ -623,6 +623,7 @@ export default function GiftStrategyPickerPage({ onBack, onNavigate, autoOpenWis
           onClose={() => setWishlistModal(null)}
           onSaved={handleWishlistSaved}
           onViewWishlists={() => onNavigate?.("giftRegistryDashboard")}
+          skipStep2
         />
       )}
 

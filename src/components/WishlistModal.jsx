@@ -124,6 +124,7 @@ export default function WishlistModal({
   onSaved,
   onViewWishlists,
   onContinueToRegistry,
+  skipStep2 = false,
 }) {
   const year = new Date().getFullYear();
   const [step, setStep] = useState(1);
@@ -139,7 +140,11 @@ export default function WishlistModal({
       await addToWishlist(trimmed, itemKey);
       setSavedName(trimmed);
       onSaved?.(itemKey, trimmed);
-      setStep(2);
+      if (skipStep2) {
+        onClose();
+      } else {
+        setStep(2);
+      }
     } finally {
       setSaving(false);
     }
