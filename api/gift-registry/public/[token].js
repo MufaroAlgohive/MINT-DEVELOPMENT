@@ -1,13 +1,42 @@
 import { supabaseAdmin } from '../../_lib/supabase.js';
 
+async function enrichContributionsWithGifterNames(contributions) {
+  if (!contributions?.length) return contributions;
+  const uniqueIds = [...new Set(contributions.map(c => c.gifter_user_id).filter(Boolean))];
+  const nameMap = {};
+  await Promise.all(uniqueIds.map(async (uid) => {
+    try {
+      const { data } = await supabaseAdmin.auth.admin.getUserById(uid);
+      const u = data?.user;
+      const fullName =
+        u?.user_metadata?.full_name ||
+        u?.user_metadata?.name ||
+        [u?.user_metadata?.first_name, u?.user_metadata?.last_name].filter(Boolean).join(' ') ||
+        '';
+      nameMap[uid] = { name: fullName, email: u?.email || '' };
+    } catch { nameMap[uid] = { name: '', email: '' }; }
+  }));
+  return contributions.map(c => ({
+    id: c.id,
+    registry_item_id: c.registry_item_id,
+    gifter_name: nameMap[c.gifter_user_id]?.name || '',
+    gifter_email: c.gifter_email || nameMap[c.gifter_user_id]?.email || '',
+    quantity: c.quantity,
+    status: c.status,
+    created_at: c.created_at,
+  }));
+}
+
 export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
+  // No-index header — prevent search engines from indexing personal wishlists
+  res.setHeader('X-Robots-Tag', 'noindex, nofollow');
+
   try {
     const { token } = req.query;
 
-    // Strict allowlist — never join to users or holdings beyond what's listed here
     const { data: registry, error } = await supabaseAdmin
       .from('gift_events')
       .select(`
@@ -26,7 +55,8 @@ export default async function handler(req, res) {
 
     if (registry.items?.length) {
       const isins = registry.items.map(i => i.isin);
-      const { data: securities } = await supabaseAdmin.from('securities_c').select('isin, name, logo_url, last_price').in('isin', isins);
+      const { data: securities } = await supabaseAdmin
+        .from('securities_c').select('isin, name, logo_url, last_price').in('isin', isins);
       const secMap = Object.fromEntries((securities || []).map(s => [s.isin, s]));
       registry.items = registry.items
         .filter(i => i.status !== 'REMOVED')
@@ -37,6 +67,31 @@ export default async function handler(req, res) {
           logo_url: secMap[item.isin]?.logo_url || null,
           price_snapshot_cents: item.price_snapshot_cents || secMap[item.isin]?.last_price || 0,
         }));
+
+      // Fetch contributions for all items (publicly visible — confirmed by owner: show full name + email)
+      const itemIds = registry.items.map(i => i.id);
+      if (itemIds.length) {
+        const { data: contributions } = await supabaseAdmin
+          .from('gift_contributions')
+          .select('id, registry_item_id, gifter_user_id, gifter_email, quantity, status, created_at')
+          .in('registry_item_id', itemIds)
+          .in('status', ['PAID', 'EXECUTING', 'SETTLED'])
+          .order('created_at', { ascending: false });
+
+        const enriched = await enrichContributionsWithGifterNames(contributions || []);
+
+        // Attach contributions to their items and also expose a flat list
+        const contribsByItem = {};
+        enriched.forEach(c => {
+          if (!contribsByItem[c.registry_item_id]) contribsByItem[c.registry_item_id] = [];
+          contribsByItem[c.registry_item_id].push(c);
+        });
+        registry.items = registry.items.map(item => ({
+          ...item,
+          contributions: contribsByItem[item.id] || [],
+        }));
+        registry.all_contributions = enriched;
+      }
     }
 
     return res.status(200).json({ registry });

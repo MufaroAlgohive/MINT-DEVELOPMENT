@@ -10,9 +10,23 @@ import GiftRegistryItemCard from "../components/GiftRegistryItemCard.jsx";
 import GiftRegistryItemCheckoutSheet from "../components/GiftRegistryItemCheckoutSheet.jsx";
 import GiftRegistryProgressBar from "../components/GiftRegistryProgressBar.jsx";
 
+function GifterAvatar({ name, email }) {
+  const initials = name
+    ? name.split(" ").map(p => p[0]).slice(0, 2).join("").toUpperCase()
+    : email
+    ? email[0].toUpperCase()
+    : "?";
+  return (
+    <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center shrink-0">
+      <span className="text-white font-bold text-xs">{initials}</span>
+    </div>
+  );
+}
+
 /**
  * Public shareable registry page.
  * Decision 1 & 3: anyone can VIEW; only logged-in, KYC-complete users can GIFT.
+ * Privacy note (confirmed by owner 2026-07-06): shows gifter full name + email publicly.
  * Entry: navigateTo("giftRegistryPublic", { token }) or via /registry/:token deep link
  */
 export default function GiftRegistryPublicPage({
@@ -26,16 +40,11 @@ export default function GiftRegistryPublicPage({
   const [checkoutItem, setCheckoutItem] = useState(null);
   const [successMsg, setSuccessMsg] = useState(null);
 
-  // Live realtime updates — progress bars move when someone gifts
-  const handleItemUpdate = useCallback(
-    (updatedItem) => {
-      reload();
-    },
-    [reload]
-  );
+  const handleItemUpdate = useCallback(() => reload(), [reload]);
   useGiftRegistryRealtime(registry?.id, handleItemUpdate);
 
   const items = registry?.items || [];
+  const allContributions = registry?.all_contributions || [];
   const progress = getRegistryProgress(items);
   const canGift = !!user && isKycComplete;
 
@@ -44,7 +53,7 @@ export default function GiftRegistryPublicPage({
     setSuccessMsg(null);
   }
 
-  function handleGiftSuccess(result) {
+  function handleGiftSuccess() {
     setCheckoutItem(null);
     setSuccessMsg("Your gift is on its way! 🎁");
     reload();
@@ -67,23 +76,17 @@ export default function GiftRegistryPublicPage({
           This wishlist may have been removed or the link has expired.
         </p>
         {onBack && (
-          <button onClick={onBack} className="text-sm text-[#6B21A8] font-semibold">
-            Go back
-          </button>
+          <button onClick={onBack} className="text-sm text-[#6B21A8] font-semibold">Go back</button>
         )}
       </div>
     );
   }
 
   const eventDate = registry.event_date
-    ? new Date(registry.event_date).toLocaleDateString("en-ZA", {
-        day: "numeric", month: "long", year: "numeric",
-      })
+    ? new Date(registry.event_date).toLocaleDateString("en-ZA", { day: "numeric", month: "long", year: "numeric" })
     : null;
   const expiryDate = registry.expiry_at
-    ? new Date(registry.expiry_at).toLocaleDateString("en-ZA", {
-        day: "numeric", month: "short",
-      })
+    ? new Date(registry.expiry_at).toLocaleDateString("en-ZA", { day: "numeric", month: "short" })
     : null;
   const isClosed = ["EXPIRED", "COMPLETED", "CANCELLED"].includes(registry.status);
 
@@ -130,13 +133,31 @@ export default function GiftRegistryPublicPage({
             />
           </div>
         </div>
+
+        {/* Gifters roll — avatars of people who've already gifted */}
+        {allContributions.length > 0 && (
+          <div className="mt-4 flex items-center gap-2">
+            <div className="flex -space-x-2">
+              {allContributions.slice(0, 5).map((c, i) => (
+                <GifterAvatar key={c.id || i} name={c.gifter_name} email={c.gifter_email} />
+              ))}
+            </div>
+            <p className="text-xs text-white/70">
+              {allContributions.length === 1
+                ? "1 person has gifted"
+                : `${allContributions.length} people have gifted`}
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Closed banner */}
       {isClosed && (
         <div className="mx-5 mt-4 bg-gray-100 rounded-2xl px-4 py-3 text-center">
           <p className="text-sm text-gray-600 font-medium">
-            {registry.status === "COMPLETED" ? "🎉 This wishlist is fully funded!" : "This wishlist is no longer accepting gifts."}
+            {registry.status === "COMPLETED"
+              ? "🎉 This wishlist is fully funded!"
+              : "This wishlist is no longer accepting gifts."}
           </p>
         </div>
       )}
@@ -148,12 +169,10 @@ export default function GiftRegistryPublicPage({
         </div>
       )}
 
-      {/* Auth prompt for non-users */}
+      {/* Auth / KYC prompts */}
       {!user && !isClosed && (
         <div className="mx-5 mt-4 bg-purple-50 border border-purple-100 rounded-2xl px-4 py-3.5 text-center">
-          <p className="text-sm text-[#6B21A8] font-medium">
-            Sign up to gift from this wishlist
-          </p>
+          <p className="text-sm text-[#6B21A8] font-medium">Sign up to gift from this wishlist</p>
           <button
             onClick={onAuthPrompt}
             className="mt-2 px-5 py-2 bg-[#6B21A8] text-white text-xs font-semibold rounded-xl"
@@ -162,13 +181,9 @@ export default function GiftRegistryPublicPage({
           </button>
         </div>
       )}
-
-      {/* KYC incomplete prompt */}
       {user && !isKycComplete && !isClosed && (
         <div className="mx-5 mt-4 bg-amber-50 border border-amber-100 rounded-2xl px-4 py-3.5 text-center">
-          <p className="text-sm text-amber-700 font-medium">
-            Complete your verification to gift
-          </p>
+          <p className="text-sm text-amber-700 font-medium">Complete your verification to gift</p>
           <button
             onClick={() => onAuthPrompt && onAuthPrompt("kyc")}
             className="mt-2 px-5 py-2 bg-amber-600 text-white text-xs font-semibold rounded-xl"
@@ -178,7 +193,7 @@ export default function GiftRegistryPublicPage({
         </div>
       )}
 
-      {/* Items */}
+      {/* Wishlist items */}
       <div className="px-5 mt-5 space-y-3">
         <p className="text-xs text-gray-500 font-medium">
           {items.length} item{items.length !== 1 ? "s" : ""} on this wishlist
@@ -194,6 +209,44 @@ export default function GiftRegistryPublicPage({
           />
         ))}
       </div>
+
+      {/* Who's gifted section */}
+      {allContributions.length > 0 && (
+        <div className="px-5 mt-6">
+          <p className="text-xs text-gray-500 font-medium mb-3">
+            Who's gifted ({allContributions.length})
+          </p>
+          <div className="space-y-2">
+            {allContributions.map((c) => {
+              const displayName = c.gifter_name || c.gifter_email || "Anonymous";
+              const subLine = c.gifter_name && c.gifter_email && c.gifter_name !== c.gifter_email
+                ? c.gifter_email
+                : null;
+              const itemName = items.find(i => i.id === c.registry_item_id)?.name;
+              return (
+                <div key={c.id} className="bg-white rounded-2xl p-3.5 flex items-center gap-3 border border-gray-100">
+                  <div className="w-9 h-9 rounded-full bg-violet-100 flex items-center justify-center shrink-0">
+                    <span className="text-violet-700 font-bold text-xs">
+                      {c.gifter_name
+                        ? c.gifter_name.split(" ").map(p => p[0]).slice(0, 2).join("").toUpperCase()
+                        : c.gifter_email?.[0]?.toUpperCase() || "?"}
+                    </span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-gray-800 truncate">{displayName}</p>
+                    {subLine && <p className="text-xs text-gray-400 truncate">{subLine}</p>}
+                    <p className="text-xs text-gray-400">
+                      {c.quantity} share{c.quantity !== 1 ? "s" : ""}
+                      {itemName ? ` of ${itemName}` : ""}
+                    </p>
+                  </div>
+                  <span className="text-lg">🎁</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Checkout sheet */}
       {checkoutItem && (

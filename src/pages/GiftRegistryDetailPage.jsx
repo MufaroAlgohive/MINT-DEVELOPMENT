@@ -12,10 +12,19 @@ import {
 import GiftRegistryProgressBar from "../components/GiftRegistryProgressBar.jsx";
 import GiftRegistryShareSheet from "../components/GiftRegistryShareSheet.jsx";
 
-/**
- * Owner's detailed view of a single registry — per-item progress + contribution list.
- * Entry: navigateTo("giftRegistryDetail", { registryId })
- */
+function GifterAvatar({ name, email }) {
+  const initials = name
+    ? name.split(" ").map(p => p[0]).slice(0, 2).join("").toUpperCase()
+    : email
+    ? email[0].toUpperCase()
+    : "?";
+  return (
+    <div className="w-9 h-9 rounded-full bg-violet-100 flex items-center justify-center shrink-0">
+      <span className="text-violet-700 font-bold text-xs">{initials}</span>
+    </div>
+  );
+}
+
 export default function GiftRegistryDetailPage({ registryId, onNavigate, onBack }) {
   const { registry, loading, reload } = useRegistryDetail(registryId);
   const { contributions } = useRegistryContributions(registryId);
@@ -23,10 +32,7 @@ export default function GiftRegistryDetailPage({ registryId, onNavigate, onBack 
   const [actionLoading, setActionLoading] = useState(false);
   const [actionError, setActionError] = useState(null);
 
-  // Live realtime updates — when anyone gifts, progress bars update instantly
-  useGiftRegistryRealtime(registryId, (updatedItem) => {
-    reload();
-  });
+  useGiftRegistryRealtime(registryId, () => reload());
 
   const items = registry?.items || [];
   const progress = getRegistryProgress(items);
@@ -81,7 +87,7 @@ export default function GiftRegistryDetailPage({ registryId, onNavigate, onBack 
               </span>
             </div>
           </div>
-          {registry?.share_token && registry?.status === "ACTIVE" && (
+          {registry?.share_token && ["ACTIVE", "PAUSED"].includes(registry?.status) && (
             <button
               onClick={() => setShowShare(true)}
               className="p-2 rounded-xl bg-purple-50 text-[#6B21A8]"
@@ -107,6 +113,9 @@ export default function GiftRegistryDetailPage({ registryId, onNavigate, onBack 
             targetQty={progress.total}
             height="h-2.5"
           />
+          <p className="text-xs text-gray-400 mt-2">
+            {progress.funded} of {progress.total} shares funded · {contributions.length} gift{contributions.length !== 1 ? "s" : ""} received
+          </p>
         </div>
 
         {/* Registry actions */}
@@ -160,9 +169,9 @@ export default function GiftRegistryDetailPage({ registryId, onNavigate, onBack 
                   <div className="flex-1">
                     <p className="text-sm font-medium text-gray-800">{item.name || item.isin}</p>
                     <p className="text-xs text-gray-400">
-                      {item.filled_quantity} / {item.target_quantity} shares ·{" "}
+                      {item.filled_quantity} / {item.target_quantity} shares
                       {item.reserved_quantity > 0 && (
-                        <span className="text-amber-600">{item.reserved_quantity} reserved</span>
+                        <> · <span className="text-amber-600">{item.reserved_quantity} reserved</span></>
                       )}
                     </p>
                   </div>
@@ -180,33 +189,40 @@ export default function GiftRegistryDetailPage({ registryId, onNavigate, onBack 
           </div>
         </div>
 
-        {/* Contributions */}
+        {/* Contributions — gifter full name + email */}
         {contributions.length > 0 && (
           <div>
-            <p className="text-xs text-gray-500 font-medium mb-3">Gifts received ({contributions.length})</p>
+            <p className="text-xs text-gray-500 font-medium mb-3">
+              Gifts received ({contributions.length})
+            </p>
             <div className="space-y-2">
-              {contributions.map((c) => (
-                <div key={c.id} className="bg-white rounded-2xl p-4 flex items-center gap-3 border border-gray-100">
-                  <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center shrink-0">
-                    <span className="text-sm">🎁</span>
+              {contributions.map((c) => {
+                const displayName = c.gifter_name || c.gifter_email || "Anonymous";
+                const subLine = c.gifter_name && c.gifter_email && c.gifter_name !== c.gifter_email
+                  ? c.gifter_email
+                  : null;
+                return (
+                  <div key={c.id} className="bg-white rounded-2xl p-4 flex items-center gap-3 border border-gray-100">
+                    <GifterAvatar name={c.gifter_name} email={c.gifter_email} />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-gray-800 truncate">{displayName}</p>
+                      {subLine && (
+                        <p className="text-xs text-gray-400 truncate">{subLine}</p>
+                      )}
+                      <p className="text-xs text-gray-400">
+                        {c.quantity} share{c.quantity !== 1 ? "s" : ""} · {centsToRand(c.executed_amount_cents || c.quoted_amount_cents)}
+                      </p>
+                    </div>
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium shrink-0 ${
+                      c.status === "SETTLED" ? "bg-green-100 text-green-700" :
+                      c.status === "FAILED" ? "bg-red-100 text-red-600" :
+                      "bg-yellow-100 text-yellow-700"
+                    }`}>
+                      {c.status}
+                    </span>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-800 truncate">
-                      {c.gifter_email}
-                    </p>
-                    <p className="text-xs text-gray-400">
-                      {c.quantity} share{c.quantity !== 1 ? "s" : ""} · {centsToRand(c.executed_amount_cents || c.quoted_amount_cents)}
-                    </p>
-                  </div>
-                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
-                    c.status === "SETTLED" ? "bg-green-100 text-green-700" :
-                    c.status === "FAILED" ? "bg-red-100 text-red-600" :
-                    "bg-yellow-100 text-yellow-700"
-                  }`}>
-                    {c.status}
-                  </span>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
