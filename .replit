@@ -29,7 +29,7 @@ outputType = "webview"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "npm run dev"
+args = "pnpm install && npm run dev"
 waitForPort = 5000
 
 [[ports]]
