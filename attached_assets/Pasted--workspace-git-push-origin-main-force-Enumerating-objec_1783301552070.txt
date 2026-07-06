@@ -1,0 +1,51 @@
+/workspace$ git push origin main --force
+Enumerating objects: 920, done.
+Counting objects: 100% (870/870), done.
+Delta compression using up to 2 threads
+Compressing objects: 100% (213/213), done.
+Writing objects: 100% (812/812), 607.90 KiB | 31.99 MiB/s, done.
+Total 812 (delta 649), reused 758 (delta 597), pack-reused 0 (from 0)
+remote: Resolving deltas: 100% (649/649), completed with 48 local objects.
+remote: error: GH013: Repository rule violations found for refs/heads/main.
+remote: 
+remote: - GITHUB PUSH PROTECTION
+remote:   —————————————————————————————————————————
+remote:     Resolve the following violations before pushing again
+remote: 
+remote:     - Push cannot contain secrets
+remote: 
+remote:     
+remote:      (?) Learn how to resolve a blocked push
+remote:      https://docs.github.com/code-security/secret-scanning/working-with-secret-scanning-and-push-protection/working-with-push-protection-from-the-command-line#resolving-a-blocked-push
+remote:     
+remote:      (?) This repository does not have Secret Scanning enabled, but is eligible. Enable Secret Scanning to view and manage detected secrets.
+remote:      Visit the repository settings page, https://github.com/tsiemasilo-dev/MINT-LIVE/settings/security_analysis
+remote:     
+remote:     
+remote:       —— GCP API Key Bound to a Service Account ————————————
+remote:        locations:
+remote:          - commit: 0fa4a192d876cdf2bf663c1c53606eb1657bda0a
+remote:            path: api/credit/detect-income.js:101
+remote:     
+remote:        (?) To push, remove secret from commit(s) or follow this URL to allow the secret.
+remote:        https://github.com/tsiemasilo-dev/MINT-LIVE/security/secret-scanning/unblock-secret/3G6oljxfAZp5Wlv4yIbahP0YDAV
+remote:     
+remote:     
+remote:       —— GCP API Key Bound to a Service Account ————————————
+remote:        locations:
+remote:          - commit: 2cd29f83780ca2378033817a2202f402bb8b72c0
+remote:            path: api/credit/detect-income.js:101
+remote:          - commit: 9735f8343a5c4fdb484861ce2443068b0329ccd8
+remote:            path: api/credit/detect-income.js:101
+remote:          - commit: 6c4959d4d6baa920d72b5358c92f2805d203cca4
+remote:            path: api/credit/detect-income.js:101
+remote:     
+remote:        (?) To push, remove secret from commit(s) or follow this URL to allow the secret.
+remote:        https://github.com/tsiemasilo-dev/MINT-LIVE/security/secret-scanning/unblock-secret/3G6olm83obHEh3skeAms8KPNMN5
+remote:     
+remote: 
+remote: 
+To https://github.com/tsiemasilo-dev/MINT-LIVE.git
+ ! [remote rejected]   main -> main (push declined due to repository rule violations)
+error: failed to push some refs to 'https://github.com/tsiemasilo-dev/MINT-LIVE.git'
+~/workspace$ 
