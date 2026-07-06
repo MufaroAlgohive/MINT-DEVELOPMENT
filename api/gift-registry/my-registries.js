@@ -15,7 +15,32 @@ export default async function handler(req, res) {
       .order('created_at', { ascending: false });
 
     if (error) throw error;
-    return res.status(200).json({ registries: data || [] });
+
+    const registries = data || [];
+
+    // Enrich all items with logo_url and name in one batch query
+    const allIsins = [...new Set(
+      registries.flatMap(r => (r.items || []).map(i => i.isin)).filter(Boolean)
+    )];
+    let secMap = {};
+    if (allIsins.length) {
+      const { data: securities } = await supabaseAdmin
+        .from('securities_c')
+        .select('isin, name, logo_url')
+        .in('isin', allIsins);
+      secMap = Object.fromEntries((securities || []).map(s => [s.isin, s]));
+    }
+
+    const enriched = registries.map(r => ({
+      ...r,
+      items: (r.items || []).map(item => ({
+        ...item,
+        name: secMap[item.isin]?.name || item.isin,
+        logo_url: secMap[item.isin]?.logo_url || null,
+      })),
+    }));
+
+    return res.status(200).json({ registries: enriched });
   } catch (e) {
     return res.status(500).json({ error: e.message });
   }

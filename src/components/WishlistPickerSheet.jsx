@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Heart, Plus, Check, ArrowRight } from "lucide-react";
-import { getWishlists, addToWishlist, saveWishlists, syncWishlistsFromCloud } from "./WishlistModal.jsx";
 import WishlistPreviewGrid from "./WishlistPreviewGrid.jsx";
 
 const CARD_GRADIENTS = [
@@ -48,7 +47,7 @@ export default function WishlistPickerSheet({ itemKey, onClose, onSaved, onCreat
                 const registryLists = registries.map((r) => ({
                   id: r.id,
                   name: r.title,
-                  items: (r.items || []).filter((i) => i.isin).map((i) => ({
+                  items: (r.items || []).filter((i) => i.isin && i.status !== 'REMOVED').map((i) => ({
                     isin: i.isin,
                     name: i.name || i.isin,
                     logo_url: i.logo_url || null,
@@ -65,15 +64,9 @@ export default function WishlistPickerSheet({ itemKey, onClose, onSaved, onCreat
         // fall through to local cache
       }
 
-      // Unauthenticated fallback
-      try {
-        const lists = await syncWishlistsFromCloud();
-        setWishlists(lists);
-      } catch {
-        setWishlists(getWishlists());
-      } finally {
-        setLoading(false);
-      }
+      // No auth session — show empty state so user can create their first registry
+      setWishlists([]);
+      setLoading(false);
     }
     load();
   }, []);
@@ -105,9 +98,6 @@ export default function WishlistPickerSheet({ itemKey, onClose, onSaved, onCreat
           const json = await res.json().catch(() => ({}));
           throw new Error(json.error || "Failed to save item");
         }
-      } else {
-        // Unauthenticated fallback — write to localStorage cache
-        await addToWishlist(list.name, itemKey);
       }
 
       setSavedId(list.id);
@@ -250,7 +240,7 @@ export default function WishlistPickerSheet({ itemKey, onClose, onSaved, onCreat
                           <div>
                             <p className="text-[13px] font-bold text-white leading-tight line-clamp-2 pr-1 drop-shadow">{list.name}</p>
                             <p className="text-[11px] text-white/80 mt-0.5 drop-shadow">
-                              {list.items?.length || 0} {(list.items?.length || 0) === 1 ? "item" : "items"}
+                              {list.items?.filter(i => i.status !== 'REMOVED')?.length || list.items?.length || 0} {((list.items?.filter(i => i.status !== 'REMOVED')?.length || list.items?.length || 0) === 1) ? "item" : "items"}
                             </p>
                           </div>
                         </div>

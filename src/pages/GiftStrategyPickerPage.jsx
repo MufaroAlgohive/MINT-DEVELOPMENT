@@ -9,7 +9,6 @@ import { getPublicStrategies, formatChangePct } from "../lib/strategyData";
 import { calculateMinInvestmentSync, enrichSecuritiesWithIntradayPrices, buildHoldingsBySymbol } from "../lib/strategyUtils";
 import { supabase } from "../lib/supabase";
 import { formatCurrency } from "../lib/formatCurrency";
-import { isInAnyWishlist, removeFromWishlist } from "../components/WishlistModal.jsx";
 import WishlistToast from "../components/WishlistToast.jsx";
 
 const HOME_BG = {
@@ -211,23 +210,51 @@ export default function GiftStrategyPickerPage({ onBack, onNavigate, autoOpenWis
   const [showSearch, setShowSearch] = useState(false);
   const [showRegistrySheet, setShowRegistrySheet] = useState(false);
   const [showWishlistMenu, setShowWishlistMenu] = useState(false);
-  // Wishlist (heart) state
-  const [wishlistedKeys, setWishlistedKeys] = useState(() => {
-    try {
-      const lists = JSON.parse(localStorage.getItem("mint_wishlists") || "[]");
-      const keys = new Set();
-      lists.forEach(l => (l.items || []).forEach(k => keys.add(k)));
-      return keys;
-    } catch { return new Set(); }
-  });
-  const [giftStrategyWatchlist, setGiftStrategyWatchlist] = useState(() => {
-    try { return JSON.parse(localStorage.getItem("mint_gift_strategy_watchlist") || "[]"); } catch { return []; }
-  });
+  // Wishlist (heart) state — loaded from Supabase user_metadata, not localStorage
+  const [wishlistedKeys, setWishlistedKeys] = useState(new Set());
+  const [giftStrategyWatchlist, setGiftStrategyWatchlist] = useState([]);
   const [toastMsg, setToastMsg] = useState("");
   const [toastVisible, setToastVisible] = useState(false);
 
   const searchRef = useRef(null);
   const wishlistMenuRef = useRef(null);
+
+  // Load wishlisted keys + watchlist from Supabase user_metadata on mount
+  useEffect(() => {
+    async function loadPrefs() {
+      try {
+        const { data } = await supabase.auth.getSession();
+        const token = data?.session?.access_token;
+        if (!token) return;
+        const res = await fetch("/api/gift-wishlist-prefs", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const { wishlistedKeys: keys = [], watchlist = [] } = await res.json();
+          setWishlistedKeys(new Set(keys));
+          setGiftStrategyWatchlist(watchlist);
+        }
+      } catch (e) {
+        console.error("[GiftStrategyPicker] loadPrefs error:", e);
+      }
+    }
+    loadPrefs();
+  }, []);
+
+  async function updatePrefs(patch) {
+    try {
+      const { data } = await supabase.auth.getSession();
+      const token = data?.session?.access_token;
+      if (!token) return;
+      await fetch("/api/gift-wishlist-prefs", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify(patch),
+      });
+    } catch (e) {
+      console.error("[GiftStrategyPicker] updatePrefs error:", e);
+    }
+  }
 
   const [wishlistPickerKey, setWishlistPickerKey] = useState(null); // itemKey awaiting picker
   const [pendingRegistryItem, setPendingRegistryItem] = useState(null); // preserved when transitioning picker → create sheet
@@ -236,8 +263,10 @@ export default function GiftStrategyPickerPage({ onBack, onNavigate, autoOpenWis
   function toggleWishlistItem(e, key) {
     e.preventDefault(); e.stopPropagation();
     if (wishlistedKeys.has(key)) {
-      removeFromWishlist(key);
-      setWishlistedKeys(prev => { const n = new Set(prev); n.delete(key); return n; });
+      const next = new Set(wishlistedKeys);
+      next.delete(key);
+      setWishlistedKeys(next);
+      updatePrefs({ wishlistedKeys: [...next] });
     } else {
       // Show picker so the user can choose a wishlist category
       setWishlistPickerKey(key);
@@ -248,7 +277,7 @@ export default function GiftStrategyPickerPage({ onBack, onNavigate, autoOpenWis
     e.preventDefault(); e.stopPropagation();
     setGiftStrategyWatchlist(prev => {
       const next = prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id];
-      localStorage.setItem("mint_gift_strategy_watchlist", JSON.stringify(next));
+      updatePrefs({ watchlist: next });
       return next;
     });
   }
@@ -612,7 +641,9 @@ export default function GiftStrategyPickerPage({ onBack, onNavigate, autoOpenWis
           itemKey={wishlistPickerKey}
           onClose={() => setWishlistPickerKey(null)}
           onSaved={(savedItemKey, listName) => {
-            setWishlistedKeys(prev => new Set([...prev, savedItemKey]));
+            const next = new Set([...wishlistedKeys, savedItemKey]);
+            setWishlistedKeys(next);
+            updatePrefs({ wishlistedKeys: [...next] });
             setWishlistPickerKey(null);
             setToastMsg(`Saved to "${listName}"`);
             setToastVisible(true);
@@ -638,7 +669,9 @@ export default function GiftStrategyPickerPage({ onBack, onNavigate, autoOpenWis
           setShowRegistrySheet(false);
           // Mark the pending item as wishlisted now that it's been saved to a new wishlist
           if (pendingRegistryItem) {
-            setWishlistedKeys(prev => new Set([...prev, pendingRegistryItem]));
+            const next = new Set([...wishlistedKeys, pendingRegistryItem]);
+            setWishlistedKeys(next);
+            updatePrefs({ wishlistedKeys: [...next] });
           }
           setPendingRegistryItem(null);
           setToastMsg(`"${title}" created!`);

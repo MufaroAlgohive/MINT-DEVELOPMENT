@@ -172,6 +172,40 @@ async function getLatestPriceCents(isin, supabaseAdmin) {
 
 function registerGiftRegistryRoutes(app, supabaseAdmin, pgPool) {
 
+  // GET /api/gift-wishlist-prefs — load user's wishlisted keys + strategy watchlist
+  app.get('/api/gift-wishlist-prefs', async (req, res) => {
+    try {
+      const user = await getUser(req, supabaseAdmin);
+      if (!user) return res.status(401).json({ error: 'Unauthorized' });
+      const prefs = user.user_metadata?.gift_wishlist_prefs || {};
+      return res.json({ wishlistedKeys: prefs.keys || [], watchlist: prefs.watchlist || [] });
+    } catch (e) {
+      return res.status(500).json({ error: e.message });
+    }
+  });
+
+  // PUT /api/gift-wishlist-prefs — update wishlisted keys and/or watchlist
+  app.put('/api/gift-wishlist-prefs', async (req, res) => {
+    try {
+      const user = await getUser(req, supabaseAdmin);
+      if (!user) return res.status(401).json({ error: 'Unauthorized' });
+      const { wishlistedKeys, watchlist } = req.body || {};
+      const existing = user.user_metadata?.gift_wishlist_prefs || {};
+      const updated = {
+        ...existing,
+        ...(Array.isArray(wishlistedKeys) ? { keys: wishlistedKeys } : {}),
+        ...(Array.isArray(watchlist) ? { watchlist } : {}),
+      };
+      const { error } = await supabaseAdmin.auth.admin.updateUserById(user.id, {
+        user_metadata: { ...user.user_metadata, gift_wishlist_prefs: updated },
+      });
+      if (error) throw error;
+      return res.json({ success: true });
+    } catch (e) {
+      return res.status(500).json({ error: e.message });
+    }
+  });
+
   // POST /api/gift-registry/create
   app.post('/api/gift-registry/create', async (req, res) => {
     try {

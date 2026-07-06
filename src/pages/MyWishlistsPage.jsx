@@ -21,7 +21,7 @@ const CARD_GRADIENTS = [
 function RegistryCard({ registry, index, onTap, onDelete, deletingId }) {
   const [fromColor, toColor] = CARD_GRADIENTS[index % CARD_GRADIENTS.length];
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const items = registry.items || [];
+  const items = (registry.items || []).filter(i => i.status !== 'REMOVED');
   const progress = getRegistryProgress(items);
   const meta = REGISTRY_STATUS_META[registry.status] || REGISTRY_STATUS_META.DRAFT;
   const occasionLabel = registry.occasion ? OCCASION_LABELS[registry.occasion] || registry.occasion : null;
@@ -75,12 +75,12 @@ function RegistryCard({ registry, index, onTap, onDelete, deletingId }) {
         </div>
       </button>
 
-      {/* Delete button — top-right corner */}
+      {/* Delete button — top-right corner, z-20 so it sits above the inset tap area */}
       <button
         onClick={handleDeleteTap}
         disabled={isDeleting}
         className={[
-          "absolute top-2 right-2 flex h-6 w-6 items-center justify-center rounded-full transition-all active:scale-90 disabled:opacity-50",
+          "absolute top-2 right-2 z-20 flex h-6 w-6 items-center justify-center rounded-full transition-all active:scale-90 disabled:opacity-50",
           confirmDelete ? "bg-red-500 shadow-lg" : "bg-black/25",
         ].join(" ")}
       >

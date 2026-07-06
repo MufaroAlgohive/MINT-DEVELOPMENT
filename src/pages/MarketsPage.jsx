@@ -8,7 +8,7 @@ import { useRealtimePrices } from "../lib/useRealtimePrices";
 import { getStrategiesWithMetrics, getPublicStrategies, formatChangePct, formatChangeAbs, getChangeColor } from "../lib/strategyData.js";
 import { useProfile } from "../lib/useProfile";
 import { TrendingUp, Search, SlidersHorizontal, X, ChevronRight, Bookmark, PlayCircle, Gift, Heart } from "lucide-react";
-import WishlistModal, { isInAnyWishlist, getWishlistNameForItem, removeFromWishlist } from "../components/WishlistModal.jsx";
+import WishlistModal from "../components/WishlistModal.jsx";
 import WishlistPickerSheet from "../components/WishlistPickerSheet.jsx";
 import ChildInvestModal from "../components/ChildInvestModal.jsx";
 import { saveMarketsInvestFilters, loadMarketsInvestFilters, saveMarketsStrategyFilters, loadMarketsStrategyFilters, buildInvestChips, buildChipsFromFilters } from "../lib/usePersistedFilters.js";
@@ -496,27 +496,55 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
   const [showWishlistMenu, setShowWishlistMenu] = useState(false);
   const wishlistMenuRef = useRef(null);
 
-  // Wishlist (heart) state
-  const STRATEGY_WL_KEY = "mint_strategy_watchlist";
-  const [wishlistedKeys, setWishlistedKeys] = useState(() => {
-    try {
-      const lists = JSON.parse(localStorage.getItem("mint_wishlists") || "[]");
-      const keys = new Set();
-      lists.forEach(l => (l.items || []).forEach(k => keys.add(k)));
-      return keys;
-    } catch { return new Set(); }
-  });
-  const [strategyWatchlist, setStrategyWatchlist] = useState(() => {
-    try { return JSON.parse(localStorage.getItem(STRATEGY_WL_KEY) || "[]"); } catch { return []; }
-  });
+  // Wishlist (heart) state — loaded from Supabase user_metadata, not localStorage
+  const [wishlistedKeys, setWishlistedKeys] = useState(new Set());
+  const [strategyWatchlist, setStrategyWatchlist] = useState([]);
   const [wishlistPickerKey, setWishlistPickerKey] = useState(null); // itemKey awaiting picker
+
+  // Load wishlisted keys + strategy watchlist from API on mount
+  useEffect(() => {
+    async function loadPrefs() {
+      try {
+        const { data } = await supabase.auth.getSession();
+        const token = data?.session?.access_token;
+        if (!token) return;
+        const res = await fetch("/api/gift-wishlist-prefs", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const { wishlistedKeys: keys = [], watchlist = [] } = await res.json();
+          setWishlistedKeys(new Set(keys));
+          setStrategyWatchlist(watchlist);
+        }
+      } catch (e) {
+        console.error("[MarketsPage] loadPrefs error:", e);
+      }
+    }
+    loadPrefs();
+  }, []);
+
+  async function updateWishlistPrefs(patch) {
+    try {
+      const { data } = await supabase.auth.getSession();
+      const token = data?.session?.access_token;
+      if (!token) return;
+      await fetch("/api/gift-wishlist-prefs", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify(patch),
+      });
+    } catch (e) {
+      console.error("[MarketsPage] updatePrefs error:", e);
+    }
+  }
+
   const toggleWishlistItem = (e, itemKey) => {
     e.stopPropagation();
     if (wishlistedKeys.has(itemKey)) {
-      removeFromWishlist(itemKey);
       const next = new Set(wishlistedKeys);
       next.delete(itemKey);
       setWishlistedKeys(next);
+      updateWishlistPrefs({ wishlistedKeys: [...next] });
     } else {
       // Show the wishlist picker so the user can choose a category
       setWishlistPickerKey(itemKey);
@@ -528,7 +556,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
     const isW = strategyWatchlist.includes(strategyId);
     const next = isW ? strategyWatchlist.filter(id => id !== strategyId) : [...strategyWatchlist, strategyId];
     setStrategyWatchlist(next);
-    try { localStorage.setItem(STRATEGY_WL_KEY, JSON.stringify(next)); } catch {}
+    updateWishlistPrefs({ watchlist: next });
   };
 
   useEffect(() => {
@@ -3297,7 +3325,9 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
           itemKey={wishlistPickerKey}
           onClose={() => setWishlistPickerKey(null)}
           onSaved={(savedItemKey, listName) => {
-            setWishlistedKeys(prev => new Set([...prev, savedItemKey]));
+            const next = new Set([...wishlistedKeys, savedItemKey]);
+            setWishlistedKeys(next);
+            updateWishlistPrefs({ wishlistedKeys: [...next] });
             setWishlistPickerKey(null);
           }}
           onCreateNew={(name) => {

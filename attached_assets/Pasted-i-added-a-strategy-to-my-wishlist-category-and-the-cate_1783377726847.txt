@@ -1,0 +1,82 @@
+i added a strategy to my wishlist category and the category is my wishlist 2026 and it says 0 items even though i added and i dont see the preview also on the card
+
+9 minutes ago
+Viewing wishlists
+
+Viewing wishlists
+This is a different component from the picker — this is the "YOUR WISHLISTS" page/list view. Let me find it.
+
+
+6 actions
+Two problems: 0 items means the item isn't actually being written to gift_registry_items when saved from the picker, and no preview because RegistryCard in MyWishlistsPage.jsx has no mosaic at all yet. Let me trace both.
+
+
+6 actions
+handlePick calls addToWishlist(list.name, itemKey) — that only writes to the mint_wishlists localStorage cache, never to gift_registry_items. The item count stays 0. Let me find the add-item endpoint and check what itemKey looks like at the call sites.
+
+
+6 actions
+Good — I have all the pieces. The add-item endpoint needs registryId + isin + targetQuantity. handlePick currently only calls addToWishlist (localStorage only). Let me check what format itemKey takes before fixing.
+
+
+3 actions
+itemKey can be a plain ISIN ("NPN.JO") or "strategy:{id}" for baskets. Let me check the strategy key format in GiftStrategyPickerPage and what fields a strategy has.
+
+
+5 actions
+The strategy key is gift:${strategy.id}. Let me see how strategies are fetched so I know what table to query, then I can fix the full flow.
+
+
+3 actions
+Now I have the full picture. Strategies fetch from getPublicStrategies() which uses a strategies_c or similar table with a holdings field (array of {ticker/symbol}). I need a unified "add by key" server endpoint that handles both ISINs and gift:strategyId baskets.
+
+
+5 actions
+I have all I need. The fix requires three things in parallel:
+
+New server endpoint that expands gift:strategyId → individual stock items (via strategies_c.holdings)
+handlePick posts to the real API instead of localStorage
+RegistryCard in MyWishlistsPage gets the same mosaic preview (shared component)
+
+2 actions
+Now wire up all three changes in parallel — server endpoint, handlePick, and MyWishlistsPage card preview.
+
+
+5 actions
+Now update handlePick and the import in WishlistPickerSheet, and add the preview to MyWishlistsPage.RegistryCard — all in parallel.
+
+
+2 actions
+Now remove the inline WishlistPreviewGrid from WishlistPickerSheet (using shared file), fix handlePick, and add the mosaic to MyWishlistsPage.RegistryCard — all in parallel.
+
+
+5 actions
+Now fix handlePick and add the preview to MyWishlistsPage in parallel.
+
+
+2 actions
+Now add the mosaic preview to MyWishlistsPage.RegistryCard:
+
+
+2 actions
+Now wire WishlistPreviewGrid into RegistryCard and restart the server so the new endpoint loads.
+
+
+6 actions
+There was a Vite reload error on WishlistPickerSheet.jsx. Let me check what's wrong.
+
+
+3 actions
+The Vite error was from a transient intermediate state during my sequential edits — the subsequent "hot updated" messages confirm it recovered. Let me verify the current state is clean.
+
+
+3 actions
+All clean — no browser errors, server up with routes registered, and all three sanity checks pass. Let me run a final code review.
+
+
+3 actions
+Two issues to fix: dedup within the strategy expansion loop, and delete button z-index on RegistryCard.
+
+
+Edited giftRegistryRoutes.cjs
+You've reached your daily free quota limit. It will reset at 12:00 AM
