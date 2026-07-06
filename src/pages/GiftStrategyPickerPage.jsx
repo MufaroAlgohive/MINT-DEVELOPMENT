@@ -395,6 +395,29 @@ export default function GiftStrategyPickerPage({ onBack, onNavigate }) {
             </div>
           ) : (
             <>
+              {/* Gift Registry entry point — alongside "Send a gift" */}
+              {activeCategory === "All" && !searchQuery && (
+                <motion.button
+                  type="button"
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.4 }}
+                  onClick={() => onNavigate?.("giftRegistryDashboard")}
+                  className="w-full flex items-center gap-4 bg-gradient-to-r from-[#6B21A8]/10 to-[#9333EA]/10 border border-[#6B21A8]/20 rounded-2xl px-4 py-3.5 text-left mb-1"
+                >
+                  <div className="w-10 h-10 rounded-xl bg-[#6B21A8] flex items-center justify-center shrink-0">
+                    <span className="text-lg">🎁</span>
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold text-[#6B21A8]">Create a Gift Registry</p>
+                    <p className="text-xs text-gray-500">Build a shareable wishlist of shares for any occasion</p>
+                  </div>
+                  <svg className="w-4 h-4 text-[#6B21A8] shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </motion.button>
+              )}
+
               {featuredStrategies.length > 0 && (
                 <div className="space-y-3">
                   {activeCategory === "All" && (

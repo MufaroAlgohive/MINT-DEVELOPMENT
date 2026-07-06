@@ -8,6 +8,7 @@ process.on('uncaughtException', (err) => {
 
 const fs = require("fs");
 const path = require("path");
+const { ensureGiftRegistryTables, registerGiftRegistryRoutes, sweepExpiredReservations } = require('./giftRegistryRoutes.cjs');
 
 function loadEnvFile(envPath) {
   try {
@@ -9284,6 +9285,7 @@ async function ensureFamilyMembersTablePg() {
   }
 }
 ensureFamilyMembersTable();
+ensureGiftRegistryTables(pgPool, supabaseAdmin);
 
 // Helper: run a raw SQL query on the family_members table via pgPool (bypasses RLS)
 async function fmQuery(sql, params = []) {
@@ -13131,6 +13133,11 @@ app.get('/api/fees-config', async (req, res) => {
     return res.status(500).json({ success: false, error: safeError(err) });
   }
 });
+
+// Gift Registry routes + reservation sweeper cron
+registerGiftRegistryRoutes(app, supabaseAdmin, pgPool);
+cron.schedule('* * * * *', () => sweepExpiredReservations(pgPool));
+console.log('[gift-registry] Reservation sweeper scheduled (every minute)');
 
 // Global Express error middleware — catches any next(err) or async throws
 app.use((err, req, res, next) => {

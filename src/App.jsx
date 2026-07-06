@@ -53,6 +53,13 @@ const GiftCodeEntryPage = lazy(() => import("./pages/GiftCodeEntryPage.jsx"));
 const GiftPreviewPage = lazy(() => import("./pages/GiftPreviewPage.jsx"));
 const SentGiftsPageV2 = lazy(() => import("./pages/SentGiftsPageV2.jsx"));
 const GiftStrategyPickerPage = lazy(() => import("./pages/GiftStrategyPickerPage.jsx"));
+const GiftRegistryDashboardPage = lazy(() => import("./pages/GiftRegistryDashboardPage.jsx"));
+const GiftRegistryCreatePage = lazy(() => import("./pages/GiftRegistryCreatePage.jsx"));
+const GiftRegistryBuilderPage = lazy(() => import("./pages/GiftRegistryBuilderPage.jsx"));
+const GiftRegistryPreviewPage = lazy(() => import("./pages/GiftRegistryPreviewPage.jsx"));
+const GiftRegistryDetailPage = lazy(() => import("./pages/GiftRegistryDetailPage.jsx"));
+const GiftRegistryPublicPage = lazy(() => import("./pages/GiftRegistryPublicPage.jsx"));
+const GiftRegistryMintNumberLookup = lazy(() => import("./pages/GiftRegistryMintNumberLookup.jsx"));
 const NewsArticlePage = lazy(() => import("./pages/NewsArticlePage.jsx"));
 const ActivityPage = lazy(() => import("./pages/ActivityPage.jsx"));
 const ActionsPage = lazy(() => import("./pages/ActionsPage.jsx"));
@@ -240,6 +247,8 @@ const App = () => {
   const [showPinLock, setShowPinLock] = useState(false);
   const [showOpenStrategiesMaintenance, setShowOpenStrategiesMaintenance] = useState(false);
   const [appEnabled, setAppEnabled] = useState(true);
+  // Gift Registry navigation state
+  const [giftRegistryNavState, setGiftRegistryNavState] = useState({});  // { registryId, registry, token }
 
   const isAuthenticated = !['welcome', 'auth', 'linkExpired'].includes(currentPage);
 
@@ -2834,6 +2843,110 @@ const App = () => {
       </SwipeBackWrapper>
     );
   }
+
+  // ── Gift Registry pages ──────────────────────────────────────────────────
+  if (currentPage === "giftRegistryDashboard") {
+    return (
+      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
+        <Suspense fallback={<div className="min-h-screen bg-[#f8f9fc]" />}>
+          <GiftRegistryDashboardPage
+            onBack={goBack}
+            onNavigate={(page, state) => { if (state) setGiftRegistryNavState(state); navigateTo(page); }}
+          />
+        </Suspense>
+      </SwipeBackWrapper>
+    );
+  }
+
+  if (currentPage === "giftRegistryCreate") {
+    return (
+      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
+        <Suspense fallback={<div className="min-h-screen bg-[#f8f9fc]" />}>
+          <GiftRegistryCreatePage
+            onBack={goBack}
+            onNavigate={(page, state) => { if (state) setGiftRegistryNavState(s => ({ ...s, ...state })); navigateTo(page); }}
+          />
+        </Suspense>
+      </SwipeBackWrapper>
+    );
+  }
+
+  if (currentPage === "giftRegistryBuilder") {
+    return (
+      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
+        <Suspense fallback={<div className="min-h-screen bg-[#f8f9fc]" />}>
+          <GiftRegistryBuilderPage
+            registryId={giftRegistryNavState.registryId}
+            registry={giftRegistryNavState.registry}
+            onBack={goBack}
+            onNavigate={(page, state) => { if (state) setGiftRegistryNavState(s => ({ ...s, ...state })); navigateTo(page); }}
+          />
+        </Suspense>
+      </SwipeBackWrapper>
+    );
+  }
+
+  if (currentPage === "giftRegistryPreview") {
+    return (
+      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
+        <Suspense fallback={<div className="min-h-screen bg-[#f8f9fc]" />}>
+          <GiftRegistryPreviewPage
+            registryId={giftRegistryNavState.registryId}
+            registry={giftRegistryNavState.registry}
+            onBack={goBack}
+            onNavigate={(page, state) => { if (state) setGiftRegistryNavState(s => ({ ...s, ...state })); navigateTo(page); }}
+          />
+        </Suspense>
+      </SwipeBackWrapper>
+    );
+  }
+
+  if (currentPage === "giftRegistryDetail") {
+    return (
+      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
+        <Suspense fallback={<div className="min-h-screen bg-[#f8f9fc]" />}>
+          <GiftRegistryDetailPage
+            registryId={giftRegistryNavState.registryId || giftRegistryNavState.registry?.id}
+            onBack={goBack}
+            onNavigate={(page, state) => { if (state) setGiftRegistryNavState(s => ({ ...s, ...state })); navigateTo(page); }}
+          />
+        </Suspense>
+      </SwipeBackWrapper>
+    );
+  }
+
+  if (currentPage === "giftRegistryPublic") {
+    return (
+      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
+        <Suspense fallback={<div className="min-h-screen bg-[#f8f9fc]" />}>
+          <GiftRegistryPublicPage
+            token={giftRegistryNavState.token}
+            user={profile}
+            isKycComplete={onboardingComplete}
+            onBack={goBack}
+            onAuthPrompt={(type) => {
+              if (type === "kyc") { navigateTo("userOnboarding"); }
+              else { navigateTo("auth"); }
+            }}
+          />
+        </Suspense>
+      </SwipeBackWrapper>
+    );
+  }
+
+  if (currentPage === "giftRegistryLookup") {
+    return (
+      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
+        <Suspense fallback={<div className="min-h-screen bg-[#f8f9fc]" />}>
+          <GiftRegistryMintNumberLookup
+            onBack={goBack}
+            onNavigate={(page, state) => { if (state) setGiftRegistryNavState(s => ({ ...s, ...state })); navigateTo(page); }}
+          />
+        </Suspense>
+      </SwipeBackWrapper>
+    );
+  }
+  // ── End Gift Registry pages ───────────────────────────────────────────────
 
   if (isStaffLoginRoute) {
     return (
