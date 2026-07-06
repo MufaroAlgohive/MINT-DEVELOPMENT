@@ -1469,7 +1469,23 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
               />
             )}
             <h1 className="text-sm font-bold tracking-[0.18em] uppercase">{childFilter ? "Child Market" : "Markets"}</h1>
-            <NotificationBell onClick={onOpenNotifications} />
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                aria-label="Watchlist"
+                onClick={() => {
+                  if (watchedSecurities.length > 0) {
+                    setExpandedSections((prev) => new Set([...prev, "watchlist"]));
+                    expandedRef.current = new Set([...expandedRef.current, "watchlist"]);
+                    secRefWatchlist.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+                  }
+                }}
+                className="relative flex h-10 w-10 items-center justify-center rounded-full border border-white/30 bg-white/10 text-white backdrop-blur-md"
+              >
+                <Star className={`h-5 w-5 ${watchedSecurities.length > 0 ? "fill-yellow-400 text-yellow-400" : ""}`} />
+              </button>
+              <NotificationBell onClick={onOpenNotifications} />
+            </div>
           </header>
 
           {/* Toggle between Mint Baskets and Markets */}
