@@ -15,6 +15,66 @@ const CARD_GRADIENTS = [
 
 const year = new Date().getFullYear();
 
+/* ── Asset preview mosaic inside wishlist card ── */
+function WishlistPreviewGrid({ items, fromColor, toColor }) {
+  const logos = items.slice(0, 4).map((it) => it.logo_url).filter(Boolean);
+  const n = logos.length;
+
+  if (n === 0) return null;
+
+  const panelStyle = {
+    background: `linear-gradient(135deg, ${fromColor}cc, ${toColor}cc)`,
+  };
+
+  const Logo = ({ url, style }) => (
+    <div
+      className="absolute overflow-hidden flex items-center justify-center"
+      style={{ ...panelStyle, ...style }}
+    >
+      <img
+        src={url}
+        alt=""
+        className="w-[70%] h-[70%] object-contain drop-shadow-sm"
+        onError={(e) => { e.target.style.display = "none"; }}
+      />
+    </div>
+  );
+
+  return (
+    <div className="absolute inset-0 rounded-2xl overflow-hidden">
+      {n === 1 && (
+        <Logo url={logos[0]} style={{ inset: 0 }} />
+      )}
+      {n === 2 && (
+        <>
+          <Logo url={logos[0]} style={{ top: 0, left: 0, right: "50%", bottom: 0, borderRight: "1px solid rgba(255,255,255,0.15)" }} />
+          <Logo url={logos[1]} style={{ top: 0, left: "50%", right: 0, bottom: 0 }} />
+        </>
+      )}
+      {n === 3 && (
+        <>
+          <Logo url={logos[0]} style={{ top: 0, left: 0, right: "50%", bottom: 0, borderRight: "1px solid rgba(255,255,255,0.15)" }} />
+          <Logo url={logos[1]} style={{ top: 0, left: "50%", right: 0, bottom: "50%", borderBottom: "1px solid rgba(255,255,255,0.15)" }} />
+          <Logo url={logos[2]} style={{ top: "50%", left: "50%", right: 0, bottom: 0 }} />
+        </>
+      )}
+      {n >= 4 && (
+        <>
+          <Logo url={logos[0]} style={{ top: 0, left: 0, right: "50%", bottom: "50%", borderRight: "1px solid rgba(255,255,255,0.15)", borderBottom: "1px solid rgba(255,255,255,0.15)" }} />
+          <Logo url={logos[1]} style={{ top: 0, left: "50%", right: 0, bottom: "50%", borderBottom: "1px solid rgba(255,255,255,0.15)" }} />
+          <Logo url={logos[2]} style={{ top: "50%", left: 0, right: "50%", bottom: 0, borderRight: "1px solid rgba(255,255,255,0.15)" }} />
+          <Logo url={logos[3]} style={{ top: "50%", left: "50%", right: 0, bottom: 0 }} />
+        </>
+      )}
+      {/* Bottom text-readability scrim */}
+      <div
+        className="absolute inset-x-0 bottom-0"
+        style={{ height: "55%", background: "linear-gradient(to top, rgba(0,0,0,0.65) 0%, transparent 100%)", borderRadius: "0 0 16px 16px" }}
+      />
+    </div>
+  );
+}
+
 export default function WishlistPickerSheet({ itemKey, onClose, onSaved, onCreateNew }) {
   const [wishlists, setWishlists] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -47,7 +107,11 @@ export default function WishlistPickerSheet({ itemKey, onClose, onSaved, onCreat
                 const registryLists = registries.map((r) => ({
                   id: r.id,
                   name: r.title,
-                  items: (r.items || []).map((i) => i.isin || i.id).filter(Boolean),
+                  items: (r.items || []).filter((i) => i.isin).map((i) => ({
+                    isin: i.isin,
+                    name: i.name || i.isin,
+                    logo_url: i.logo_url || null,
+                  })),
                 }));
                 setWishlists(registryLists);
                 setLoading(false);
@@ -186,17 +250,24 @@ export default function WishlistPickerSheet({ itemKey, onClose, onSaved, onCreat
                         disabled={!!saving}
                         className="relative rounded-2xl p-4 text-left shadow-sm overflow-hidden"
                         style={{
-                          minHeight: 100,
+                          minHeight: 110,
                           background: `linear-gradient(135deg, ${fromColor}, ${toColor})`,
                         }}
                       >
+                        {/* Asset mosaic preview */}
+                        <WishlistPreviewGrid
+                          items={Array.isArray(list.items) ? list.items.filter(it => it && it.logo_url) : []}
+                          fromColor={fromColor}
+                          toColor={toColor}
+                        />
+
                         <AnimatePresence>
                           {isSaved && (
                             <motion.div
                               initial={{ opacity: 0, scale: 0.7 }}
                               animate={{ opacity: 1, scale: 1 }}
-                              className="absolute inset-0 flex items-center justify-center rounded-2xl"
-                              style={{ background: "rgba(0,0,0,0.3)" }}
+                              className="absolute inset-0 flex items-center justify-center rounded-2xl z-20"
+                              style={{ background: "rgba(0,0,0,0.45)" }}
                             >
                               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white">
                                 <Check size={20} className="text-[#6B21A8]" />
@@ -205,16 +276,21 @@ export default function WishlistPickerSheet({ itemKey, onClose, onSaved, onCreat
                           )}
                         </AnimatePresence>
 
-                        <div className="flex items-start justify-between mb-2">
-                          <Heart size={16} className="fill-white/60 text-white/60" />
-                          {isSaving && !isSaved && (
-                            <div className="h-4 w-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />
-                          )}
+                        {/* Text content — sits above the mosaic via z-index */}
+                        <div className="relative z-10 flex flex-col h-full justify-between">
+                          <div className="flex items-start justify-between mb-2">
+                            <Heart size={16} className="fill-white/70 text-white/70 drop-shadow" />
+                            {isSaving && !isSaved && (
+                              <div className="h-4 w-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />
+                            )}
+                          </div>
+                          <div>
+                            <p className="text-[13px] font-bold text-white leading-tight line-clamp-2 pr-1 drop-shadow">{list.name}</p>
+                            <p className="text-[11px] text-white/80 mt-0.5 drop-shadow">
+                              {list.items?.length || 0} {(list.items?.length || 0) === 1 ? "item" : "items"}
+                            </p>
+                          </div>
                         </div>
-                        <p className="text-[13px] font-bold text-white leading-tight line-clamp-2 pr-1">{list.name}</p>
-                        <p className="text-[11px] text-white/70 mt-1">
-                          {list.items?.length || 0} {(list.items?.length || 0) === 1 ? "item" : "items"}
-                        </p>
                       </motion.button>
                     );
                   })}

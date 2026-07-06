@@ -221,7 +221,30 @@ function registerGiftRegistryRoutes(app, supabaseAdmin, pgPool) {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      return res.json({ registries: data || [] });
+
+      const registries = data || [];
+
+      // Enrich all items across all registries with logo_url in one query
+      const allIsins = [...new Set(registries.flatMap(r => (r.items || []).map(i => i.isin)))];
+      let secMap = {};
+      if (allIsins.length) {
+        const { data: securities } = await supabaseAdmin
+          .from('securities_c')
+          .select('isin, name, logo_url')
+          .in('isin', allIsins);
+        secMap = Object.fromEntries((securities || []).map(s => [s.isin, s]));
+      }
+
+      const enriched = registries.map(r => ({
+        ...r,
+        items: (r.items || []).map(item => ({
+          ...item,
+          name: secMap[item.isin]?.name || item.isin,
+          logo_url: secMap[item.isin]?.logo_url || null,
+        })),
+      }));
+
+      return res.json({ registries: enriched });
     } catch (e) {
       return res.status(500).json({ error: e.message });
     }
