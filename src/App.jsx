@@ -2910,7 +2910,10 @@ const App = () => {
     return (
       <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
         <Suspense fallback={<div className="min-h-screen bg-slate-50" />}>
-          <MyWishlistsPage onBack={goBack} />
+          <MyWishlistsPage
+            onBack={goBack}
+            onNavigate={(page, state) => { if (state) setGiftRegistryNavState(s => ({ ...s, ...state })); navigateTo(page); }}
+          />
         </Suspense>
       </SwipeBackWrapper>
     );
