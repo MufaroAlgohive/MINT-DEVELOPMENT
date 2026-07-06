@@ -1,64 +1,73 @@
 import React from "react";
 
 /**
- * Renders an asset logo mosaic inside a wishlist/registry card.
- * items: array of { logo_url } objects (up to 4 shown)
- * fromColor / toColor: gradient stops for the tinted panel background
+ * Renders a stacked-circle holding preview inside a wishlist/registry card,
+ * matching the strategy-card aesthetic (overlapping circular avatars).
+ *
+ * items: array of { logo_url, name, isin } — up to 5 shown, rest as "+N"
  */
-export default function WishlistPreviewGrid({ items = [], fromColor, toColor }) {
-  const logos = items.slice(0, 4).map((it) => it?.logo_url).filter(Boolean);
-  const n = logos.length;
-  if (n === 0) return null;
+export default function WishlistPreviewGrid({ items = [] }) {
+  const visible = items.slice(0, 5);
+  const extraCount = Math.max(0, items.length - 5);
+  if (visible.length === 0) return null;
 
-  const panelStyle = {
-    background: `linear-gradient(135deg, ${fromColor}cc, ${toColor}cc)`,
-  };
-
-  const Logo = ({ url, style }) => (
-    <div
-      className="absolute overflow-hidden flex items-center justify-center"
-      style={{ ...panelStyle, ...style }}
-    >
-      <img
-        src={url}
-        alt=""
-        className="w-[70%] h-[70%] object-contain drop-shadow-sm"
-        onError={(e) => { e.target.style.display = "none"; }}
-      />
-    </div>
-  );
+  // Avatar size scales with how many we show
+  const size = visible.length <= 3 ? 40 : 34;
+  const overlap = Math.round(size * 0.35);
 
   return (
-    <div className="absolute inset-0 rounded-2xl overflow-hidden">
-      {n === 1 && (
-        <Logo url={logos[0]} style={{ inset: 0 }} />
-      )}
-      {n === 2 && (
-        <>
-          <Logo url={logos[0]} style={{ top: 0, left: 0, right: "50%", bottom: 0, borderRight: "1px solid rgba(255,255,255,0.15)" }} />
-          <Logo url={logos[1]} style={{ top: 0, left: "50%", right: 0, bottom: 0 }} />
-        </>
-      )}
-      {n === 3 && (
-        <>
-          <Logo url={logos[0]} style={{ top: 0, left: 0, right: "50%", bottom: 0, borderRight: "1px solid rgba(255,255,255,0.15)" }} />
-          <Logo url={logos[1]} style={{ top: 0, left: "50%", right: 0, bottom: "50%", borderBottom: "1px solid rgba(255,255,255,0.15)" }} />
-          <Logo url={logos[2]} style={{ top: "50%", left: "50%", right: 0, bottom: 0 }} />
-        </>
-      )}
-      {n >= 4 && (
-        <>
-          <Logo url={logos[0]} style={{ top: 0, left: 0, right: "50%", bottom: "50%", borderRight: "1px solid rgba(255,255,255,0.15)", borderBottom: "1px solid rgba(255,255,255,0.15)" }} />
-          <Logo url={logos[1]} style={{ top: 0, left: "50%", right: 0, bottom: "50%", borderBottom: "1px solid rgba(255,255,255,0.15)" }} />
-          <Logo url={logos[2]} style={{ top: "50%", left: 0, right: "50%", bottom: 0, borderRight: "1px solid rgba(255,255,255,0.15)" }} />
-          <Logo url={logos[3]} style={{ top: "50%", left: "50%", right: 0, bottom: 0 }} />
-        </>
-      )}
-      {/* Bottom scrim so text stays readable */}
-      <div
-        className="absolute inset-x-0 bottom-0"
-        style={{ height: "55%", background: "linear-gradient(to top, rgba(0,0,0,0.65) 0%, transparent 100%)", borderRadius: "0 0 16px 16px" }}
-      />
+    <div
+      className="absolute inset-x-0 flex items-center justify-center pointer-events-none"
+      style={{ top: "50%", transform: "translateY(-62%)", zIndex: 1 }}
+    >
+      <div className="flex items-center" style={{ marginRight: -(overlap * (visible.length - 1)) }}>
+        {visible.map((item, i) => { // eslint-disable-line react/no-array-index-key
+          const initials = (item.name || item.isin || "?")
+            .replace(/\.[A-Z]+$/, "") // strip exchange suffix e.g. ".JO"
+            .slice(0, 2)
+            .toUpperCase();
+
+          return (
+            <div
+              key={i}
+              className="rounded-full border-2 border-white/80 bg-white overflow-hidden flex items-center justify-center flex-shrink-0 shadow-md"
+              style={{
+                width: size,
+                height: size,
+                marginRight: i < visible.length - 1 ? -overlap : 0,
+                zIndex: visible.length - i,
+              }}
+            >
+              {item.logo_url ? (
+                <img
+                  src={item.logo_url}
+                  alt={initials}
+                  className="w-full h-full object-cover"
+                  onError={(e) => {
+                    e.target.style.display = "none";
+                    e.target.nextSibling && (e.target.nextSibling.style.display = "flex");
+                  }}
+                />
+              ) : null}
+              <span
+                className="text-[10px] font-bold text-slate-500 items-center justify-center w-full h-full"
+                style={{ display: item.logo_url ? "none" : "flex" }}
+              >
+                {initials}
+              </span>
+            </div>
+          );
+        })}
+
+        {extraCount > 0 && (
+          <div
+            className="rounded-full border-2 border-white/80 bg-white/20 backdrop-blur-sm flex items-center justify-center flex-shrink-0 shadow-md"
+            style={{ width: size, height: size, marginLeft: -overlap, zIndex: 0 }}
+          >
+            <span className="text-[9px] font-bold text-white drop-shadow">+{extraCount}</span>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

@@ -209,9 +209,7 @@ export default function WishlistPickerSheet({ itemKey, onClose, onSaved, onCreat
                       >
                         {/* Asset mosaic preview */}
                         <WishlistPreviewGrid
-                          items={Array.isArray(list.items) ? list.items.filter(it => it && it.logo_url) : []}
-                          fromColor={fromColor}
-                          toColor={toColor}
+                          items={Array.isArray(list.items) ? list.items : []}
                         />
 
                         <AnimatePresence>

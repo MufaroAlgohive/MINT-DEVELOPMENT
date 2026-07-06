@@ -47,11 +47,7 @@ function RegistryCard({ registry, index, onTap, onDelete, deletingId }) {
       }}
     >
       {/* Asset mosaic preview */}
-      <WishlistPreviewGrid
-        items={items.filter(it => it?.logo_url)}
-        fromColor={fromColor}
-        toColor={toColor}
-      />
+      <WishlistPreviewGrid items={items} />
 
       <button
         onClick={() => !confirmDelete && onTap(registry)}
