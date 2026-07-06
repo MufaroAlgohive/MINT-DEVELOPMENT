@@ -6,6 +6,7 @@ import {
   ChevronLeft, ChevronRight, User, Users, UserPlus,
 } from "lucide-react";
 import { supabaseReady } from "../lib/supabase.js";
+import { getWishlists, saveWishlists } from "./WishlistModal.jsx";
 
 const MONTHS = [
   "January","February","March","April","May","June",
@@ -185,6 +186,21 @@ export default function GiftRegistryCreateSheet({ open, onClose, onSaved, pendin
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Could not create wishlist");
+
+      // Mirror the new registry into mint_wishlists so the heart-button picker
+      // shows it immediately without needing a full cloud re-sync.
+      try {
+        const trimmed = form.title.trim();
+        const lists = getWishlists();
+        const registryId = json.registry?.id;
+        if (registryId && !lists.find((l) => String(l.id) === String(registryId))) {
+          lists.push({ id: registryId, name: trimmed, items: [] });
+          await saveWishlists(lists);
+        }
+      } catch {
+        // non-fatal — picker will fall back to cloud sync
+      }
+
       onClose?.();
       onSaved?.(json.registry, form.title.trim());
     } catch (e) {

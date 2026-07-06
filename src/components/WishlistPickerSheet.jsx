@@ -26,7 +26,45 @@ export default function WishlistPickerSheet({ itemKey, onClose, onSaved, onCreat
   const inputRef = useRef(null);
 
   useEffect(() => {
-    syncWishlistsFromCloud().then(setWishlists).catch(() => {});
+    async function load() {
+      // 1. Sync regular wishlists
+      const cloudLists = await syncWishlistsFromCloud().catch(() => getWishlists());
+
+      // 2. Also pull gift registries from Supabase so they appear as choices
+      try {
+        const { supabaseReady } = await import("../lib/supabase.js");
+        const sb = await supabaseReady;
+        if (sb) {
+          const { data } = await sb.auth.getSession();
+          const token = data?.session?.access_token;
+          if (token) {
+            const res = await fetch("/api/gift-registry/my-registries", {
+              headers: { Authorization: `Bearer ${token}` },
+            });
+            if (res.ok) {
+              const { registries } = await res.json();
+              if (Array.isArray(registries) && registries.length > 0) {
+                const existingIds = new Set(cloudLists.map((l) => String(l.id)));
+                const registryLists = registries
+                  .filter((r) => !existingIds.has(String(r.id)))
+                  .map((r) => ({
+                    id: r.id,
+                    name: r.title,
+                    items: (r.items || []).map((i) => i.isin || i.id).filter(Boolean),
+                  }));
+                setWishlists([...cloudLists, ...registryLists]);
+                return;
+              }
+            }
+          }
+        }
+      } catch {
+        // fall through
+      }
+
+      setWishlists(cloudLists);
+    }
+    load();
   }, []);
 
   // Auto-focus input when empty-state form is shown
