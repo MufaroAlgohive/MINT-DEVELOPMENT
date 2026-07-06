@@ -32,6 +32,22 @@ Explained simply, like the registry is a vending machine:
 
 ---
 
+## 🔧 Requested UI/Flow Change — added 2026-07-06, confirmed by user, NOT built yet
+
+The current "Add Shares" screen (plain search bar + list) does not match the app's premium look and needs to be reworked. Confirmed decisions for this change:
+
+1. **Restyle "Add Shares" to look like the "Gift a Basket" picker** (`GiftStrategyPickerPage.jsx` — gradient header, category pills, mini sparkline cards). Keep the same underlying capability (shares, ETFs, AND baskets can all still be added to a wishlist) — this is a visual/UX restyle of the existing picker, not a narrowing of what can be added.
+2. **Drop the separate preview/publish step.** As soon as the creator adds their first item to the wishlist, the app immediately generates and shows the shareable link — no extra "Preview → Publish" screen in between. (Occasion/title/dates are still collected in the existing `GiftRegistryCreateSheet` steps before reaching the picker; it's only the post-item preview step that goes away.)
+3. **Copy-and-share link:** the creator can copy that link and send it to anyone. When that person opens the link, they can view the wishlist and gift/buy an item directly from it (this already exists as `GiftRegistryPublicPage.jsx` + `GiftRegistryItemCheckoutSheet.jsx` — just needs to be reachable immediately per point 2).
+4. **Show who gifted each item — confirmed: full name AND email, shown publicly on the wishlist.** ⚠️ **Flagged for compliance review before build:** this directly conflicts with the spec's Section 9.2 privacy rule and the project's own threat model (Information Disclosure category), which both say public registry pages must never expose full name or email — only first names should ever be shown publicly. Recommend either (a) getting explicit compliance sign-off to override that rule for gifter attribution specifically, or (b) showing full name+email only to the wishlist **owner** (in `GiftRegistryDetailPage.jsx`, which is already private/authenticated) and showing just a first name publicly. Do not build the public-facing full name/email display until this is resolved — the private owner-facing version is already partially there today (`gifter_email` shows in the owner's detail page).
+
+**Build order for this change (once confirmed to proceed):**
+- Restyle `GiftRegistryBuilderPage.jsx` using `GiftStrategyPickerPage.jsx`'s visual components (header, category pills, sparkline cards), keeping shares/ETFs/baskets all searchable.
+- Change the "add item" action to call publish immediately after the first successful item add (auto-generate `share_token` and set status ACTIVE at that point instead of waiting for a separate publish step), then surface the share sheet right away.
+- Add gifter name/email display: private version first (owner detail page — low risk, already scoped), public version only after compliance decision above.
+
+---
+
 ## ✅ Decisions Made (Confirmed by Lonwabo)
 
 These are locked. Build to these rules. Do not guess or deviate.
