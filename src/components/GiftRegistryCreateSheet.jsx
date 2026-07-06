@@ -175,7 +175,7 @@ export default function GiftRegistryCreateSheet({ open, onClose, onSaved, pendin
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Could not create wishlist");
       onClose?.();
-      onSaved?.(form.title.trim());
+      onSaved?.(json.registry, form.title.trim());
     } catch (e) {
       setError(e.message);
     } finally {

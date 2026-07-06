@@ -9,6 +9,7 @@ import { getStrategiesWithMetrics, getPublicStrategies, formatChangePct, formatC
 import { useProfile } from "../lib/useProfile";
 import { TrendingUp, Search, SlidersHorizontal, X, ChevronRight, Bookmark, PlayCircle, Gift, Heart } from "lucide-react";
 import WishlistModal, { isInAnyWishlist, getWishlistNameForItem, removeFromWishlist } from "../components/WishlistModal.jsx";
+import WishlistPickerSheet from "../components/WishlistPickerSheet.jsx";
 import ChildInvestModal from "../components/ChildInvestModal.jsx";
 import { saveMarketsInvestFilters, loadMarketsInvestFilters, saveMarketsStrategyFilters, loadMarketsStrategyFilters, buildInvestChips, buildChipsFromFilters } from "../lib/usePersistedFilters.js";
 import NotificationBell from "../components/NotificationBell";
@@ -508,6 +509,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
   const [strategyWatchlist, setStrategyWatchlist] = useState(() => {
     try { return JSON.parse(localStorage.getItem(STRATEGY_WL_KEY) || "[]"); } catch { return []; }
   });
+  const [wishlistPickerKey, setWishlistPickerKey] = useState(null); // itemKey awaiting picker
   const toggleWishlistItem = (e, itemKey) => {
     e.stopPropagation();
     if (wishlistedKeys.has(itemKey)) {
@@ -516,9 +518,8 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
       next.delete(itemKey);
       setWishlistedKeys(next);
     } else {
-      // Optimistically fill the heart, then open the registry create sheet directly
-      setWishlistedKeys(prev => new Set([...prev, itemKey]));
-      onContinueToRegistry?.(itemKey);
+      // Show the wishlist picker so the user can choose a category
+      setWishlistPickerKey(itemKey);
     }
   };
 
@@ -3290,6 +3291,22 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
         </div>
       , portalTarget)}
 
+      {/* Wishlist picker — Airbnb-style category selector */}
+      {wishlistPickerKey && (
+        <WishlistPickerSheet
+          itemKey={wishlistPickerKey}
+          onClose={() => setWishlistPickerKey(null)}
+          onSaved={(savedItemKey, listName) => {
+            setWishlistedKeys(prev => new Set([...prev, savedItemKey]));
+            setWishlistPickerKey(null);
+          }}
+          onCreateNew={() => {
+            const key = wishlistPickerKey;
+            setWishlistPickerKey(null);
+            onContinueToRegistry?.(key);
+          }}
+        />
+      )}
     </div>
   );
 };

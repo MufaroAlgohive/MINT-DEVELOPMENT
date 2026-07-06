@@ -57,6 +57,7 @@ const SentGiftsPageV2 = lazy(() => import("./pages/SentGiftsPageV2.jsx"));
 const GiftStrategyPickerPage = lazy(() => import("./pages/GiftStrategyPickerPage.jsx"));
 const MyWishlistsPage = lazy(() => import("./pages/MyWishlistsPage.jsx"));
 const GiftRegistryCreatePage = lazy(() => import("./pages/GiftRegistryCreatePage.jsx"));
+const GiftRegistryBuilderPage = lazy(() => import("./pages/GiftRegistryBuilderPage.jsx"));
 const GiftRegistryPreviewPage = lazy(() => import("./pages/GiftRegistryPreviewPage.jsx"));
 const GiftRegistryDetailPage = lazy(() => import("./pages/GiftRegistryDetailPage.jsx"));
 const GiftRegistryPublicPage = lazy(() => import("./pages/GiftRegistryPublicPage.jsx"));
@@ -1605,10 +1606,15 @@ const App = () => {
             open={showRegistryCreateSheet}
             pendingItemKey={giftRegistryNavState.pendingItemKey}
             onClose={() => setShowRegistryCreateSheet(false)}
-            onSaved={(title) => {
+            onSaved={(registry, title) => {
               setShowRegistryCreateSheet(false);
-              setRegistrySavedToastMsg(`"${title}" saved!`);
-              setRegistrySavedToastVisible(true);
+              if (registry?.id) {
+                setGiftRegistryNavState(s => ({ ...s, registryId: registry.id, registry }));
+                navigateTo("giftRegistryBuilder");
+              } else {
+                setRegistrySavedToastMsg(`"${title}" saved!`);
+                setRegistrySavedToastVisible(true);
+              }
             }}
           />
           <WishlistToast
@@ -2158,10 +2164,15 @@ const App = () => {
           open={showRegistryCreateSheet}
           pendingItemKey={giftRegistryNavState.pendingItemKey}
           onClose={() => setShowRegistryCreateSheet(false)}
-          onSaved={(title) => {
+          onSaved={(registry, title) => {
             setShowRegistryCreateSheet(false);
-            setRegistrySavedToastMsg(`"${title}" saved!`);
-            setRegistrySavedToastVisible(true);
+            if (registry?.id) {
+              setGiftRegistryNavState(s => ({ ...s, registryId: registry.id, registry }));
+              navigateTo("giftRegistryBuilder");
+            } else {
+              setRegistrySavedToastMsg(`"${title}" saved!`);
+              setRegistrySavedToastVisible(true);
+            }
           }}
         />
         <WishlistToast
@@ -2899,6 +2910,22 @@ const App = () => {
       <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
         <Suspense fallback={<div className="min-h-screen bg-slate-50" />}>
           <MyWishlistsPage onBack={goBack} />
+        </Suspense>
+      </SwipeBackWrapper>
+    );
+  }
+
+  if (currentPage === "giftRegistryBuilder") {
+    return (
+      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
+        <Suspense fallback={<div className="min-h-screen bg-[#f8f9fc]" />}>
+          <GiftRegistryBuilderPage
+            registryId={giftRegistryNavState.registryId}
+            registry={giftRegistryNavState.registry}
+            pendingItemKey={giftRegistryNavState.pendingItemKey}
+            onBack={goBack}
+            onNavigate={(page, state) => { if (state) setGiftRegistryNavState(s => ({ ...s, ...state })); navigateTo(page); }}
+          />
         </Suspense>
       </SwipeBackWrapper>
     );

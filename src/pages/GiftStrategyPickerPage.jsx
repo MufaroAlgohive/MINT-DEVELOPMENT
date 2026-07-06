@@ -1,6 +1,7 @@
 import React, { useEffect, useId, useMemo, useRef, useState } from "react";
 import { ArrowLeft, BookMarked, Bookmark, Gift, Heart, Search, Sparkles, TrendingUp, X } from "lucide-react";
 import GiftRegistryCreateSheet from "../components/GiftRegistryCreateSheet.jsx";
+import WishlistPickerSheet from "../components/WishlistPickerSheet.jsx";
 import { AreaChart, Area, LineChart, Line, ResponsiveContainer } from "recharts";
 import { motion, AnimatePresence } from "framer-motion";
 import { SparklesText } from "../components/ui/sparkles-text";
@@ -228,15 +229,17 @@ export default function GiftStrategyPickerPage({ onBack, onNavigate, autoOpenWis
   const searchRef = useRef(null);
   const wishlistMenuRef = useRef(null);
 
+  const [wishlistPickerKey, setWishlistPickerKey] = useState(null); // itemKey awaiting picker
+  const [pendingRegistryItem, setPendingRegistryItem] = useState(null); // preserved when transitioning picker → create sheet
+
   function toggleWishlistItem(e, key) {
     e.preventDefault(); e.stopPropagation();
     if (wishlistedKeys.has(key)) {
       removeFromWishlist(key);
       setWishlistedKeys(prev => { const n = new Set(prev); n.delete(key); return n; });
     } else {
-      // Optimistically fill the heart, then open the registry create sheet directly
-      setWishlistedKeys(prev => new Set([...prev, key]));
-      setShowRegistrySheet(true);
+      // Show picker so the user can choose a wishlist category
+      setWishlistPickerKey(key);
     }
   }
 
@@ -602,10 +605,44 @@ export default function GiftStrategyPickerPage({ onBack, onNavigate, autoOpenWis
         </div>
       </main>
 
+      {/* Wishlist picker — Airbnb-style category selector */}
+      {wishlistPickerKey && (
+        <WishlistPickerSheet
+          itemKey={wishlistPickerKey}
+          onClose={() => setWishlistPickerKey(null)}
+          onSaved={(savedItemKey, listName) => {
+            setWishlistedKeys(prev => new Set([...prev, savedItemKey]));
+            setWishlistPickerKey(null);
+            setToastMsg(`Saved to "${listName}"`);
+            setToastVisible(true);
+          }}
+          onCreateNew={() => {
+            const key = wishlistPickerKey;
+            setWishlistPickerKey(null);
+            setPendingRegistryItem(key);
+            setShowRegistrySheet(true);
+          }}
+        />
+      )}
+
       {/* Wishlist creation bottom sheet */}
       <GiftRegistryCreateSheet
         open={showRegistrySheet}
-        onClose={() => setShowRegistrySheet(false)}
+        pendingItemKey={pendingRegistryItem}
+        onClose={() => { setShowRegistrySheet(false); setPendingRegistryItem(null); }}
+        onSaved={(registry, title) => {
+          setShowRegistrySheet(false);
+          // Mark the pending item as wishlisted now that it's been saved to a new wishlist
+          if (pendingRegistryItem) {
+            setWishlistedKeys(prev => new Set([...prev, pendingRegistryItem]));
+          }
+          setPendingRegistryItem(null);
+          setToastMsg(`"${title}" created!`);
+          setToastVisible(true);
+          if (onNavigate && registry?.id) {
+            onNavigate("giftRegistryBuilder", { registryId: registry.id, registry, pendingItemKey: null });
+          }
+        }}
         onNavigate={onNavigate}
       />
 
