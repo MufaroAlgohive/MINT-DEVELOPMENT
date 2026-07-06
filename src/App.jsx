@@ -10,6 +10,7 @@ import { StatusBar, Style } from '@capacitor/status-bar';
 import { SplashScreen } from '@capacitor/splash-screen';
 import { Keyboard } from '@capacitor/keyboard';
 import SwipeBackWrapper from "./components/SwipeBackWrapper.jsx";
+import GiftRegistryCreateSheet from "./components/GiftRegistryCreateSheet.jsx";
 import AppLayout from "./layouts/AppLayout.jsx";
 import { useProfile } from "./lib/useProfile";
 import { NotificationsProvider, createWelcomeNotification, useNotificationsContext } from "./lib/NotificationsContext.jsx";
@@ -249,7 +250,8 @@ const App = () => {
   const [showOpenStrategiesMaintenance, setShowOpenStrategiesMaintenance] = useState(false);
   const [appEnabled, setAppEnabled] = useState(true);
   // Gift Registry navigation state
-  const [giftRegistryNavState, setGiftRegistryNavState] = useState({});  // { registryId, registry, token }
+  const [giftRegistryNavState, setGiftRegistryNavState] = useState({});  // { registryId, registry, token, pendingItemKey }
+  const [showRegistryCreateSheet, setShowRegistryCreateSheet] = useState(false);
 
   const isAuthenticated = !['welcome', 'auth', 'linkExpired'].includes(currentPage);
 
@@ -1497,7 +1499,7 @@ const App = () => {
                   onNavigateToHome={() => { navigationHistory.current = []; setPreviousPageName(null); setCurrentPage("home"); }}
                   onNavigateToInvest={() => { navigationHistory.current = []; setPreviousPageName(null); setCurrentPage("markets"); }}
                   onOpenMyWishlists={() => navigateTo("giftRegistryDashboard")}
-                  onContinueToRegistry={(itemKey) => { setGiftRegistryNavState(s => ({ ...s, pendingItemKey: itemKey })); navigateTo("giftRegistryCreate"); }}
+                  onContinueToRegistry={(itemKey) => { setGiftRegistryNavState(s => ({ ...s, pendingItemKey: itemKey })); setShowRegistryCreateSheet(true); }}
                 />
               </AppLayout>
             )}
@@ -2130,6 +2132,18 @@ const App = () => {
           }}
           onGiftDone={() => { setShowAdultInvestModal(false); navigateTo("home"); }}
           onUpdateMandate={() => { setShowAdultInvestModal(false); navigateTo("updateMandate"); }}
+        />
+
+        {/* Gift Registry Create Sheet — shown as overlay on any tab */}
+        <GiftRegistryCreateSheet
+          open={showRegistryCreateSheet}
+          pendingItemKey={giftRegistryNavState.pendingItemKey}
+          onClose={() => setShowRegistryCreateSheet(false)}
+          onNavigate={(page, state) => {
+            setShowRegistryCreateSheet(false);
+            if (state) setGiftRegistryNavState(s => ({ ...s, ...state }));
+            navigateTo(page);
+          }}
         />
       </>
     );

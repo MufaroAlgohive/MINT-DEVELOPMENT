@@ -137,7 +137,7 @@ function addDays(isoDate, n) {
 }
 
 // ─── Main sheet ───────────────────────────────────────────────────────────────
-export default function GiftRegistryCreateSheet({ open, onClose, onNavigate }) {
+export default function GiftRegistryCreateSheet({ open, onClose, onNavigate, pendingItemKey }) {
   const [step, setStep]   = useState(1);
   const [form, setForm]   = useState({
     occasion: "", customOccasion: "",
@@ -202,7 +202,7 @@ export default function GiftRegistryCreateSheet({ open, onClose, onNavigate }) {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Could not create wishlist");
       onClose?.();
-      onNavigate?.("giftRegistryBuilder", { registryId: json.registry.id, registry: json.registry });
+      onNavigate?.("giftRegistryBuilder", { registryId: json.registry.id, registry: json.registry, pendingItemKey: pendingItemKey || null });
     } catch (e) {
       setError(e.message);
     } finally {
