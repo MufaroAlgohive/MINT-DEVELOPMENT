@@ -110,6 +110,8 @@ async function ensureGiftRegistryTables(pgPool, supabaseAdmin) {
     await client.query(`CREATE INDEX IF NOT EXISTS idx_gift_contrib_item ON gift_contributions(registry_item_id)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_gift_contrib_gifter ON gift_contributions(gifter_user_id)`);
 
+    // Notify PostgREST to reload its schema cache so Supabase client can see the new tables
+    await client.query(`NOTIFY pgrst, 'reload schema'`);
     console.log('[gift-registry] All tables ready');
   } catch (e) {
     console.error('[gift-registry] Migration error:', e.message);
