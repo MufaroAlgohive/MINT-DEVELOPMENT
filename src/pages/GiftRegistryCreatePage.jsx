@@ -7,7 +7,7 @@ const OCCASIONS = Object.entries(OCCASION_LABELS);
 /**
  * Step 1 of registry creation: occasion, beneficiary, dates, message.
  * Entry: navigateTo("giftRegistryCreate")
- * On save → navigateTo("giftRegistryBuilder", { registryId })
+ * On save → navigateTo("giftRegistryDashboard")
  */
 export default function GiftRegistryCreatePage({ onNavigate, onBack, pendingItemKey }) {
   const [step, setStep] = useState(1); // 1 = occasion, 2 = beneficiary, 3 = dates
@@ -72,7 +72,7 @@ export default function GiftRegistryCreatePage({ onNavigate, onBack, pendingItem
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Could not create wishlist");
       if (typeof onNavigate === "function") {
-        onNavigate("giftRegistryBuilder", { registryId: json.registry.id, registry: json.registry, pendingItemKey: pendingItemKey || null });
+        onNavigate("giftRegistryDashboard", { registryId: json.registry.id, registry: json.registry, pendingItemKey: pendingItemKey || null });
       }
     } catch (e) {
       setError(e.message);

@@ -644,7 +644,7 @@ export default function GiftStrategyPickerPage({ onBack, onNavigate, autoOpenWis
           setToastMsg(`"${title}" created!`);
           setToastVisible(true);
           if (onNavigate && registry?.id) {
-            onNavigate("giftRegistryBuilder", { registryId: registry.id, registry, pendingItemKey: null });
+            onNavigate("giftRegistryDashboard", { registryId: registry.id, registry, pendingItemKey: null });
           }
         }}
         onNavigate={onNavigate}
