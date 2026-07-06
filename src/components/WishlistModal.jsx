@@ -21,8 +21,11 @@ async function getAuthToken() {
 // ─── Local cache (sync) ───────────────────────────────────────────────────────
 export function getWishlists() {
   try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
-  } catch {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    const parsed = JSON.parse(raw || "[]");
+    return parsed;
+  } catch (e) {
+    console.error("[wishlist] getWishlists localStorage error:", e);
     return [];
   }
 }
@@ -34,7 +37,12 @@ export function getWishlists() {
  * Returns a promise that resolves when the server save completes.
  */
 export async function saveWishlists(lists) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(lists));
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(lists));
+  } catch {
+    // localStorage blocked (private mode, sandboxed iframe, quota exceeded)
+    // Fall through — server save will still run so data isn't fully lost
+  }
   try {
     const token = await getAuthToken();
     if (!token) return;
@@ -47,7 +55,7 @@ export async function saveWishlists(lists) {
       body: JSON.stringify({ wishlists: lists }),
     });
   } catch {
-    // Local is already saved — server will sync next time
+    // Server save failed — local copy (if writable) is still intact
   }
 }
 
@@ -240,6 +248,13 @@ export default function WishlistModal({
                 className="px-6 pt-5 pb-10"
               >
                 <div className="mx-auto mb-5 h-1 w-10 rounded-full bg-slate-200" />
+
+                <button
+                  onClick={handleDone}
+                  className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-full bg-slate-100"
+                >
+                  <X size={15} className="text-slate-600" />
+                </button>
 
                 <div className="mb-1 flex items-center gap-2">
                   <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">

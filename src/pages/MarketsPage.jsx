@@ -8,7 +8,7 @@ import { useRealtimePrices } from "../lib/useRealtimePrices";
 import { getStrategiesWithMetrics, getPublicStrategies, formatChangePct, formatChangeAbs, getChangeColor } from "../lib/strategyData.js";
 import { useProfile } from "../lib/useProfile";
 import { TrendingUp, Search, SlidersHorizontal, X, ChevronRight, Bookmark, PlayCircle, Gift, Heart } from "lucide-react";
-import { isInAnyWishlist, getWishlistNameForItem, removeFromWishlist } from "../components/WishlistModal.jsx";
+import WishlistModal, { isInAnyWishlist, getWishlistNameForItem, removeFromWishlist } from "../components/WishlistModal.jsx";
 import ChildInvestModal from "../components/ChildInvestModal.jsx";
 import { saveMarketsInvestFilters, loadMarketsInvestFilters, saveMarketsStrategyFilters, loadMarketsStrategyFilters, buildInvestChips, buildChipsFromFilters } from "../lib/usePersistedFilters.js";
 import NotificationBell from "../components/NotificationBell";
@@ -508,6 +508,9 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
   const [strategyWatchlist, setStrategyWatchlist] = useState(() => {
     try { return JSON.parse(localStorage.getItem(STRATEGY_WL_KEY) || "[]"); } catch { return []; }
   });
+  // Which item has the wishlist modal open (null = closed)
+  const [wishlistModalKey, setWishlistModalKey] = useState(null);
+
   const toggleWishlistItem = (e, itemKey) => {
     e.stopPropagation();
     if (wishlistedKeys.has(itemKey)) {
@@ -516,12 +519,15 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
       next.delete(itemKey);
       setWishlistedKeys(next);
     } else {
-      const next = new Set(wishlistedKeys);
-      next.add(itemKey);
-      setWishlistedKeys(next);
-      onContinueToRegistry?.(itemKey);
+      // Open the name-your-wishlist modal instead of navigating away
+      setWishlistModalKey(itemKey);
     }
   };
+
+  function handleMarketsWishlistSaved(key, listName) {
+    setWishlistedKeys(prev => new Set([...prev, key]));
+    // Modal stays open so the user can see step 2 ("Saved!") and choose next action
+  }
 
   const toggleStrategyWatchlist = (e, strategyId) => {
     e.stopPropagation();
@@ -3290,6 +3296,23 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
           </div>
         </div>
       , portalTarget)}
+
+      {/* Wishlist naming modal — shown when user taps ❤️ on a stock or strategy */}
+      {wishlistModalKey && (
+        <WishlistModal
+          itemKey={wishlistModalKey}
+          onClose={() => setWishlistModalKey(null)}
+          onSaved={handleMarketsWishlistSaved}
+          onViewWishlists={() => {
+            setWishlistModalKey(null);
+            onOpenMyWishlists?.();
+          }}
+          onContinueToRegistry={() => {
+            setWishlistModalKey(null);
+            onOpenMyWishlists?.();
+          }}
+        />
+      )}
     </div>
   );
 };

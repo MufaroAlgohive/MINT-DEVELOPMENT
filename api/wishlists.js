@@ -29,8 +29,11 @@ export default async function handler(req, res) {
     if (!Array.isArray(wishlists)) {
       return res.status(400).json({ error: 'wishlists must be an array' });
     }
+    // Read existing metadata first so we don't overwrite unrelated keys
+    const { data: existing } = await supabaseAdmin.auth.admin.getUserById(user.id);
+    const existingMeta = existing?.user?.user_metadata ?? {};
     const { error } = await supabaseAdmin.auth.admin.updateUserById(user.id, {
-      user_metadata: { wishlists },
+      user_metadata: { ...existingMeta, wishlists },
     });
     if (error) return res.status(500).json({ error: error.message });
     return res.status(200).json({ ok: true });

@@ -13176,8 +13176,11 @@ app.post("/api/wishlists", async (req, res) => {
     if (authErr || !user) return res.status(401).json({ error: "Unauthorized" });
     const { wishlists } = req.body || {};
     if (!Array.isArray(wishlists)) return res.status(400).json({ error: "wishlists must be an array" });
+    // Read existing metadata first to avoid clobbering unrelated keys
+    const { data: existing } = await supabaseAdmin.auth.admin.getUserById(user.id);
+    const existingMeta = existing?.user?.user_metadata ?? {};
     const { error } = await supabaseAdmin.auth.admin.updateUserById(user.id, {
-      user_metadata: { wishlists },
+      user_metadata: { ...existingMeta, wishlists },
     });
     if (error) return res.status(500).json({ error: error.message });
     return res.json({ ok: true });
