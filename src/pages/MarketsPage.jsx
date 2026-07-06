@@ -1486,7 +1486,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                aria-label="Watchlist"
+                aria-label="Wishlist"
                 onClick={() => {
                   setExpandedSections((prev) => new Set([...prev, "watchlist"]));
                   expandedRef.current = new Set([...expandedRef.current, "watchlist"]);
@@ -1777,7 +1777,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
             {!searchQuery && (
               <>
                 <CollapsibleSection
-                  title="My Watchlist"
+                  title="My Wishlist"
                   securities={watchedSecurities}
                   onOpenStockDetail={onOpenStockDetail}
                   onToggleWatchlist={toggleWatchlist}
@@ -1785,7 +1785,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                   sparklineData={sparklineData}
                   isExpanded={expandedSections.has("watchlist")}
                   sectionRef={secRefWatchlist}
-                  emptyMessage="Tap the bookmark icon on any stock to add it to your watchlist."
+                  emptyMessage="Tap the bookmark icon on any stock to add it to your wishlist."
                 />
 
                 <CollapsibleSection
