@@ -2822,6 +2822,9 @@ const App = () => {
                 if (page === "giftStrategyInvest") {
                   setPageParams(params);
                   navigateTo("giftStrategyInvest");
+                } else if (page === "giftRegistryBuilder" || page === "giftRegistryCreate" || page === "giftRegistryDetail" || page === "giftRegistryPreview" || page === "giftRegistryPublic" || page === "giftRegistryDashboard" || page === "giftRegistryLookup") {
+                  if (params) setGiftRegistryNavState(s => ({ ...s, ...params }));
+                  navigateTo(page);
                 } else {
                   navigateTo(page);
                 }
