@@ -174,7 +174,21 @@ const CompactSecurityRow = ({ security, onClick }) => {
   );
 };
 
-const CollapsibleSection = ({ title, securities, onOpenStockDetail, onToggleWatchlist, watchlist, sparklineData, isExpanded, sectionRef }) => {
+const CollapsibleSection = ({ title, securities, onOpenStockDetail, onToggleWatchlist, watchlist, sparklineData, isExpanded, sectionRef, emptyMessage }) => {
+  if (securities.length === 0 && emptyMessage) {
+    return (
+      <section ref={sectionRef}>
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">{title}</h2>
+        </div>
+        <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 px-4 py-6 text-center">
+          <Bookmark className="mx-auto mb-2 h-5 w-5 text-slate-300" />
+          <p className="text-xs text-slate-400">{emptyMessage}</p>
+        </div>
+      </section>
+    );
+  }
+
   return (
     <section ref={sectionRef}>
       <div className="mb-3 flex items-center justify-between">
@@ -1474,11 +1488,9 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                 type="button"
                 aria-label="Watchlist"
                 onClick={() => {
-                  if (watchedSecurities.length > 0) {
-                    setExpandedSections((prev) => new Set([...prev, "watchlist"]));
-                    expandedRef.current = new Set([...expandedRef.current, "watchlist"]);
-                    secRefWatchlist.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-                  }
+                  setExpandedSections((prev) => new Set([...prev, "watchlist"]));
+                  expandedRef.current = new Set([...expandedRef.current, "watchlist"]);
+                  secRefWatchlist.current?.scrollIntoView({ behavior: "smooth", block: "start" });
                 }}
                 className="relative flex h-10 w-10 items-center justify-center rounded-full border border-white/30 bg-white/10 text-white backdrop-blur-md"
               >
@@ -1764,18 +1776,17 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
             {/* Grouped Sections - only show when NOT searching */}
             {!searchQuery && (
               <>
-                {watchedSecurities.length > 0 && (
-                  <CollapsibleSection
-                    title="My Watchlist"
-                    securities={watchedSecurities}
-                    onOpenStockDetail={onOpenStockDetail}
-                    onToggleWatchlist={toggleWatchlist}
-                    watchlist={watchlist}
-                    sparklineData={sparklineData}
-                    isExpanded={expandedSections.has("watchlist")}
-                    sectionRef={secRefWatchlist}
-                  />
-                )}
+                <CollapsibleSection
+                  title="My Watchlist"
+                  securities={watchedSecurities}
+                  onOpenStockDetail={onOpenStockDetail}
+                  onToggleWatchlist={toggleWatchlist}
+                  watchlist={watchlist}
+                  sparklineData={sparklineData}
+                  isExpanded={expandedSections.has("watchlist")}
+                  sectionRef={secRefWatchlist}
+                  emptyMessage="Tap the bookmark icon on any stock to add it to your watchlist."
+                />
 
                 <CollapsibleSection
                   title="Largest companies"
