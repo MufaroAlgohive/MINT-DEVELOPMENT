@@ -149,21 +149,36 @@ function WishlistDetailSheet({ list, colorFrom, colorTo, onClose, onDelete, onRe
 }
 
 // ─── Small Category Card ──────────────────────────────────────────────────────
-function WishlistCard({ list, index, onTap }) {
+function WishlistCard({ list, index, onTap, onDelete }) {
   const [fromColor, toColor] = CARD_GRADIENTS[index % CARD_GRADIENTS.length];
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const itemCount = list.items?.length || 0;
 
+  function handleDeleteTap(e) {
+    e.stopPropagation();
+    if (confirmDelete) {
+      onDelete();
+    } else {
+      setConfirmDelete(true);
+      // Auto-cancel confirmation after 3 seconds
+      setTimeout(() => setConfirmDelete(false), 3000);
+    }
+  }
+
   return (
-    <motion.button
-      whileTap={{ scale: 0.94 }}
-      onClick={() => onTap(list, fromColor, toColor)}
-      className="relative rounded-2xl overflow-hidden text-left shadow-sm"
+    <motion.div
+      layout
+      className="relative rounded-2xl overflow-hidden shadow-sm"
       style={{
         background: `linear-gradient(135deg, ${fromColor}, ${toColor})`,
         aspectRatio: "1 / 1",
       }}
     >
-      <div className="absolute inset-0 p-3 flex flex-col justify-between">
+      {/* Tap anywhere (except delete btn) to open detail */}
+      <button
+        className="absolute inset-0 p-3 flex flex-col justify-between w-full h-full text-left"
+        onClick={() => !confirmDelete && onTap(list, fromColor, toColor)}
+      >
         <Heart size={16} className="fill-white/60 text-white/60" />
         <div>
           <p className="text-[12px] font-bold text-white leading-tight line-clamp-2">{list.name}</p>
@@ -171,8 +186,36 @@ function WishlistCard({ list, index, onTap }) {
             {itemCount} {itemCount === 1 ? "item" : "items"}
           </p>
         </div>
-      </div>
-    </motion.button>
+      </button>
+
+      {/* Delete button — top-right corner */}
+      <button
+        onClick={handleDeleteTap}
+        className={[
+          "absolute top-2 right-2 flex h-6 w-6 items-center justify-center rounded-full transition-all active:scale-90",
+          confirmDelete
+            ? "bg-red-500 shadow-lg"
+            : "bg-black/25",
+        ].join(" ")}
+      >
+        <Trash2 size={10} className="text-white" />
+      </button>
+
+      {/* Confirm overlay */}
+      <AnimatePresence>
+        {confirmDelete && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 flex items-center justify-center rounded-2xl pointer-events-none"
+            style={{ background: "rgba(0,0,0,0.35)" }}
+          >
+            <p className="text-[10px] font-bold text-white text-center px-2">Tap 🗑️ again<br/>to delete</p>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
   );
 }
 
@@ -297,6 +340,7 @@ export default function MyWishlistsPage({ onBack }) {
                   list={list}
                   index={i}
                   onTap={(l, from, to) => setDetail({ list: l, fromColor: from, toColor: to })}
+                  onDelete={() => deleteWishlist(list.id)}
                 />
               ))}
               <AddCard onTap={() => setShowCreate(true)} />

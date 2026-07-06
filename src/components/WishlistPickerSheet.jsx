@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Heart, Plus, Check } from "lucide-react";
-import { getWishlists, addToWishlist, syncWishlistsFromCloud } from "./WishlistModal.jsx";
+import { X, Heart, Plus, Check, ArrowRight } from "lucide-react";
+import { getWishlists, addToWishlist, saveWishlists, syncWishlistsFromCloud } from "./WishlistModal.jsx";
 
 const CARD_GRADIENTS = [
   ["#7c3aed", "#6d28d9"],
@@ -13,15 +13,28 @@ const CARD_GRADIENTS = [
   ["#7c3aed", "#4f46e5"],
 ];
 
+const year = new Date().getFullYear();
+
 export default function WishlistPickerSheet({ itemKey, onClose, onSaved, onCreateNew }) {
-  const [wishlists, setWishlists] = useState([]);
+  const [wishlists, setWishlists] = useState(() => getWishlists());
   const [saving, setSaving] = useState(null);
   const [savedId, setSavedId] = useState(null);
 
+  // Step-1 form state (shown when no wishlists exist)
+  const [name, setName] = useState(`My Wishlist ${year}`);
+  const [savingNew, setSavingNew] = useState(false);
+  const inputRef = useRef(null);
+
   useEffect(() => {
-    setWishlists(getWishlists());
     syncWishlistsFromCloud().then(setWishlists).catch(() => {});
   }, []);
+
+  // Auto-focus input when empty-state form is shown
+  useEffect(() => {
+    if (wishlists.length === 0 && inputRef.current) {
+      setTimeout(() => inputRef.current?.focus(), 350);
+    }
+  }, [wishlists.length]);
 
   async function handlePick(list) {
     if (saving) return;
@@ -38,12 +51,27 @@ export default function WishlistPickerSheet({ itemKey, onClose, onSaved, onCreat
     }
   }
 
+  // Called from the inline Step-1 form (empty state)
+  async function handleSaveNew() {
+    if (savingNew) return;
+    setSavingNew(true);
+    try {
+      const trimmed = name.trim() || `My Wishlist ${year}`;
+      await addToWishlist(trimmed, itemKey);
+      onSaved?.(itemKey, trimmed);
+      onClose();
+    } finally {
+      setSavingNew(false);
+    }
+  }
+
   function handleCreateNew() {
     onClose();
     onCreateNew?.();
   }
 
   const portalTarget = document.getElementById("modal-root") || document.body;
+  const hasWishlists = wishlists.length > 0;
 
   return createPortal(
     <AnimatePresence>
@@ -71,101 +99,138 @@ export default function WishlistPickerSheet({ itemKey, onClose, onSaved, onCreat
           exit={{ y: "100%" }}
           transition={{ type: "spring", damping: 28, stiffness: 320 }}
         >
-          {/* Gradient accent strip */}
-          <div className="h-1 w-full flex-shrink-0" style={{ background: "linear-gradient(90deg,#7c3aed,#6366f1,#8b5cf6)" }} />
-
           {/* Drag handle */}
-          <div className="flex justify-center pt-2.5 pb-1 flex-shrink-0">
-            <div className="h-[3px] w-9 rounded-full bg-slate-200" />
+          <div className="flex justify-center pt-3 pb-1 flex-shrink-0">
+            <div className="h-[4px] w-10 rounded-full bg-slate-200" />
           </div>
 
-          {/* Header */}
-          <div className="flex items-center justify-between px-5 py-3 flex-shrink-0">
-            <div>
-              <h2 className="text-[17px] font-bold text-slate-900 leading-tight">Save to wishlist</h2>
-              {wishlists.length > 0 && (
+          {/* Close button */}
+          <button
+            onClick={onClose}
+            className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-500"
+          >
+            <X size={15} />
+          </button>
+
+          {hasWishlists ? (
+            /* ── Has wishlists: show grid + create button ── */
+            <>
+              {/* Header */}
+              <div className="px-5 py-3 flex-shrink-0">
+                <h2 className="text-[17px] font-bold text-slate-900 leading-tight">Save to wishlist</h2>
                 <p className="text-[11px] text-slate-400 mt-0.5">Pick a category or create a new one</p>
-              )}
-            </div>
-            <button
-              onClick={onClose}
-              className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 transition"
-            >
-              <X size={15} />
-            </button>
-          </div>
+              </div>
 
-          {/* Wishlist grid */}
-          <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-5 pb-3">
-            {wishlists.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-8 text-center">
-                <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-slate-100">
-                  <Heart size={24} className="text-slate-300" />
+              {/* Wishlist grid */}
+              <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-5 pb-3">
+                <div className="grid grid-cols-2 gap-3">
+                  {wishlists.map((list, i) => {
+                    const [fromColor, toColor] = CARD_GRADIENTS[i % CARD_GRADIENTS.length];
+                    const isSaved = savedId === list.id;
+                    const isSaving = saving === list.id;
+                    return (
+                      <motion.button
+                        key={list.id}
+                        whileTap={{ scale: 0.95 }}
+                        onClick={() => handlePick(list)}
+                        disabled={!!saving}
+                        className="relative rounded-2xl p-4 text-left shadow-sm overflow-hidden"
+                        style={{
+                          minHeight: 100,
+                          background: `linear-gradient(135deg, ${fromColor}, ${toColor})`,
+                        }}
+                      >
+                        <AnimatePresence>
+                          {isSaved && (
+                            <motion.div
+                              initial={{ opacity: 0, scale: 0.7 }}
+                              animate={{ opacity: 1, scale: 1 }}
+                              className="absolute inset-0 flex items-center justify-center rounded-2xl"
+                              style={{ background: "rgba(0,0,0,0.3)" }}
+                            >
+                              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white">
+                                <Check size={20} className="text-[#6B21A8]" />
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+
+                        <div className="flex items-start justify-between mb-2">
+                          <Heart size={16} className="fill-white/60 text-white/60" />
+                          {isSaving && !isSaved && (
+                            <div className="h-4 w-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />
+                          )}
+                        </div>
+                        <p className="text-[13px] font-bold text-white leading-tight line-clamp-2 pr-1">{list.name}</p>
+                        <p className="text-[11px] text-white/70 mt-1">
+                          {list.items?.length || 0} {(list.items?.length || 0) === 1 ? "item" : "items"}
+                        </p>
+                      </motion.button>
+                    );
+                  })}
                 </div>
-                <p className="text-sm font-medium text-slate-600 mb-1">No wishlists yet</p>
-                <p className="text-xs text-slate-400">Create your first wishlist below</p>
               </div>
-            ) : (
-              <div className="grid grid-cols-2 gap-3">
-                {wishlists.map((list, i) => {
-                  const [fromColor, toColor] = CARD_GRADIENTS[i % CARD_GRADIENTS.length];
-                  const isSaved = savedId === list.id;
-                  const isSaving = saving === list.id;
-                  return (
-                    <motion.button
-                      key={list.id}
-                      whileTap={{ scale: 0.95 }}
-                      onClick={() => handlePick(list)}
-                      disabled={!!saving}
-                      className="relative rounded-2xl p-4 text-left shadow-sm overflow-hidden"
-                      style={{
-                        minHeight: 100,
-                        background: `linear-gradient(135deg, ${fromColor}, ${toColor})`,
-                      }}
-                    >
-                      {/* Check overlay on save */}
-                      <AnimatePresence>
-                        {isSaved && (
-                          <motion.div
-                            initial={{ opacity: 0, scale: 0.7 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            className="absolute inset-0 flex items-center justify-center rounded-2xl"
-                            style={{ background: "rgba(0,0,0,0.3)" }}
-                          >
-                            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white">
-                              <Check size={20} className="text-[#6B21A8]" />
-                            </div>
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
 
-                      <div className="flex items-start justify-between mb-2">
-                        <Heart size={16} className="fill-white/60 text-white/60" />
-                        {isSaving && !isSaved && (
-                          <div className="h-4 w-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />
-                        )}
-                      </div>
-                      <p className="text-[13px] font-bold text-white leading-tight line-clamp-2 pr-1">{list.name}</p>
-                      <p className="text-[11px] text-white/70 mt-1">
-                        {list.items?.length || 0} {(list.items?.length || 0) === 1 ? "item" : "items"}
-                      </p>
-                    </motion.button>
-                  );
-                })}
+              {/* Create new — solid dark button */}
+              <div className="flex-shrink-0 px-5 pt-3 pb-8 border-t border-slate-100">
+                <button
+                  onClick={handleCreateNew}
+                  className="w-full flex items-center justify-center gap-2 rounded-2xl bg-[#111111] py-4 text-sm font-bold text-white active:scale-95 transition-transform"
+                >
+                  <Plus size={16} />
+                  Create a new wishlist
+                </button>
               </div>
-            )}
-          </div>
+            </>
+          ) : (
+            /* ── No wishlists: Step 1 inline form ── */
+            <div className="px-6 pt-2 pb-10">
+              {/* Step label */}
+              <div className="mb-1 mt-2">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                  Step 1 of 2
+                </span>
+              </div>
 
-          {/* Create new button — always visible at bottom */}
-          <div className="flex-shrink-0 px-5 pt-3 pb-8 border-t border-slate-100">
-            <button
-              onClick={handleCreateNew}
-              className="w-full flex items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-slate-200 py-4 text-sm font-semibold text-slate-600 active:bg-slate-50 transition-colors hover:border-violet-300 hover:text-violet-700"
-            >
-              <Plus size={16} />
-              Create a new wishlist
-            </button>
-          </div>
+              {/* Icon + title */}
+              <div className="mb-5 flex items-center gap-3">
+                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-red-50 flex-shrink-0">
+                  <Heart size={22} className="fill-red-500 text-red-500" />
+                </div>
+                <div>
+                  <h2 className="text-[17px] font-bold text-slate-900 leading-tight">
+                    Name your wishlist
+                  </h2>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    You can rename it anytime
+                  </p>
+                </div>
+              </div>
+
+              {/* Name input */}
+              <input
+                ref={inputRef}
+                type="text"
+                value={name}
+                onChange={e => setName(e.target.value)}
+                onKeyDown={e => e.key === "Enter" && handleSaveNew()}
+                className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3.5 text-[15px] text-slate-800 focus:outline-none focus:ring-2 focus:ring-violet-300 mb-4"
+                placeholder={`My Wishlist ${year}`}
+                maxLength={60}
+              />
+
+              {/* Save button */}
+              <button
+                onClick={handleSaveNew}
+                disabled={savingNew || !name.trim()}
+                className="w-full flex items-center justify-center gap-2 rounded-2xl bg-[#111111] py-4 text-sm font-bold text-white active:scale-95 transition-transform disabled:opacity-50"
+              >
+                {savingNew ? "Saving…" : (
+                  <>Save <ArrowRight size={16} /></>
+                )}
+              </button>
+            </div>
+          )}
         </motion.div>
       </motion.div>
     </AnimatePresence>,
