@@ -3307,9 +3307,9 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
             setWishlistModalKey(null);
             onOpenMyWishlists?.();
           }}
-          onContinueToRegistry={() => {
+          onContinueToRegistry={(itemKey) => {
             setWishlistModalKey(null);
-            onOpenMyWishlists?.();
+            onContinueToRegistry?.(itemKey);
           }}
         />
       )}

@@ -143,7 +143,8 @@ export default function WishlistModal({
       if (skipStep2) {
         onClose();
       } else {
-        setStep(2);
+        onClose();
+        onContinueToRegistry?.(itemKey);
       }
     } finally {
       setSaving(false);
