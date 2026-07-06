@@ -525,11 +525,11 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
     }
   };
 
-  const handleWishlistSaved = (name) => {
+  const handleWishlistSaved = (key, listName) => {
     const next = new Set(wishlistedKeys);
-    next.add(wishlistModal);
+    next.add(key);
     setWishlistedKeys(next);
-    setToastMsg(`Saved to ${name}`);
+    setToastMsg(`Saved to "${listName}"`);
     setToastVisible(true);
     setWishlistModal(null);
   };
