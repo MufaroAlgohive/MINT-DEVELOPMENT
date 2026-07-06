@@ -621,6 +621,7 @@ export default function GiftStrategyPickerPage({ onBack, onNavigate, autoOpenWis
           itemKey={wishlistModal}
           onClose={() => setWishlistModal(null)}
           onSaved={handleWishlistSaved}
+          onViewWishlists={() => onNavigate?.("giftRegistryDashboard")}
         />
       )}
 

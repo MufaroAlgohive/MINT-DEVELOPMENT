@@ -53,7 +53,7 @@ const GiftCodeEntryPage = lazy(() => import("./pages/GiftCodeEntryPage.jsx"));
 const GiftPreviewPage = lazy(() => import("./pages/GiftPreviewPage.jsx"));
 const SentGiftsPageV2 = lazy(() => import("./pages/SentGiftsPageV2.jsx"));
 const GiftStrategyPickerPage = lazy(() => import("./pages/GiftStrategyPickerPage.jsx"));
-const GiftRegistryDashboardPage = lazy(() => import("./pages/GiftRegistryDashboardPage.jsx"));
+const MyWishlistsPage = lazy(() => import("./pages/MyWishlistsPage.jsx"));
 const GiftRegistryCreatePage = lazy(() => import("./pages/GiftRegistryCreatePage.jsx"));
 const GiftRegistryBuilderPage = lazy(() => import("./pages/GiftRegistryBuilderPage.jsx"));
 const GiftRegistryPreviewPage = lazy(() => import("./pages/GiftRegistryPreviewPage.jsx"));
@@ -1496,6 +1496,7 @@ const App = () => {
                   childFilter={marketsChildFilter}
                   onNavigateToHome={() => { navigationHistory.current = []; setPreviousPageName(null); setCurrentPage("home"); }}
                   onNavigateToInvest={() => { navigationHistory.current = []; setPreviousPageName(null); setCurrentPage("markets"); }}
+                  onOpenMyWishlists={() => navigateTo("giftRegistryDashboard")}
                 />
               </AppLayout>
             )}
@@ -2857,11 +2858,8 @@ const App = () => {
   if (currentPage === "giftRegistryDashboard") {
     return (
       <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
-        <Suspense fallback={<div className="min-h-screen bg-[#f8f9fc]" />}>
-          <GiftRegistryDashboardPage
-            onBack={goBack}
-            onNavigate={(page, state) => { if (state) setGiftRegistryNavState(s => ({ ...s, ...state })); navigateTo(page); }}
-          />
+        <Suspense fallback={<div className="min-h-screen bg-slate-50" />}>
+          <MyWishlistsPage onBack={goBack} />
         </Suspense>
       </SwipeBackWrapper>
     );
