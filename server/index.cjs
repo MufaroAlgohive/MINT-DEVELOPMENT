@@ -9287,6 +9287,16 @@ async function ensureFamilyMembersTablePg() {
 ensureFamilyMembersTable();
 ensureGiftRegistryTables(pgPool, supabaseAdmin);
 
+// Drop gift-registry columns that were defined in schema but never populated
+if (pgPool) {
+  pgPool.query('ALTER TABLE gift_events DROP COLUMN IF EXISTS beneficiary_ref')
+    .then(() => console.log('[gift-registry] dropped unused column: gift_events.beneficiary_ref'))
+    .catch(() => {}); // table may not exist yet on first run
+  pgPool.query('ALTER TABLE gift_contributions DROP COLUMN IF EXISTS executed_amount_cents')
+    .then(() => console.log('[gift-registry] dropped unused column: gift_contributions.executed_amount_cents'))
+    .catch(() => {});
+}
+
 // Helper: run a raw SQL query on the family_members table via pgPool (bypasses RLS)
 async function fmQuery(sql, params = []) {
   if (!pgPool) throw new Error('pgPool unavailable');
@@ -13138,6 +13148,43 @@ app.get('/api/fees-config', async (req, res) => {
 registerGiftRegistryRoutes(app, supabaseAdmin, pgPool);
 cron.schedule('* * * * *', () => sweepExpiredReservations(pgPool));
 console.log('[gift-registry] Reservation sweeper scheduled (every minute)');
+
+// ─── Wishlists ────────────────────────────────────────────────────────────────
+// GET  /api/wishlists  — return the signed-in user's saved wishlists
+// POST /api/wishlists  — overwrite the signed-in user's saved wishlists
+// Stored in auth.users.user_metadata so no extra table is required.
+
+app.get("/api/wishlists", async (req, res) => {
+  try {
+    const token = (req.headers.authorization || "").replace("Bearer ", "");
+    if (!token) return res.status(401).json({ error: "Unauthorized" });
+    const { data: { user }, error: authErr } = await supabaseAdmin.auth.getUser(token);
+    if (authErr || !user) return res.status(401).json({ error: "Unauthorized" });
+    const { data, error } = await supabaseAdmin.auth.admin.getUserById(user.id);
+    if (error) return res.status(500).json({ error: error.message });
+    return res.json({ wishlists: data.user.user_metadata?.wishlists || [] });
+  } catch (e) {
+    return res.status(500).json({ error: e.message });
+  }
+});
+
+app.post("/api/wishlists", async (req, res) => {
+  try {
+    const token = (req.headers.authorization || "").replace("Bearer ", "");
+    if (!token) return res.status(401).json({ error: "Unauthorized" });
+    const { data: { user }, error: authErr } = await supabaseAdmin.auth.getUser(token);
+    if (authErr || !user) return res.status(401).json({ error: "Unauthorized" });
+    const { wishlists } = req.body || {};
+    if (!Array.isArray(wishlists)) return res.status(400).json({ error: "wishlists must be an array" });
+    const { error } = await supabaseAdmin.auth.admin.updateUserById(user.id, {
+      user_metadata: { wishlists },
+    });
+    if (error) return res.status(500).json({ error: error.message });
+    return res.json({ ok: true });
+  } catch (e) {
+    return res.status(500).json({ error: e.message });
+  }
+});
 
 // Global Express error middleware — catches any next(err) or async throws
 app.use((err, req, res, next) => {
