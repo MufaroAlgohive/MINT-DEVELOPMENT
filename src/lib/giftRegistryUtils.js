@@ -61,14 +61,14 @@ export function centsToRand(cents) {
   })}`;
 }
 
-/** Occasion display labels */
+/** Occasion display labels (no emoji — icons are rendered per component) */
 export const OCCASION_LABELS = {
-  BIRTHDAY: "Birthday 🎂",
-  WEDDING: "Wedding 💍",
-  BABY: "New Baby 🍼",
-  GRADUATION: "Graduation 🎓",
-  FESTIVE: "Festive Season 🎄",
-  CUSTOM: "Custom Occasion 🎉",
+  BIRTHDAY:   "Birthday",
+  WEDDING:    "Wedding",
+  BABY:       "New Baby",
+  GRADUATION: "Graduation",
+  FESTIVE:    "Festive Season",
+  CUSTOM:     "Custom",
 };
 
 /** Status badge colour/label map */

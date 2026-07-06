@@ -1,5 +1,6 @@
 import React, { useEffect, useId, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Gift, Search, Sparkles, TrendingUp, X } from "lucide-react";
+import { ArrowLeft, BookMarked, Gift, Search, Sparkles, TrendingUp, X } from "lucide-react";
+import GiftRegistryCreateSheet from "../components/GiftRegistryCreateSheet.jsx";
 import { AreaChart, Area, LineChart, Line, ResponsiveContainer } from "recharts";
 import { motion, AnimatePresence } from "framer-motion";
 import { SparklesText } from "../components/ui/sparkles-text";
@@ -187,6 +188,7 @@ export default function GiftStrategyPickerPage({ onBack, onNavigate }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeCategory, setActiveCategory] = useState("All");
   const [showSearch, setShowSearch] = useState(false);
+  const [showRegistrySheet, setShowRegistrySheet] = useState(false);
   const searchRef = useRef(null);
 
   useEffect(() => {
@@ -292,13 +294,23 @@ export default function GiftStrategyPickerPage({ onBack, onNavigate }) {
               sparklesCount={6}
               className="text-base tracking-wide text-white"
             />
-            <button
-              type="button"
-              onClick={() => setShowSearch(!showSearch)}
-              className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 backdrop-blur-sm"
-            >
-              {showSearch ? <X className="h-4 w-4" /> : <Search className="h-4 w-4" />}
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setShowRegistrySheet(true)}
+                className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 backdrop-blur-sm"
+                title="My registries"
+              >
+                <BookMarked className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowSearch(!showSearch)}
+                className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 backdrop-blur-sm"
+              >
+                {showSearch ? <X className="h-4 w-4" /> : <Search className="h-4 w-4" />}
+              </button>
+            </div>
           </div>
 
           {/* Search bar (collapsible) */}
@@ -395,29 +407,6 @@ export default function GiftStrategyPickerPage({ onBack, onNavigate }) {
             </div>
           ) : (
             <>
-              {/* Gift Registry entry point — alongside "Send a gift" */}
-              {activeCategory === "All" && !searchQuery && (
-                <motion.button
-                  type="button"
-                  initial={{ opacity: 0, y: 12 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.4 }}
-                  onClick={() => onNavigate?.("giftRegistryDashboard")}
-                  className="w-full flex items-center gap-4 bg-gradient-to-r from-[#6B21A8]/10 to-[#9333EA]/10 border border-[#6B21A8]/20 rounded-2xl px-4 py-3.5 text-left mb-1"
-                >
-                  <div className="w-10 h-10 rounded-xl bg-[#6B21A8] flex items-center justify-center shrink-0">
-                    <span className="text-lg">🎁</span>
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-sm font-semibold text-[#6B21A8]">Create a Gift Registry</p>
-                    <p className="text-xs text-gray-500">Build a shareable wishlist of shares for any occasion</p>
-                  </div>
-                  <svg className="w-4 h-4 text-[#6B21A8] shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                  </svg>
-                </motion.button>
-              )}
-
               {featuredStrategies.length > 0 && (
                 <div className="space-y-3">
                   {activeCategory === "All" && (
@@ -489,6 +478,13 @@ export default function GiftStrategyPickerPage({ onBack, onNavigate }) {
           )}
         </div>
       </main>
+
+      {/* Registry creation bottom sheet */}
+      <GiftRegistryCreateSheet
+        open={showRegistrySheet}
+        onClose={() => setShowRegistrySheet(false)}
+        onNavigate={onNavigate}
+      />
     </div>
   );
 }
