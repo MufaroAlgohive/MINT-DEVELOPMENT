@@ -8,3 +8,4 @@
 - [Fee config Express route](fee-config-express.md) — /api/fees-config only existed as a Vercel function; added to Express server so dev env picks up CRM values from app_settings instead of hardcoded defaults.
 - [Yahoo JSE price units](yahoo-jse-price-units.md) — Yahoo Finance returns JSE (.JO) prices in ZAp (South African cents), same unit as securities_c.last_price; do NOT multiply by 100.
 - [Yahoo bad-data incident Jun-2026](yahoo-bad-data-recovery.md) — EOD snapshot corruption playbook: identify, fix stock_returns_c, clean intraday, retrigger strategy returns; anomaly guard threshold is 20%.
+- [pgPool optional-connection-string danger](pgpool-fallback-danger.md) — an unreachable SUPABASE_DB_URL is worse than none: null pgPool degrades gracefully, a broken one times out and breaks unrelated features.
