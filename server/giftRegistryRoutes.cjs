@@ -506,6 +506,91 @@ function registerGiftRegistryRoutes(app, supabaseAdmin, pgPool) {
     }
   });
 
+  // POST /api/gift-registry/items/by-key — add an item by itemKey
+  // itemKey can be a plain ISIN/symbol ("NPN.JO") or a prefixed strategy ("gift:uuid" / "strategy:uuid").
+  // Strategy keys are expanded: each holding in strategies_c.holdings is inserted as a separate SHARE item.
+  app.post('/api/gift-registry/items/by-key', async (req, res) => {
+    try {
+      const user = await getUser(req, supabaseAdmin);
+      if (!user) return res.status(401).json({ error: 'Unauthorized' });
+
+      const { registryId, itemKey } = req.body;
+      if (!registryId || !itemKey) return res.status(400).json({ error: 'Missing registryId or itemKey' });
+
+      // Verify ownership
+      const { data: reg } = await supabaseAdmin
+        .from('gift_events').select('id, status')
+        .eq('id', registryId).eq('creator_user_id', user.id).single();
+      if (!reg) return res.status(404).json({ error: 'Registry not found' });
+      if (!['DRAFT', 'ACTIVE', 'PAUSED'].includes(reg.status))
+        return res.status(400).json({ error: 'Cannot add items to a closed registry' });
+
+      const isStrategy = itemKey.startsWith('gift:') || itemKey.startsWith('strategy:');
+
+      if (isStrategy) {
+        // ── Strategy basket: expand holdings and insert each as a SHARE item ──
+        const strategyId = itemKey.replace(/^(gift:|strategy:)/, '');
+        const { data: strategy, error: stratErr } = await supabaseAdmin
+          .from('strategies_c').select('id, name, holdings').eq('id', strategyId).single();
+        if (stratErr || !strategy) return res.status(404).json({ error: 'Strategy not found' });
+
+        const holdings = Array.isArray(strategy.holdings) ? strategy.holdings : [];
+        if (!holdings.length) return res.status(400).json({ error: 'Strategy has no holdings' });
+
+        const tickers = [...new Set(holdings.map(h => h.ticker || h.symbol || h).filter(Boolean))];
+        const { data: securities } = await supabaseAdmin
+          .from('securities_c').select('isin, symbol, last_price').in('symbol', tickers);
+        const secBySymbol = Object.fromEntries((securities || []).map(s => [s.symbol, s]));
+
+        // Find already-added ISINs to avoid duplicates
+        const { data: existing } = await supabaseAdmin
+          .from('gift_registry_items').select('isin').eq('gift_event_id', registryId);
+        const existingIsins = new Set((existing || []).map(r => r.isin));
+
+        const toInsert = [];
+        const seenIsins = new Set(existingIsins); // dedupe within this request too
+        for (const h of holdings) {
+          const ticker = h.ticker || h.symbol || h;
+          const sec = secBySymbol[ticker];
+          if (!sec?.isin || seenIsins.has(sec.isin)) continue;
+          seenIsins.add(sec.isin);
+          const priceCents = sec.last_price || 0;
+          const minTranche = priceCents > 0 ? Math.max(1, Math.ceil(1000 / priceCents)) : 1;
+          toInsert.push({
+            gift_event_id: registryId, isin: sec.isin, instrument_type: 'SHARE',
+            target_quantity: 1, price_snapshot_cents: priceCents, min_tranche_quantity: minTranche,
+          });
+        }
+
+        if (!toInsert.length) return res.json({ success: true, items: [], message: 'All holdings already in registry' });
+
+        const { data: items, error: insertErr } = await supabaseAdmin
+          .from('gift_registry_items').insert(toInsert).select();
+        if (insertErr) throw insertErr;
+        return res.json({ success: true, items });
+
+      } else {
+        // ── Plain ISIN / symbol ──
+        const { data: existing } = await supabaseAdmin
+          .from('gift_registry_items').select('id').eq('gift_event_id', registryId).eq('isin', itemKey).maybeSingle();
+        if (existing) return res.json({ success: true, item: existing, message: 'Already in registry' });
+
+        const priceCents = await getLatestPriceCents(itemKey, supabaseAdmin);
+        const minTranche = priceCents > 0 ? Math.max(1, Math.ceil(1000 / priceCents)) : 1;
+        const { data: item, error } = await supabaseAdmin
+          .from('gift_registry_items')
+          .insert({ gift_event_id: registryId, isin: itemKey, instrument_type: 'SHARE',
+            target_quantity: 1, price_snapshot_cents: priceCents, min_tranche_quantity: minTranche })
+          .select().single();
+        if (error) throw error;
+        return res.json({ success: true, item });
+      }
+    } catch (e) {
+      console.error('[gift-registry] add by-key error:', e.message);
+      return res.status(500).json({ error: e.message });
+    }
+  });
+
   // POST /api/gift-registry/items — add an item
   app.post('/api/gift-registry/items', async (req, res) => {
     try {

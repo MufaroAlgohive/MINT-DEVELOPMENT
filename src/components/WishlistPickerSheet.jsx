@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Heart, Plus, Check, ArrowRight } from "lucide-react";
 import { getWishlists, addToWishlist, saveWishlists, syncWishlistsFromCloud } from "./WishlistModal.jsx";
+import WishlistPreviewGrid from "./WishlistPreviewGrid.jsx";
 
 const CARD_GRADIENTS = [
   ["#7c3aed", "#6d28d9"],
@@ -14,66 +15,6 @@ const CARD_GRADIENTS = [
 ];
 
 const year = new Date().getFullYear();
-
-/* ── Asset preview mosaic inside wishlist card ── */
-function WishlistPreviewGrid({ items, fromColor, toColor }) {
-  const logos = items.slice(0, 4).map((it) => it.logo_url).filter(Boolean);
-  const n = logos.length;
-
-  if (n === 0) return null;
-
-  const panelStyle = {
-    background: `linear-gradient(135deg, ${fromColor}cc, ${toColor}cc)`,
-  };
-
-  const Logo = ({ url, style }) => (
-    <div
-      className="absolute overflow-hidden flex items-center justify-center"
-      style={{ ...panelStyle, ...style }}
-    >
-      <img
-        src={url}
-        alt=""
-        className="w-[70%] h-[70%] object-contain drop-shadow-sm"
-        onError={(e) => { e.target.style.display = "none"; }}
-      />
-    </div>
-  );
-
-  return (
-    <div className="absolute inset-0 rounded-2xl overflow-hidden">
-      {n === 1 && (
-        <Logo url={logos[0]} style={{ inset: 0 }} />
-      )}
-      {n === 2 && (
-        <>
-          <Logo url={logos[0]} style={{ top: 0, left: 0, right: "50%", bottom: 0, borderRight: "1px solid rgba(255,255,255,0.15)" }} />
-          <Logo url={logos[1]} style={{ top: 0, left: "50%", right: 0, bottom: 0 }} />
-        </>
-      )}
-      {n === 3 && (
-        <>
-          <Logo url={logos[0]} style={{ top: 0, left: 0, right: "50%", bottom: 0, borderRight: "1px solid rgba(255,255,255,0.15)" }} />
-          <Logo url={logos[1]} style={{ top: 0, left: "50%", right: 0, bottom: "50%", borderBottom: "1px solid rgba(255,255,255,0.15)" }} />
-          <Logo url={logos[2]} style={{ top: "50%", left: "50%", right: 0, bottom: 0 }} />
-        </>
-      )}
-      {n >= 4 && (
-        <>
-          <Logo url={logos[0]} style={{ top: 0, left: 0, right: "50%", bottom: "50%", borderRight: "1px solid rgba(255,255,255,0.15)", borderBottom: "1px solid rgba(255,255,255,0.15)" }} />
-          <Logo url={logos[1]} style={{ top: 0, left: "50%", right: 0, bottom: "50%", borderBottom: "1px solid rgba(255,255,255,0.15)" }} />
-          <Logo url={logos[2]} style={{ top: "50%", left: 0, right: "50%", bottom: 0, borderRight: "1px solid rgba(255,255,255,0.15)" }} />
-          <Logo url={logos[3]} style={{ top: "50%", left: "50%", right: 0, bottom: 0 }} />
-        </>
-      )}
-      {/* Bottom text-readability scrim */}
-      <div
-        className="absolute inset-x-0 bottom-0"
-        style={{ height: "55%", background: "linear-gradient(to top, rgba(0,0,0,0.65) 0%, transparent 100%)", borderRadius: "0 0 16px 16px" }}
-      />
-    </div>
-  );
-}
 
 export default function WishlistPickerSheet({ itemKey, onClose, onSaved, onCreateNew }) {
   const [wishlists, setWishlists] = useState([]);
@@ -148,12 +89,34 @@ export default function WishlistPickerSheet({ itemKey, onClose, onSaved, onCreat
     if (saving) return;
     setSaving(list.id);
     try {
-      await addToWishlist(list.name, itemKey);
+      // list.id is a real registry UUID — write the item to gift_registry_items
+      const { supabaseReady } = await import("../lib/supabase.js");
+      const sb = await supabaseReady;
+      const { data: sessionData } = await sb.auth.getSession();
+      const token = sessionData?.session?.access_token;
+
+      if (token && list.id) {
+        const res = await fetch("/api/gift-registry/items/by-key", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ registryId: list.id, itemKey }),
+        });
+        if (!res.ok) {
+          const json = await res.json().catch(() => ({}));
+          throw new Error(json.error || "Failed to save item");
+        }
+      } else {
+        // Unauthenticated fallback — write to localStorage cache
+        await addToWishlist(list.name, itemKey);
+      }
+
       setSavedId(list.id);
       setTimeout(() => {
         onSaved?.(itemKey, list.name);
         onClose();
       }, 550);
+    } catch (e) {
+      console.error("[WishlistPicker] handlePick error:", e.message);
     } finally {
       setSaving(null);
     }

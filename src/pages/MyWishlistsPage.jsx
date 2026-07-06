@@ -5,6 +5,7 @@ import { useMyRegistries } from "../lib/useGiftRegistry.js";
 import { getRegistryProgress, REGISTRY_STATUS_META, OCCASION_LABELS } from "../lib/giftRegistryUtils.js";
 import GiftRegistryCreateSheet from "../components/GiftRegistryCreateSheet.jsx";
 import { supabaseReady } from "../lib/supabase.js";
+import WishlistPreviewGrid from "../components/WishlistPreviewGrid.jsx";
 
 const CARD_GRADIENTS = [
   ["#7c3aed", "#6d28d9"],
@@ -45,22 +46,29 @@ function RegistryCard({ registry, index, onTap, onDelete, deletingId }) {
         aspectRatio: "1 / 1",
       }}
     >
+      {/* Asset mosaic preview */}
+      <WishlistPreviewGrid
+        items={items.filter(it => it?.logo_url)}
+        fromColor={fromColor}
+        toColor={toColor}
+      />
+
       <button
         onClick={() => !confirmDelete && onTap(registry)}
-        className="absolute inset-0 p-3 flex flex-col justify-between w-full h-full text-left"
+        className="absolute inset-0 p-3 flex flex-col justify-between w-full h-full text-left z-10"
       >
         <div className="flex items-center justify-between pr-6">
-          <Heart size={16} className="fill-white/60 text-white/60" />
+          <Heart size={16} className="fill-white/60 text-white/60 drop-shadow" />
           <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${meta.color}`}>
             {meta.label}
           </span>
         </div>
         <div>
-          <p className="text-[12px] font-bold text-white leading-tight line-clamp-2">{registry.title}</p>
+          <p className="text-[12px] font-bold text-white leading-tight line-clamp-2 drop-shadow">{registry.title}</p>
           {occasionLabel && (
-            <p className="text-[10px] text-white/70 mt-0.5">{occasionLabel}</p>
+            <p className="text-[10px] text-white/70 mt-0.5 drop-shadow">{occasionLabel}</p>
           )}
-          <p className="text-[10px] text-white/70 mt-0.5">
+          <p className="text-[10px] text-white/70 mt-0.5 drop-shadow">
             {items.length} {items.length === 1 ? "item" : "items"}
             {progress.total > 0 ? ` · ${progress.percent}% funded` : ""}
           </p>
