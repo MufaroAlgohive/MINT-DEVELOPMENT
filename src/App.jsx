@@ -1597,6 +1597,18 @@ const App = () => {
             onGiftDone={() => { setShowAdultInvestModal(false); navigateTo("home"); }}
             onUpdateMandate={() => { setShowAdultInvestModal(false); navigateTo("updateMandate"); }}
           />
+
+          {/* Gift Registry Create Sheet — shown as overlay on any tab */}
+          <GiftRegistryCreateSheet
+            open={showRegistryCreateSheet}
+            pendingItemKey={giftRegistryNavState.pendingItemKey}
+            onClose={() => setShowRegistryCreateSheet(false)}
+            onNavigate={(page, state) => {
+              setShowRegistryCreateSheet(false);
+              if (state) setGiftRegistryNavState(s => ({ ...s, ...state }));
+              navigateTo(page);
+            }}
+          />
         </>
       </Suspense>
     );
