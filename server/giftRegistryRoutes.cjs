@@ -379,6 +379,45 @@ function registerGiftRegistryRoutes(app, supabaseAdmin, pgPool) {
     }
   });
 
+  // DELETE /api/gift-registry/:id — permanently delete a registry (owner only)
+  app.delete('/api/gift-registry/:id', async (req, res) => {
+    try {
+      const user = await getUser(req, supabaseAdmin);
+      if (!user) return res.status(401).json({ error: 'Unauthorized' });
+
+      // Release any HELD reservations first (best-effort, table cascade handles the rest)
+      if (pgPool) {
+        const pg = await pgPool.connect();
+        try {
+          await pg.query(`
+            UPDATE gift_reservations gr
+               SET status = 'RELEASED'
+              FROM gift_registry_items gri
+             WHERE gr.registry_item_id = gri.id
+               AND gri.gift_event_id = $1
+               AND gr.status = 'HELD'
+          `, [req.params.id]);
+        } finally {
+          pg.release();
+        }
+      }
+
+      const { data, error } = await supabaseAdmin
+        .from('gift_events')
+        .delete()
+        .eq('id', req.params.id)
+        .eq('creator_user_id', user.id)
+        .select()
+        .single();
+
+      if (error || !data) return res.status(404).json({ error: 'Registry not found' });
+      return res.json({ success: true });
+    } catch (e) {
+      console.error('[gift-registry] delete error:', e.message);
+      return res.status(500).json({ error: e.message });
+    }
+  });
+
   // GET /api/gift-registry/public/:token — public view (no auth to view)
   app.get('/api/gift-registry/public/:token', async (req, res) => {
     try {

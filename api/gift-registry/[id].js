@@ -52,6 +52,19 @@ export default async function handler(req, res) {
       return res.status(200).json({ success: true, registry: data });
     }
 
+    // DELETE — permanently delete a registry (owner only)
+    if (req.method === 'DELETE') {
+      const { data, error } = await supabaseAdmin
+        .from('gift_events')
+        .delete()
+        .eq('id', id)
+        .eq('creator_user_id', user.id)
+        .select()
+        .single();
+      if (error || !data) return res.status(404).json({ error: 'Registry not found' });
+      return res.status(200).json({ success: true });
+    }
+
     return res.status(405).json({ error: 'Method not allowed' });
   } catch (e) {
     return res.status(500).json({ error: e.message });

@@ -1,9 +1,10 @@
 import React, { useState } from "react";
-import { ArrowLeft, Heart, Plus, Gift } from "lucide-react";
+import { ArrowLeft, Heart, Plus, Gift, Trash2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useMyRegistries } from "../lib/useGiftRegistry.js";
 import { getRegistryProgress, REGISTRY_STATUS_META, OCCASION_LABELS } from "../lib/giftRegistryUtils.js";
 import GiftRegistryCreateSheet from "../components/GiftRegistryCreateSheet.jsx";
+import { supabaseReady } from "../lib/supabase.js";
 
 const CARD_GRADIENTS = [
   ["#7c3aed", "#6d28d9"],
@@ -16,40 +17,86 @@ const CARD_GRADIENTS = [
   ["#0369a1", "#075985"],
 ];
 
-function RegistryCard({ registry, index, onTap }) {
+function RegistryCard({ registry, index, onTap, onDelete, deletingId }) {
   const [fromColor, toColor] = CARD_GRADIENTS[index % CARD_GRADIENTS.length];
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const items = registry.items || [];
   const progress = getRegistryProgress(items);
   const meta = REGISTRY_STATUS_META[registry.status] || REGISTRY_STATUS_META.DRAFT;
   const occasionLabel = registry.occasion ? OCCASION_LABELS[registry.occasion] || registry.occasion : null;
+  const isDeleting = deletingId === registry.id;
+
+  function handleDeleteTap(e) {
+    e.stopPropagation();
+    if (confirmDelete) {
+      onDelete(registry.id);
+    } else {
+      setConfirmDelete(true);
+      setTimeout(() => setConfirmDelete(false), 3000);
+    }
+  }
 
   return (
-    <motion.button
+    <motion.div
       layout
-      onClick={() => onTap(registry)}
-      className="relative rounded-2xl overflow-hidden shadow-sm text-left p-3 flex flex-col justify-between"
+      className="relative rounded-2xl overflow-hidden shadow-sm"
       style={{
         background: `linear-gradient(135deg, ${fromColor}, ${toColor})`,
         aspectRatio: "1 / 1",
       }}
     >
-      <div className="flex items-center justify-between">
-        <Heart size={16} className="fill-white/60 text-white/60" />
-        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${meta.color}`}>
-          {meta.label}
-        </span>
-      </div>
-      <div>
-        <p className="text-[12px] font-bold text-white leading-tight line-clamp-2">{registry.title}</p>
-        {occasionLabel && (
-          <p className="text-[10px] text-white/70 mt-0.5">{occasionLabel}</p>
+      <button
+        onClick={() => !confirmDelete && onTap(registry)}
+        className="absolute inset-0 p-3 flex flex-col justify-between w-full h-full text-left"
+      >
+        <div className="flex items-center justify-between pr-6">
+          <Heart size={16} className="fill-white/60 text-white/60" />
+          <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${meta.color}`}>
+            {meta.label}
+          </span>
+        </div>
+        <div>
+          <p className="text-[12px] font-bold text-white leading-tight line-clamp-2">{registry.title}</p>
+          {occasionLabel && (
+            <p className="text-[10px] text-white/70 mt-0.5">{occasionLabel}</p>
+          )}
+          <p className="text-[10px] text-white/70 mt-0.5">
+            {items.length} {items.length === 1 ? "item" : "items"}
+            {progress.total > 0 ? ` · ${progress.percent}% funded` : ""}
+          </p>
+        </div>
+      </button>
+
+      {/* Delete button — top-right corner */}
+      <button
+        onClick={handleDeleteTap}
+        disabled={isDeleting}
+        className={[
+          "absolute top-2 right-2 flex h-6 w-6 items-center justify-center rounded-full transition-all active:scale-90 disabled:opacity-50",
+          confirmDelete ? "bg-red-500 shadow-lg" : "bg-black/25",
+        ].join(" ")}
+      >
+        {isDeleting ? (
+          <div className="w-3 h-3 border-2 border-white/50 border-t-white rounded-full animate-spin" />
+        ) : (
+          <Trash2 size={10} className="text-white" />
         )}
-        <p className="text-[10px] text-white/70 mt-0.5">
-          {items.length} {items.length === 1 ? "item" : "items"}
-          {progress.total > 0 ? ` · ${progress.percent}% funded` : ""}
-        </p>
-      </div>
-    </motion.button>
+      </button>
+
+      <AnimatePresence>
+        {confirmDelete && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 flex items-center justify-center rounded-2xl pointer-events-none"
+            style={{ background: "rgba(0,0,0,0.35)" }}
+          >
+            <p className="text-[10px] font-bold text-white text-center px-2">Tap 🗑️ again<br/>to delete</p>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
   );
 }
 
@@ -95,12 +142,34 @@ function EmptyState({ onCreate }) {
 export default function MyWishlistsPage({ onBack, onNavigate }) {
   const { registries, loading, reload } = useMyRegistries();
   const [showCreate, setShowCreate] = useState(false);
+  const [deletingId, setDeletingId] = useState(null);
+  const [error, setError] = useState(null);
 
   const totalItems = registries.reduce((t, r) => t + (r.items?.length || 0), 0);
 
   function openRegistry(registry) {
     if (typeof onNavigate === "function") {
       onNavigate("giftRegistryDetail", { registryId: registry.id, registry });
+    }
+  }
+
+  async function handleDelete(registryId) {
+    setDeletingId(registryId);
+    setError(null);
+    try {
+      const session = await (await supabaseReady).auth.getSession();
+      const token = session?.data?.session?.access_token;
+      const res = await fetch(`/api/gift-registry/${registryId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Could not delete wishlist");
+      reload();
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setDeletingId(null);
     }
   }
 
@@ -147,6 +216,9 @@ export default function MyWishlistsPage({ onBack, onNavigate }) {
             <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide mb-3">
               Your wishlists
             </p>
+            {error && (
+              <p className="text-[11px] font-semibold text-red-500 mb-3">{error}</p>
+            )}
             <div className="grid grid-cols-3 gap-3">
               <AnimatePresence>
                 {registries.map((registry, i) => (
@@ -155,6 +227,8 @@ export default function MyWishlistsPage({ onBack, onNavigate }) {
                     registry={registry}
                     index={i}
                     onTap={openRegistry}
+                    onDelete={handleDelete}
+                    deletingId={deletingId}
                   />
                 ))}
               </AnimatePresence>
