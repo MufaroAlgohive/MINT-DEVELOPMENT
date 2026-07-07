@@ -964,25 +964,20 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
 
       if (!registry) return res.status(403).json({ error: 'Wishlist not found or not yours' });
 
-      // Look up target user by email via Supabase admin REST API
-      const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
-      const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-      console.log('[notify-beneficiary] step4 lookup: supabaseUrl set=', !!supabaseUrl, 'serviceKey set=', !!serviceKey);
+      // Look up target user by email via profiles table (admin REST email filter is unreliable)
+      console.log('[notify-beneficiary] step4 lookup email:', email.toLowerCase());
       let targetUserId = null;
 
-      if (supabaseUrl && serviceKey) {
-        try {
-          const lookupRes = await fetch(
-            `${supabaseUrl}/auth/v1/admin/users?email=${encodeURIComponent(email.toLowerCase())}&page=1&per_page=1`,
-            { headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` } }
-          );
-          const lookupJson = await lookupRes.json();
-          const found = lookupJson?.users?.[0];
-          console.log('[notify-beneficiary] step4 lookup result: found=', !!found, 'id=', found?.id || 'none', 'total=', lookupJson?.total);
-          if (found?.id) targetUserId = found.id;
-        } catch (lookupErr) {
-          console.error('[notify-beneficiary] step4 email lookup failed:', lookupErr.message);
-        }
+      try {
+        const { data: profileMatch, error: profileErr } = await supabaseAdmin
+          .from('profiles')
+          .select('id, email, first_name')
+          .eq('email', email.toLowerCase())
+          .maybeSingle();
+        console.log('[notify-beneficiary] step4 profiles lookup: found=', !!profileMatch, 'id=', profileMatch?.id || 'none', 'err=', profileErr?.message || 'none');
+        if (profileMatch?.id) targetUserId = profileMatch.id;
+      } catch (lookupErr) {
+        console.error('[notify-beneficiary] step4 email lookup failed:', lookupErr.message);
       }
 
       if (!targetUserId) {
