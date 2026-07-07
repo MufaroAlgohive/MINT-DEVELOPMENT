@@ -5,6 +5,7 @@ import { useGiftRegistryRealtime } from "../lib/useGiftRegistryRealtime.js";
 import {
   OCCASION_LABELS,
   getRegistryProgress,
+  centsToRand,
 } from "../lib/giftRegistryUtils.js";
 import GiftRegistryItemCard from "../components/GiftRegistryItemCard.jsx";
 import GiftRegistryItemCheckoutSheet from "../components/GiftRegistryItemCheckoutSheet.jsx";
@@ -37,6 +38,7 @@ export default function GiftRegistryPublicPage({
   const [successMsg, setSuccessMsg] = useState(null);
   const [myGiftedItemIds, setMyGiftedItemIds] = useState(new Set());
   const [shareToast, setShareToast] = useState(false);
+  const [activeTab, setActiveTab] = useState("items"); // "items" | "history"
 
   const handleItemUpdate = useCallback(() => reload(), [reload]);
   useGiftRegistryRealtime(registry?.id, handleItemUpdate);
@@ -292,11 +294,28 @@ export default function GiftRegistryPublicPage({
           </div>
         )}
 
-        {/* Wishlist items */}
-        <div>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400 mb-3 px-0.5">
-            {items.length} item{items.length !== 1 ? "s" : ""} on this wishlist
-          </p>
+        {/* Tabs */}
+        <div className="flex gap-1 bg-slate-100 rounded-xl p-1">
+          {[
+            { key: "items", label: `Items (${items.length})` },
+            { key: "history", label: `Gift history${allContributions.length > 0 ? ` (${allContributions.length})` : ""}` },
+          ].map((tab) => (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all ${
+                activeTab === tab.key
+                  ? "bg-white text-violet-700 shadow-sm"
+                  : "text-slate-500"
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {/* ── Items tab ── */}
+        {activeTab === "items" && (
           <div className="space-y-4">
             {items.map((item) => (
               <GiftRegistryItemCard
@@ -310,57 +329,69 @@ export default function GiftRegistryPublicPage({
               />
             ))}
           </div>
-        </div>
+        )}
 
-        {/* Who's gifted section */}
-        {allContributions.length > 0 && (
+        {/* ── Gift history tab ── */}
+        {activeTab === "history" && (
           <div>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400 mb-3 px-0.5">
-              Who's gifted ({allContributions.length})
-            </p>
-            <div className="space-y-2">
-              {allContributions.map((c) => {
-                const displayName = c.gifter_name || c.gifter_email || "Anonymous";
-                const subLine =
-                  c.gifter_name &&
-                  c.gifter_email &&
-                  c.gifter_name !== c.gifter_email
-                    ? c.gifter_email
-                    : null;
-                const itemName = items.find((i) => i.id === c.registry_item_id)?.name;
-                const initials = c.gifter_name
-                  ? c.gifter_name
-                      .split(" ")
-                      .map((p) => p[0])
-                      .slice(0, 2)
-                      .join("")
-                      .toUpperCase()
-                  : c.gifter_email?.[0]?.toUpperCase() || "?";
-                return (
-                  <div
-                    key={c.id}
-                    className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 flex items-center gap-3"
-                  >
-                    <div className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center shrink-0">
-                      <span className="text-slate-600 font-bold text-xs">{initials}</span>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-slate-800 truncate">
-                        {displayName}
-                      </p>
-                      {subLine && (
-                        <p className="text-xs text-slate-400 truncate">{subLine}</p>
+            {allContributions.length === 0 ? (
+              <div className="bg-white rounded-2xl border border-slate-100 shadow-sm px-5 py-10 text-center">
+                <p className="text-2xl mb-2">🎁</p>
+                <p className="text-sm font-semibold text-slate-700">No gifts yet</p>
+                <p className="text-xs text-slate-400 mt-1">Be the first to contribute!</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {allContributions.map((c) => {
+                  const displayName = c.gifter_name || c.gifter_email || "Anonymous";
+                  const mintPart = c.gifter_mint_number ? ` · ${c.gifter_mint_number}` : "";
+                  const amountCents = c.executed_amount_cents || c.quoted_amount_cents || 0;
+                  const itemLabel = items.find((i) => i.id === c.registry_item_id)?.name;
+                  const initials = displayName
+                    .split(" ")
+                    .map((p) => p[0])
+                    .slice(0, 2)
+                    .join("")
+                    .toUpperCase();
+                  return (
+                    <div
+                      key={c.id}
+                      className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-full bg-violet-100 flex items-center justify-center shrink-0">
+                          <span className="text-violet-700 font-bold text-xs">{initials}</span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-slate-800 truncate">{displayName}</p>
+                          {(c.gifter_email || mintPart) && (
+                            <p className="text-xs text-slate-400 truncate">
+                              {c.gifter_email}{mintPart}
+                            </p>
+                          )}
+                          {itemLabel && (
+                            <p className="text-xs text-violet-600 font-medium truncate mt-0.5">{itemLabel}</p>
+                          )}
+                        </div>
+                        <div className="text-right shrink-0">
+                          {amountCents > 0 && (
+                            <p className="text-sm font-bold text-slate-800">{centsToRand(amountCents)}</p>
+                          )}
+                          <span className="inline-block text-[10px] px-2 py-0.5 rounded-full font-medium mt-1 bg-amber-100 text-amber-700">
+                            Gifted
+                          </span>
+                        </div>
+                      </div>
+                      {c.gifter_message && (
+                        <p className="mt-3 text-xs text-slate-500 italic border-t border-slate-100 pt-2">
+                          "{c.gifter_message}"
+                        </p>
                       )}
-                      <p className="text-xs text-slate-400">
-                        {c.quantity} share{c.quantity !== 1 ? "s" : ""}
-                        {itemName ? ` of ${itemName}` : ""}
-                      </p>
                     </div>
-                    <Gift className="w-4 h-4 text-slate-300 shrink-0" />
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
       </div>

@@ -409,6 +409,49 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
       if (error || !registry) return res.status(404).json({ error: 'Registry not found' });
       registry.items = await enrichItems(registry.items, supabaseAdmin);
 
+      // Fetch contributions with gifter display names and amounts for the "Gift history" tab
+      try {
+        const itemIds = (registry.items || []).map(i => i.id).filter(Boolean);
+        if (itemIds.length > 0) {
+          const { data: contribs } = await supabaseAdmin
+            .from('gift_contributions')
+            .select('id, registry_item_id, gifter_user_id, gifter_email, quantity, quoted_amount_cents, executed_amount_cents, fee_cents, status, gifter_message, created_at')
+            .in('registry_item_id', itemIds)
+            .eq('status', 'PAID')
+            .order('created_at', { ascending: false });
+
+          if (contribs && contribs.length > 0) {
+            // Enrich with gifter names from profiles
+            const gifterIds = [...new Set(contribs.map(c => c.gifter_user_id).filter(Boolean))];
+            const { data: profiles } = await supabaseAdmin
+              .from('profiles')
+              .select('id, first_name, last_name, mint_number')
+              .in('id', gifterIds);
+            const profileMap = {};
+            for (const p of profiles || []) profileMap[p.id] = p;
+
+            registry.all_contributions = contribs.map(c => {
+              const p = profileMap[c.gifter_user_id];
+              const gifterName = p
+                ? [p.first_name, p.last_name].filter(Boolean).join(' ') || c.gifter_email?.split('@')[0] || 'Someone'
+                : c.gifter_email?.split('@')[0] || 'Someone';
+              return {
+                ...c,
+                gifter_name: gifterName,
+                gifter_mint_number: p?.mint_number || null,
+              };
+            });
+          } else {
+            registry.all_contributions = [];
+          }
+        } else {
+          registry.all_contributions = [];
+        }
+      } catch (contribErr) {
+        console.warn('[gift-registry] public: contributions fetch error:', contribErr.message);
+        registry.all_contributions = [];
+      }
+
       // Record authenticated viewer for nudge eligibility tracking (fire-and-forget)
       const authHeader = req.headers.authorization || '';
       const viewerToken = authHeader.replace('Bearer ', '');
@@ -1048,19 +1091,31 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
         if (ownerUserId && ownerUserId !== user.id) {
           const msgPart = gifterMessage ? ` — "${gifterMessage.slice(0, 80)}"` : '';
           const mintPart = gifterMintNumber ? ` (${gifterMintNumber})` : '';
-          await supabaseAdmin.from('notifications').insert({
+          // Fetch share_token so the deep link works
+          const { data: regForToken } = await supabaseAdmin.from('gift_events').select('share_token').eq('id', registryId).maybeSingle();
+          const shareToken = regForToken?.share_token || '';
+          const { error: notifInsertErr } = await supabaseAdmin.from('notifications').insert({
             user_id: ownerUserId,
             title: `${gifterName} gifted you 🎁`,
             body: `${gifterName}${mintPart} gifted "${itemName}" on your "${registryTitle}" wishlist${msgPart}`,
-            type: 'investment',
+            type: 'system',
             payload: {
               action: 'OPEN_GIFT_REGISTRY',
               registry_id: registryId,
               registry_item_id: reservedItemId,
+              share_token: shareToken,
+              deep_link: shareToken ? `/gift/${shareToken}` : null,
               gifter_user_id: user.id,
               gifter_message: gifterMessage || null,
             },
           });
+          if (notifInsertErr) {
+            console.error('[gift-registry] contribute: owner notification insert failed:', notifInsertErr.message, notifInsertErr.code);
+          } else {
+            console.log('[gift-registry] contribute: owner notification sent → user_id=', ownerUserId);
+          }
+        } else {
+          console.log('[gift-registry] contribute: notification skipped — ownerUserId=', ownerUserId, 'userId=', user.id);
         }
 
         // ── 3. If item is now FILLED — thank-you to every gifter ──
@@ -1077,7 +1132,7 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
             user_id: gId,
             title: 'Your gift came together! 🙌',
             body: `"${itemName}" on "${registryTitle}" is fully funded — thanks to you and others ✨`,
-            type: 'investment',
+            type: 'system',
             payload: {
               action: 'OPEN_GIFT_REGISTRY',
               registry_id: registryId,
