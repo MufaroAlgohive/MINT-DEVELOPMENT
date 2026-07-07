@@ -1098,7 +1098,7 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
           const { error: notifInsertErr } = await supabaseAdmin.from('notifications').insert({
             user_id: ownerUserId,
             title: `${gifterName} gifted you 🎁`,
-            body: `${gifterName}${mintPart} gifted "${itemName}" on your "${registryTitle}" wishlist${msgPart}`,
+            body: `${gifterName}${mintPart} gifted you a ${itemName} from your "${registryTitle}" wishlist. Tap to see what they sent you!`,
             type: 'system',
             payload: {
               action: 'OPEN_GIFT_REGISTRY',
@@ -1261,8 +1261,8 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
         ? `${senderName} is nudging you ${emoji}`
         : `${senderName} shared a wishlist with you ${emoji}`;
       const notifBody = isNudge
-        ? `Don't forget — ${senderName} wants your gift for "${registry.title}"`
-        : `"${registry.title}" — gift the shares they actually want`;
+        ? `Don't forget — ${senderName} is hoping for your gift on "${registry.title}". It only takes a moment!`
+        : `${senderName} has shared their wishlist with you. Browse "${registry.title}" and find something meaningful to gift.`;
 
       console.log('[notify-beneficiary] step8 inserting notification: user_id=', targetUserId, 'title=', notifTitle);
       const { data: insertData, error: insertErr } = await supabaseAdmin
