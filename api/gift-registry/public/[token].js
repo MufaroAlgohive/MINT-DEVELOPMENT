@@ -13,14 +13,13 @@ async function enrichContributionsWithGifterNames(contributions) {
         u?.user_metadata?.name ||
         [u?.user_metadata?.first_name, u?.user_metadata?.last_name].filter(Boolean).join(' ') ||
         '';
-      nameMap[uid] = { name: fullName, email: u?.email || '' };
-    } catch { nameMap[uid] = { name: '', email: '' }; }
+      nameMap[uid] = { name: fullName };
+    } catch { nameMap[uid] = { name: '' }; }
   }));
   return contributions.map(c => ({
     id: c.id,
     registry_item_id: c.registry_item_id,
     gifter_name: nameMap[c.gifter_user_id]?.name || '',
-    gifter_email: c.gifter_email || nameMap[c.gifter_user_id]?.email || '',
     quantity: c.quantity,
     status: c.status,
     created_at: c.created_at,
@@ -68,12 +67,12 @@ export default async function handler(req, res) {
           price_snapshot_cents: item.price_snapshot_cents || secMap[item.isin]?.last_price || 0,
         }));
 
-      // Fetch contributions for all items (publicly visible — confirmed by owner: show full name + email)
+      // Fetch contributions for all items (publicly visible — show display name only, no PII)
       const itemIds = registry.items.map(i => i.id);
       if (itemIds.length) {
         const { data: contributions } = await supabaseAdmin
           .from('gift_contributions')
-          .select('id, registry_item_id, gifter_user_id, gifter_email, quantity, status, created_at')
+          .select('id, registry_item_id, gifter_user_id, quantity, status, created_at')
           .in('registry_item_id', itemIds)
           .in('status', ['PAID', 'EXECUTING', 'SETTLED'])
           .order('created_at', { ascending: false });
