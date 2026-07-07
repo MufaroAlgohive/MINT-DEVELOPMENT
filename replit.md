@@ -1,4 +1,16 @@
-# Mint Auth (React + Vite)
+# Mint — Investment & Wealth Platform
+
+## How to Run on Replit
+
+- **Workflow**: `Start application` — runs `npm run dev`, which starts the Express backend (port 3001) and the Vite dev server (port 5000) concurrently.
+- **Preview**: Open port 5000 in the Replit preview pane.
+- **Required secrets** (set via Replit Secrets):
+  - `VITE_SUPABASE_ANON_KEY` — Supabase public anon key (frontend)
+  - `SUPABASE_SERVICE_ROLE_KEY` — Supabase service role key (backend admin)
+  - `SESSION_SECRET` — Express session secret
+- **Optional secrets** (features degrade gracefully without them): `RESEND_API_KEY`, `PAYSTACK_SECRET_KEY`, `OZOW_PRIVATE_KEY`, `OZOW_SITE_CODE`, `ANTHROPIC_API_KEY`, `BROKER_API_KEY`, `TRUID_WEBHOOK_SECRET`, `CRON_SECRET`
+- `EXPERIAN_MOCK=true` is already set — KYC runs in mock mode for development.
+- Dependencies: installed automatically by the workflow via `pnpm install` before `npm run dev`.
 
 ## Overview
 Mint Auth is a React authentication application built with Vite, Tailwind CSS, and Framer Motion. It provides a secure user authentication experience, featuring a complete signup flow with robust password validation, OTP email verification, and advanced security measures like biometric authentication and PIN lock screens. The application integrates with various third-party services for KYC, bank linking, and real-time market data, aiming to deliver a seamless and feature-rich financial management platform for managing personal finances and investments.
