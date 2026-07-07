@@ -7,52 +7,57 @@ import GiftRegistryCreateSheet from "../components/GiftRegistryCreateSheet.jsx";
 import { supabaseReady } from "../lib/supabase.js";
 
 // ─── Sparkline bar chart ──────────────────────────────────────────────────────
-// One bar per item (capped at 7); height = funded %. Violet-themed.
+// One bar per item (capped at 7); height = funded %. Violet-themed, high-contrast.
 function RegistryBars({ items }) {
-  const PALETTE = {
-    full:    "#6d28d9", // deep violet — fully funded
-    partial: "#a78bfa", // medium violet — partially funded
-    empty:   "#ede9fe", // light violet — unfunded
-    ghost:   "#f1f0fb", // placeholder bar
+  // Colours match the reference card's visual rhythm adapted to MINT violet palette:
+  // full = deep violet (like reference lime), partial = medium violet (like reference lime-deep),
+  // empty = light gray (like reference mist), accent = near-black (like reference ink bar)
+  const C = {
+    full:    "#6d28d9",
+    partial: "#8b5cf6",
+    empty:   "#ddd6fe",
+    muted:   "#c4b5fd",
+    ink:     "#1e1b4b",
+    ghost:   "#e5e7eb",
   };
 
   let bars;
   if (items.length === 0) {
-    // Decorative placeholder — mirrors the reference card's visual rhythm
+    // Decorative placeholder matching the reference bar rhythm exactly
     bars = [
-      { h: 28, c: PALETTE.ghost },
-      { h: 42, c: PALETTE.ghost },
-      { h: 65, c: PALETTE.empty },
-      { h: 100, c: PALETTE.empty },
-      { h: 55, c: PALETTE.ghost },
-      { h: 38, c: PALETTE.ghost },
-      { h: 80, c: PALETTE.empty },
+      { h: 28, c: C.ghost  },
+      { h: 42, c: C.ghost  },
+      { h: 68, c: C.empty  },
+      { h: 100,c: C.empty  },
+      { h: 55, c: C.muted  },
+      { h: 38, c: C.ink    },
+      { h: 82, c: C.full   },
     ];
   } else {
     bars = items.slice(0, 7).map(item => {
       const pct = item.target_quantity > 0
         ? (item.filled_quantity ?? 0) / item.target_quantity
         : 0;
-      const h = Math.max(8, Math.round(pct * 100));
-      const c = pct >= 1 ? PALETTE.full : pct > 0 ? PALETTE.partial : PALETTE.empty;
+      const h = Math.max(10, Math.round(pct * 100));
+      const c = pct >= 1 ? C.full : pct > 0 ? C.partial : C.empty;
       return { h, c };
     });
-    // Pad to at least 5 bars so the chart area always looks full (deterministic heights)
-    const PAD_HEIGHTS = [22, 38, 18, 30, 14];
-    while (bars.length < 5) bars.push({ h: PAD_HEIGHTS[bars.length % PAD_HEIGHTS.length], c: PALETTE.ghost });
+    // Pad to at least 5 bars (deterministic heights)
+    const PAD = [{ h: 22, c: C.ghost }, { h: 38, c: C.muted }, { h: 18, c: C.ghost }, { h: 55, c: C.empty }, { h: 30, c: C.ghost }];
+    while (bars.length < 5) bars.push(PAD[bars.length]);
   }
 
   return (
     <div
       className="flex items-end gap-[3px]"
-      style={{ height: 44, flex: 1, maxWidth: 88 }}
+      style={{ height: 56, flex: 1, maxWidth: 96 }}
       aria-hidden="true"
     >
       {bars.map((bar, i) => (
         <div
           key={i}
           className="flex-1 rounded-[3px]"
-          style={{ height: `${bar.h}%`, background: bar.c, minHeight: 5 }}
+          style={{ height: `${bar.h}%`, background: bar.c, minHeight: 6 }}
         />
       ))}
     </div>
@@ -103,18 +108,19 @@ function RegistryCard({ registry, onTap, onDelete, deletingId }) {
         boxShadow: "0 1px 0 rgba(11,16,21,0.04), 0 1px 3px rgba(11,16,21,0.06)",
       }}
     >
-      {/* Tappable body */}
+      {/* Tappable body — padding matches reference: 20px sides, 20px top, 24px bottom */}
       <button
         onClick={() => !confirmDelete && onTap(registry)}
-        className="w-full text-left px-4 pt-4 pb-4 flex flex-col gap-3 active:bg-slate-50 transition-colors"
+        className="w-full text-left flex flex-col gap-4 active:bg-slate-50 transition-colors"
+        style={{ padding: "20px 24px 24px" }}
       >
-        {/* ── Head: occasion + status | funding pill ── */}
-        <div className="flex items-center justify-between gap-2 pr-5">
+        {/* ── Head: occasion / status label ── */}
+        <div className="flex items-center justify-between gap-3">
           <span
             className="truncate"
             style={{
               fontFamily: "ui-monospace, monospace",
-              fontSize: 10,
+              fontSize: 12,
               color: "#8b9aad",
               letterSpacing: "0.1em",
               textTransform: "uppercase",
@@ -122,12 +128,13 @@ function RegistryCard({ registry, onTap, onDelete, deletingId }) {
           >
             {occasionLabel} / {meta.label}
           </span>
+          {/* Badge — exact reference sizing: 12px, 600, 4px/10px */}
           <span
             style={{
               fontFamily: "ui-monospace, monospace",
-              fontSize: 10,
-              fontWeight: 700,
-              padding: "3px 9px",
+              fontSize: 12,
+              fontWeight: 600,
+              padding: "4px 10px",
               borderRadius: 999,
               flexShrink: 0,
               ...badgeStyle,
@@ -137,10 +144,10 @@ function RegistryCard({ registry, onTap, onDelete, deletingId }) {
           </span>
         </div>
 
-        {/* ── Value: registry title (the "big number" equivalent) ── */}
+        {/* ── Value: registry title — the "big number" equivalent ── */}
         <div
-          className="font-bold leading-tight line-clamp-2 text-slate-900"
-          style={{ fontSize: 18, letterSpacing: "-0.015em", minHeight: "2.25rem" }}
+          className="font-semibold leading-snug line-clamp-2 text-slate-900"
+          style={{ fontSize: 28, letterSpacing: "-0.015em" }}
         >
           {registry.title}
         </div>
@@ -150,28 +157,28 @@ function RegistryCard({ registry, onTap, onDelete, deletingId }) {
           <span
             style={{
               fontFamily: "ui-monospace, monospace",
-              fontSize: 10,
+              fontSize: 12,
               color: "#8b9aad",
-              lineHeight: 1.4,
+              lineHeight: 1.5,
             }}
           >
             {items.length === 0
               ? "No items yet"
               : `${items.length} ${items.length === 1 ? "item" : "items"} saved`}
             {progress.total > 0 && progress.percent > 0 && (
-              <><br />{`${progress.percent}% funded`}</>
+              <><br />{`+${progress.percent}% funded`}</>
             )}
           </span>
           <RegistryBars items={items} />
         </div>
       </button>
 
-      {/* Delete button — top-right */}
+      {/* Delete — subtle icon in top-right; doesn't compete with the badge */}
       <button
         onClick={handleDeleteTap}
         disabled={isDeleting}
         className={[
-          "absolute top-3 right-3 z-20 flex h-6 w-6 items-center justify-center rounded-full transition-all active:scale-90 disabled:opacity-50",
+          "absolute bottom-3.5 left-3.5 z-20 flex h-6 w-6 items-center justify-center rounded-full transition-all active:scale-90 disabled:opacity-50",
           confirmDelete ? "bg-red-500 shadow-md" : "bg-slate-100 hover:bg-slate-200",
         ].join(" ")}
       >
@@ -332,8 +339,8 @@ export default function MyWishlistsPage({ onBack, onNavigate }) {
         </div>
       </div>
 
-      {/* Card grid */}
-      <div className="px-4 pt-5 pb-24">
+      {/* Card grid — max-w-md keeps cards from stretching on desktop */}
+      <div className="mx-auto px-4 pt-5 pb-24" style={{ maxWidth: 480 }}>
         {loading && registries.length === 0 ? (
           <div className="grid grid-cols-2 gap-3">
             {[1, 2, 3, 4].map(i => (
