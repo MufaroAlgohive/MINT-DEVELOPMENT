@@ -2600,7 +2600,10 @@ const App = () => {
         <NotificationsPage
           onBack={goBack}
           onOpenSettings={() => navigateTo("notificationSettings")}
-          onNavigate={navigateTo}
+          onNavigate={(page, params) => {
+            if (params) setGiftRegistryNavState(s => ({ ...s, ...params }));
+            navigateTo(page);
+          }}
         />
       </SwipeBackWrapper>
     );

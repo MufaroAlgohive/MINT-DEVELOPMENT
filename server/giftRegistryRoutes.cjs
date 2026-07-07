@@ -389,6 +389,34 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
     }
   });
 
+  // GET /api/gift-registry/public/:token/my-contributions — item IDs gifted by the authed user for this registry
+  app.get('/api/gift-registry/public/:token/my-contributions', async (req, res) => {
+    try {
+      const user = await getUser(req, supabaseAdmin);
+      if (!user) return res.json({ itemIds: [] }); // unauthenticated — return empty, not error
+
+      const { data: registry, error: regErr } = await supabaseAdmin
+        .from('gift_events')
+        .select('id')
+        .eq('share_token', req.params.token)
+        .single();
+
+      if (regErr || !registry) return res.json({ itemIds: [] });
+
+      const { data: contribs } = await supabaseAdmin
+        .from('gift_contributions')
+        .select('registry_item_id')
+        .eq('gifter_user_id', user.id)
+        .eq('gift_event_id', registry.id)
+        .eq('status', 'PAID');
+
+      const itemIds = [...new Set((contribs || []).map(c => c.registry_item_id).filter(Boolean))];
+      return res.json({ itemIds });
+    } catch (e) {
+      return res.json({ itemIds: [] });
+    }
+  });
+
   // GET /api/gift-registry/by-mint-number/:mintNumber
   app.get('/api/gift-registry/by-mint-number/:mintNumber', async (req, res) => {
     try {
@@ -956,7 +984,7 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
       // Verify caller owns this registry
       const { data: registry, error: regErr } = await supabaseAdmin
         .from('gift_events')
-        .select('id, title, creator_user_id, share_token, occasion')
+        .select('id, title, creator_user_id, share_token, occasion, items:gift_registry_items(id)')
         .eq('id', registryId)
         .eq('creator_user_id', user.id)
         .single();
@@ -1064,6 +1092,9 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
             deep_link: `/gift/${registry.share_token}`,
             sent_by: user.id,
             is_nudge: !!isNudge,
+            registry_title: registry.title,
+            item_count: (registry.items || []).length,
+            occasion: registry.occasion,
           },
         })
         .select('id');
@@ -1080,6 +1111,137 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
       return res.json({ sent: true, nudge: !!isNudge, state: 'sent', sentAt: nowIso });
     } catch (e) {
       console.error('[notify-beneficiary] CAUGHT ERROR:', e.message, e.stack);
+      return res.status(500).json({ error: e.message });
+    }
+  });
+
+  // GET /api/gift-registry/:id/view-count — viewer count for the registry owner
+  app.get('/api/gift-registry/:id/view-count', async (req, res) => {
+    try {
+      const user = await getUser(req, supabaseAdmin);
+      if (!user) return res.status(401).json({ error: 'Unauthorized' });
+
+      // Verify ownership
+      const { data: reg, error: regErr } = await supabaseAdmin
+        .from('gift_events')
+        .select('id')
+        .eq('id', req.params.id)
+        .eq('creator_user_id', user.id)
+        .single();
+
+      if (regErr || !reg) return res.status(403).json({ error: 'Not found or not yours' });
+
+      const { count, error: countErr } = await supabaseAdmin
+        .from('gift_registry_views')
+        .select('viewer_user_id', { count: 'exact', head: true })
+        .eq('registry_id', req.params.id);
+
+      if (countErr && countErr.code === '42P01') return res.json({ count: 0 }); // table not yet created
+      if (countErr) throw countErr;
+
+      return res.json({ count: count || 0 });
+    } catch (e) {
+      return res.status(500).json({ error: e.message });
+    }
+  });
+
+  // POST /api/gift-registry/send-pending-nudges — cron endpoint: send 48hr nudge to viewers who haven't gifted yet
+  // Protected by Authorization: Bearer <CRON_SECRET> header
+  app.post('/api/gift-registry/send-pending-nudges', async (req, res) => {
+    try {
+      const authHeader = req.headers.authorization || '';
+      const token = authHeader.replace('Bearer ', '');
+      const cronSecret = process.env.CRON_SECRET;
+      if (!cronSecret || token !== cronSecret) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+
+      const cutoff = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+
+      // Find views older than 48 hours
+      const { data: views, error: viewErr } = await supabaseAdmin
+        .from('gift_registry_views')
+        .select('registry_id, viewer_user_id, viewed_at')
+        .lt('viewed_at', cutoff);
+
+      if (viewErr && viewErr.code === '42P01') return res.json({ sent: 0, skipped: 0, message: 'gift_registry_views table not found' });
+      if (viewErr) throw viewErr;
+      if (!views || views.length === 0) return res.json({ sent: 0, skipped: 0 });
+
+      const registryIds = [...new Set(views.map(v => v.registry_id))];
+
+      // Fetch registry details for all relevant registries
+      const { data: registries } = await supabaseAdmin
+        .from('gift_events')
+        .select('id, title, share_token, occasion, creator_user_id, status, items:gift_registry_items(id)')
+        .in('id', registryIds)
+        .in('status', ['ACTIVE']);
+
+      const regMap = Object.fromEntries((registries || []).map(r => [r.id, r]));
+
+      // Find viewers who have already contributed
+      const { data: existingContribs } = await supabaseAdmin
+        .from('gift_contributions')
+        .select('gift_event_id, gifter_user_id')
+        .in('gift_event_id', registryIds)
+        .eq('status', 'PAID');
+
+      const contributedSet = new Set((existingContribs || []).map(c => `${c.gift_event_id}:${c.gifter_user_id}`));
+
+      // Find existing nudge notifications to avoid double-sending
+      const viewerIds = [...new Set(views.map(v => v.viewer_user_id))];
+      const { data: existingNudges } = await supabaseAdmin
+        .from('notifications')
+        .select('user_id, payload')
+        .in('user_id', viewerIds)
+        .eq('type', 'system');
+
+      const nudgedSet = new Set();
+      for (const n of (existingNudges || [])) {
+        if (n.payload?.action === 'OPEN_GIFT_REGISTRY' && n.payload?.is_nudge) {
+          nudgedSet.add(`${n.payload.registry_id}:${n.user_id}`);
+        }
+      }
+
+      const OCCASION_EMOJI = { BIRTHDAY: '🎂', WEDDING: '💍', BABY: '👶', GRADUATION: '🎓', FESTIVE: '🎄', CUSTOM: '🎉' };
+      const notifRows = [];
+      let skipped = 0;
+
+      for (const view of views) {
+        const reg = regMap[view.registry_id];
+        if (!reg) { skipped++; continue; }
+        if (contributedSet.has(`${view.registry_id}:${view.viewer_user_id}`)) { skipped++; continue; }
+        if (nudgedSet.has(`${view.registry_id}:${view.viewer_user_id}`)) { skipped++; continue; }
+        if (view.viewer_user_id === reg.creator_user_id) { skipped++; continue; }
+
+        const emoji = OCCASION_EMOJI[reg.occasion] || '🎁';
+        notifRows.push({
+          user_id: view.viewer_user_id,
+          title: `Don't forget "${reg.title}" ${emoji}`,
+          body: `You viewed this wishlist — it's not too late to gift the shares they actually want!`,
+          type: 'system',
+          payload: {
+            action: 'OPEN_GIFT_REGISTRY',
+            registry_id: reg.id,
+            share_token: reg.share_token,
+            deep_link: `/gift/${reg.share_token}`,
+            is_nudge: true,
+            registry_title: reg.title,
+            item_count: (reg.items || []).length,
+            occasion: reg.occasion,
+          },
+        });
+      }
+
+      if (notifRows.length === 0) return res.json({ sent: 0, skipped });
+
+      const { error: insertErr } = await supabaseAdmin.from('notifications').insert(notifRows);
+      if (insertErr) throw insertErr;
+
+      console.log(`[gift-registry] send-pending-nudges: sent=${notifRows.length} skipped=${skipped}`);
+      return res.json({ sent: notifRows.length, skipped });
+    } catch (e) {
+      console.error('[gift-registry] send-pending-nudges error:', e.message);
       return res.status(500).json({ error: e.message });
     }
   });

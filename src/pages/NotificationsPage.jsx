@@ -18,7 +18,9 @@ import {
 import { useNotificationsContext, groupNotificationsByDate, getNotificationIcon } from "../lib/NotificationsContext";
 import NotificationsSkeleton from "../components/NotificationsSkeleton";
 
-const NotificationDetailModal = ({ notification, onClose, onDelete }) => {
+const OCCASION_EMOJI = { BIRTHDAY: "🎂", WEDDING: "💍", BABY: "👶", GRADUATION: "🎓", FESTIVE: "🎄", CUSTOM: "🎉" };
+
+const NotificationDetailModal = ({ notification, onClose, onDelete, onNavigate }) => {
   if (!notification) return null;
 
   const { icon, color } = getNotificationIcon(notification.type);
@@ -45,6 +47,9 @@ const NotificationDetailModal = ({ notification, onClose, onDelete }) => {
       minute: "2-digit",
     });
   };
+
+  const isWishlistNotif = notification.payload?.action === "OPEN_GIFT_REGISTRY";
+  const shareToken = notification.payload?.share_token;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
@@ -75,7 +80,21 @@ const NotificationDetailModal = ({ notification, onClose, onDelete }) => {
           {notification.body}
         </p>
 
-        {notification.payload && Object.keys(notification.payload).length > 0 && (
+        {isWishlistNotif && notification.payload?.registry_title && (
+          <div className="mt-4 rounded-2xl bg-violet-50 border border-violet-100 p-3.5">
+            <div className="flex items-center gap-2">
+              <span className="text-xl">{OCCASION_EMOJI[notification.payload.occasion] || "🎁"}</span>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-slate-800 truncate">{notification.payload.registry_title}</p>
+                {notification.payload.item_count > 0 && (
+                  <p className="text-xs text-violet-600">{notification.payload.item_count} item{notification.payload.item_count !== 1 ? "s" : ""} on this wishlist</p>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {!isWishlistNotif && notification.payload && Object.keys(notification.payload).length > 0 && (
           <div className="mt-4 rounded-xl bg-slate-50 p-3">
             <p className="text-xs font-medium text-slate-500">Additional Info</p>
             <p className="mt-1 text-xs text-slate-600">
@@ -96,13 +115,26 @@ const NotificationDetailModal = ({ notification, onClose, onDelete }) => {
           >
             Delete
           </button>
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex-1 rounded-full bg-slate-900 py-3 text-sm font-medium text-white"
-          >
-            Close
-          </button>
+          {isWishlistNotif && shareToken ? (
+            <button
+              type="button"
+              onClick={() => {
+                onClose();
+                onNavigate?.("giftRegistryPublic", { token: shareToken });
+              }}
+              className="flex-1 rounded-full bg-[#6B21A8] py-3 text-sm font-medium text-white"
+            >
+              View Wishlist →
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 rounded-full bg-slate-900 py-3 text-sm font-medium text-white"
+            >
+              Close
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -158,6 +190,8 @@ const NotificationItem = ({ notification, onMarkRead, onDelete, onOpenDetail, on
   };
 
   const isGiftNotification = notification.payload?.action === "gift_received";
+  const isWishlistNotif = notification.payload?.action === "OPEN_GIFT_REGISTRY";
+  const shareToken = notification.payload?.share_token;
 
   const handleClick = () => {
     if (swiped) return;
@@ -166,6 +200,10 @@ const NotificationItem = ({ notification, onMarkRead, onDelete, onOpenDetail, on
     }
     if (isGiftNotification) {
       onNavigate?.("sentGifts");
+      return;
+    }
+    if (isWishlistNotif && shareToken) {
+      onNavigate?.("giftRegistryPublic", { token: shareToken });
       return;
     }
     onOpenDetail(notification);
@@ -199,24 +237,36 @@ const NotificationItem = ({ notification, onMarkRead, onDelete, onOpenDetail, on
         onClick={handleClick}
         className={`relative flex gap-3 bg-white p-4 shadow-sm transition-transform cursor-pointer ${
           swiped ? "-translate-x-20" : "translate-x-0"
-        } ${isGiftNotification ? "border-l-4 border-violet-400" : ""}`}
+        } ${isGiftNotification || isWishlistNotif ? "border-l-4 border-violet-400" : ""}`}
       >
         <div className={`flex h-12 w-12 items-center justify-center rounded-full ${color}`}>
           <IconComponent className="h-5 w-5" />
         </div>
-        <div className="flex-1 space-y-1">
+        <div className="flex-1 space-y-1 min-w-0">
           <div className="flex items-center justify-between gap-3">
-            <p className={`text-sm ${!notification.read_at ? "font-semibold" : "font-medium"} text-slate-800`}>
+            <p className={`text-sm ${!notification.read_at ? "font-semibold" : "font-medium"} text-slate-800 truncate`}>
               {notification.title}
             </p>
-            <div className="flex items-center gap-2 text-xs text-slate-400">
+            <div className="flex items-center gap-2 text-xs text-slate-400 shrink-0">
               <span>{formatDate(notification.created_at)}</span>
               {!notification.read_at && (
                 <span className="h-2 w-2 rounded-full bg-emerald-400" />
               )}
             </div>
           </div>
-          <p className="text-xs text-slate-500">{notification.body}</p>
+          <p className="text-xs text-slate-500 line-clamp-2">{notification.body}</p>
+          {isWishlistNotif && notification.payload?.registry_title && (
+            <div className="mt-1.5 flex items-center gap-1.5 bg-violet-50 rounded-xl px-2.5 py-1.5">
+              <span className="text-base leading-none">{OCCASION_EMOJI[notification.payload.occasion] || "🎁"}</span>
+              <span className="text-xs font-semibold text-violet-700 truncate">{notification.payload.registry_title}</span>
+              {notification.payload.item_count > 0 && (
+                <span className="text-[10px] text-violet-400 shrink-0">· {notification.payload.item_count} item{notification.payload.item_count !== 1 ? "s" : ""}</span>
+              )}
+            </div>
+          )}
+          {isWishlistNotif && shareToken && (
+            <p className="text-[10px] text-violet-500 font-medium">Tap to view wishlist →</p>
+          )}
         </div>
       </div>
     </div>
@@ -287,6 +337,10 @@ const NotificationsPage = ({ onBack, onOpenSettings, onNavigate }) => {
         notification={selectedNotification}
         onClose={handleCloseDetail}
         onDelete={deleteNotification}
+        onNavigate={(page, params) => {
+          handleCloseDetail();
+          onNavigate?.(page, params);
+        }}
       />
     <div className="min-h-screen bg-slate-50 pb-[env(safe-area-inset-bottom)] text-slate-900">
       <div className="mx-auto flex w-full max-w-sm flex-col px-4 pb-10 pt-12 md:max-w-md md:px-8">

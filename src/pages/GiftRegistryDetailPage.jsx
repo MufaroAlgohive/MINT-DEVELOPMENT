@@ -1,4 +1,4 @@
-import React, { useState, useId, useMemo } from "react";
+import React, { useState, useId, useMemo, useEffect } from "react";
 import { AreaChart, Area, ResponsiveContainer } from "recharts";
 import { Heart } from "lucide-react";
 import { useRegistryDetail, useRegistryContributions } from "../lib/useGiftRegistry.js";
@@ -251,8 +251,28 @@ export default function GiftRegistryDetailPage({ registryId, onNavigate, onBack 
   const [showShare, setShowShare] = useState(false);
   const [publishLoading, setPublishLoading] = useState(false);
   const [publishedToken, setPublishedToken] = useState(null); // share_token from publish response, before reload settles
+  const [viewCount, setViewCount] = useState(null);
 
   useGiftRegistryRealtime(registryId, () => reload());
+
+  useEffect(() => {
+    if (!registryId || !["ACTIVE", "PAUSED", "COMPLETED"].includes(registry?.status)) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const sb = await supabaseReady;
+        const { data: { session } } = await sb.auth.getSession();
+        if (!session?.access_token || cancelled) return;
+        const res = await fetch(`/api/gift-registry/${registryId}/view-count`, {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        });
+        if (!res.ok || cancelled) return;
+        const json = await res.json();
+        if (!cancelled) setViewCount(json.count ?? null);
+      } catch {}
+    })();
+    return () => { cancelled = true; };
+  }, [registryId, registry?.status]);
 
   const items = registry?.items || [];
   const meta = REGISTRY_STATUS_META[registry?.status] || REGISTRY_STATUS_META.DRAFT;
@@ -350,15 +370,25 @@ export default function GiftRegistryDetailPage({ registryId, onNavigate, onBack 
         </div>
       </div>
 
-      {/* Countdown pill — below header, above content */}
-      {daysRemaining && (
-        <div className="px-5 pt-4">
-          <div className="inline-flex items-center gap-1.5 bg-amber-50 border border-amber-200 rounded-full px-3 py-1.5">
-            <span className="text-base leading-none">{OCCASION_EMOJI[registry?.occasion] || "🎉"}</span>
-            <span className="text-xs font-semibold text-amber-700">
-              {daysRemaining} day{daysRemaining !== 1 ? "s" : ""} to go
-            </span>
-          </div>
+      {/* Countdown + view count pills */}
+      {(daysRemaining || viewCount !== null) && (
+        <div className="px-5 pt-4 flex flex-wrap gap-2">
+          {daysRemaining && (
+            <div className="inline-flex items-center gap-1.5 bg-amber-50 border border-amber-200 rounded-full px-3 py-1.5">
+              <span className="text-base leading-none">{OCCASION_EMOJI[registry?.occasion] || "🎉"}</span>
+              <span className="text-xs font-semibold text-amber-700">
+                {daysRemaining} day{daysRemaining !== 1 ? "s" : ""} to go
+              </span>
+            </div>
+          )}
+          {viewCount !== null && viewCount > 0 && (
+            <div className="inline-flex items-center gap-1.5 bg-violet-50 border border-violet-200 rounded-full px-3 py-1.5">
+              <span className="text-base leading-none">👀</span>
+              <span className="text-xs font-semibold text-violet-700">
+                {viewCount} viewer{viewCount !== 1 ? "s" : ""}
+              </span>
+            </div>
+          )}
         </div>
       )}
 

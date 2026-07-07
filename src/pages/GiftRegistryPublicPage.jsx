@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import { usePublicRegistry } from "../lib/useGiftRegistry.js";
 import { useGiftRegistryRealtime } from "../lib/useGiftRegistryRealtime.js";
 import {
@@ -9,6 +9,7 @@ import {
 import GiftRegistryItemCard from "../components/GiftRegistryItemCard.jsx";
 import GiftRegistryItemCheckoutSheet from "../components/GiftRegistryItemCheckoutSheet.jsx";
 import GiftRegistryProgressBar from "../components/GiftRegistryProgressBar.jsx";
+import { supabaseReady } from "../lib/supabase.js";
 
 function GifterAvatar({ name, email }) {
   const initials = name
@@ -39,9 +40,45 @@ export default function GiftRegistryPublicPage({
   const { registry, loading, error, reload } = usePublicRegistry(token);
   const [checkoutItem, setCheckoutItem] = useState(null);
   const [successMsg, setSuccessMsg] = useState(null);
+  const [myGiftedItemIds, setMyGiftedItemIds] = useState(new Set());
+  const [shareToast, setShareToast] = useState(false);
 
   const handleItemUpdate = useCallback(() => reload(), [reload]);
   useGiftRegistryRealtime(registry?.id, handleItemUpdate);
+
+  useEffect(() => {
+    if (!token || !user) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const sb = await supabaseReady;
+        const { data: { session } } = await sb.auth.getSession();
+        if (!session?.access_token || cancelled) return;
+        const res = await fetch(`/api/gift-registry/public/${token}/my-contributions`, {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        });
+        if (!res.ok || cancelled) return;
+        const json = await res.json();
+        if (!cancelled) setMyGiftedItemIds(new Set(json.itemIds || []));
+      } catch {}
+    })();
+    return () => { cancelled = true; };
+  }, [token, user]);
+
+  async function handleShare() {
+    const url = `${window.location.origin}/registry/${token}`;
+    const title = registry?.title || "MINT Wishlist";
+    const text = `Check out "${title}" on MINT — gift the shares they actually want!`;
+    try {
+      if (navigator.share) {
+        await navigator.share({ title, text, url });
+      } else {
+        await navigator.clipboard.writeText(url);
+        setShareToast(true);
+        setTimeout(() => setShareToast(false), 2500);
+      }
+    } catch {}
+  }
 
   const items = registry?.items || [];
   const allContributions = registry?.all_contributions || [];
@@ -92,14 +129,30 @@ export default function GiftRegistryPublicPage({
 
   return (
     <div className="min-h-screen bg-[#f8f9fc] pb-24">
-      {/* Back nav */}
-      {onBack && (
-        <div className="absolute top-14 left-4 z-10">
+      {/* Back nav + share button */}
+      <div className="absolute top-14 left-4 right-4 z-10 flex items-center justify-between">
+        {onBack ? (
           <button onClick={onBack} className="p-2 bg-white/80 backdrop-blur rounded-xl shadow-sm text-gray-500">
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
           </button>
+        ) : <div />}
+        <button
+          onClick={handleShare}
+          className="p-2 bg-white/80 backdrop-blur rounded-xl shadow-sm text-[#6B21A8] flex items-center gap-1.5 px-3"
+          aria-label="Share wishlist"
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+          </svg>
+          <span className="text-xs font-semibold">Share</span>
+        </button>
+      </div>
+
+      {shareToast && (
+        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 bg-gray-800 text-white text-sm rounded-full px-5 py-2.5 shadow-lg">
+          Link copied!
         </div>
       )}
 
@@ -206,6 +259,7 @@ export default function GiftRegistryPublicPage({
             isOwner={false}
             canGift={canGift && !isClosed}
             onAuthPrompt={onAuthPrompt}
+            alreadyGifted={myGiftedItemIds.has(item.id)}
           />
         ))}
       </div>

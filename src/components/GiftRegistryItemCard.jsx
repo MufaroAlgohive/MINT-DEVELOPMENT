@@ -22,6 +22,7 @@ export default function GiftRegistryItemCard({
   isOwner = false,
   canGift = false,
   onAuthPrompt,
+  alreadyGifted = false,
 }) {
   const { state, available } = getItemGiftState(item);
   const percent = getItemFillPercent(item);
@@ -67,11 +68,15 @@ export default function GiftRegistryItemCard({
           </p>
         </div>
 
-        {greyed && (
+        {greyed ? (
           <span className="text-xs bg-gray-100 text-gray-400 px-2 py-0.5 rounded-full shrink-0">
             Funded ✓
           </span>
-        )}
+        ) : alreadyGifted ? (
+          <span className="text-xs bg-violet-100 text-violet-600 px-2 py-0.5 rounded-full shrink-0 font-medium">
+            Already gifted ✓
+          </span>
+        ) : null}
       </div>
 
       {/* Price & target */}
@@ -113,6 +118,13 @@ export default function GiftRegistryItemCard({
             <div className="w-full py-2.5 rounded-xl bg-gray-100 text-gray-400 text-sm text-center font-medium">
               Fully funded
             </div>
+          ) : alreadyGifted ? (
+            <button
+              onClick={handleGiftTap}
+              className="w-full py-2.5 rounded-xl bg-violet-50 border border-violet-200 text-violet-600 text-sm text-center font-semibold active:opacity-80"
+            >
+              Gift again
+            </button>
           ) : remainderOnly ? (
             <button
               onClick={handleGiftTap}
