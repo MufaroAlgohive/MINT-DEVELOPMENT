@@ -31,14 +31,14 @@ const getTypeStyle = (notification) => {
   const isGiftReceived  = isWishlist && !!notification.payload?.gifter_user_id;
 
   if (isGiftReceived) return {
-    iconBg:    "bg-emerald-100 text-emerald-700",
-    border:    "border-l-4 border-emerald-400",
-    dot:       "bg-emerald-500",
+    iconBg:    "bg-purple-100 text-purple-800",
+    border:    "border-l-4 border-purple-500",
+    dot:       "bg-purple-600",
     ctaBg:     "bg-[#6B21A8]",
-    pillBg:    "bg-emerald-50 border border-emerald-100",
-    pillText:  "text-emerald-800",
-    pillCount: "text-emerald-500",
-    threadBar: "bg-emerald-500",
+    pillBg:    "bg-purple-50 border border-purple-100",
+    pillText:  "text-purple-900",
+    pillCount: "text-purple-500",
+    threadBar: "bg-[#6B21A8]",
   };
   if (isWishlist) return {
     iconBg:    "bg-violet-100 text-violet-600",
