@@ -252,6 +252,7 @@ export default function GiftRegistryDetailPage({ registryId, onNavigate, onBack 
   const [publishLoading, setPublishLoading] = useState(false);
   const [publishedToken, setPublishedToken] = useState(null); // share_token from publish response, before reload settles
   const [viewCount, setViewCount] = useState(null);
+  const [activeTab, setActiveTab] = useState("items"); // "items" | "history"
 
   useGiftRegistryRealtime(registryId, () => reload());
 
@@ -392,89 +393,128 @@ export default function GiftRegistryDetailPage({ registryId, onNavigate, onBack 
         </div>
       )}
 
+      {/* Tabs */}
+      <div className="px-5 pt-4">
+        <div className="flex gap-1 bg-gray-100 rounded-xl p-1">
+          {[
+            { key: "items", label: "Items" },
+            { key: "history", label: `Gift history${contributions.length > 0 ? ` (${contributions.length})` : ""}` },
+          ].map((tab) => (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all ${
+                activeTab === tab.key
+                  ? "bg-white text-[#6B21A8] shadow-sm"
+                  : "text-gray-500"
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <div className="px-5 pt-5 space-y-5">
-        {/* Wishlist items — identical card layout to Mint Baskets horizontal strip */}
-        {items.length > 0 && (
-          <div>
-            <div className="flex gap-4 overflow-x-auto snap-x snap-mandatory pb-2 -mx-5 px-5">
-              {items.map((item) => (
-                <WishlistItemCard
-                  key={item.id}
-                  item={item}
-                  onRemove={removeItem}
-                  registryStatus={registry?.status}
-                  onPublish={handlePublish}
-                  publishLoading={publishLoading}
-                />
-              ))}
-            </div>
-          </div>
+        {/* ── Items tab ── */}
+        {activeTab === "items" && (
+          <>
+            {items.length > 0 && (
+              <div>
+                <div className="flex gap-4 overflow-x-auto snap-x snap-mandatory pb-2 -mx-5 px-5">
+                  {items.map((item) => (
+                    <WishlistItemCard
+                      key={item.id}
+                      item={item}
+                      onRemove={removeItem}
+                      registryStatus={registry?.status}
+                      onPublish={handlePublish}
+                      publishLoading={publishLoading}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Share CTA — shown when registry is published */}
+            {registry?.share_token && ["ACTIVE", "PAUSED"].includes(registry?.status) && (
+              <button
+                onClick={() => setShowShare(true)}
+                className="w-full flex items-center justify-between gap-3 rounded-2xl bg-[#6B21A8] px-5 py-4 text-white active:opacity-80 transition-opacity"
+              >
+                <div className="text-left">
+                  <p className="text-sm font-bold leading-tight">Share your wishlist</p>
+                  <p className="text-[11px] text-purple-200 mt-0.5">Send the link to friends &amp; family</p>
+                </div>
+                <svg className="w-5 h-5 shrink-0 text-purple-200" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                </svg>
+              </button>
+            )}
+          </>
         )}
 
-        {/* Share CTA — shown prominently when registry is published */}
-        {registry?.share_token && ["ACTIVE", "PAUSED"].includes(registry?.status) && (
-          <button
-            onClick={() => setShowShare(true)}
-            className="w-full flex items-center justify-between gap-3 rounded-2xl bg-[#6B21A8] px-5 py-4 text-white active:opacity-80 transition-opacity"
-          >
-            <div className="text-left">
-              <p className="text-sm font-bold leading-tight">Share your wishlist</p>
-              <p className="text-[11px] text-purple-200 mt-0.5">Send the link to friends &amp; family</p>
-            </div>
-            <svg className="w-5 h-5 shrink-0 text-purple-200" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
-            </svg>
-          </button>
-        )}
-
-        {/* Contributions */}
-        {contributions.length > 0 && (
+        {/* ── Gift history tab ── */}
+        {activeTab === "history" && (
           <div>
-            <p className="text-xs text-gray-500 font-medium mb-3">
-              Gifts received ({contributions.length})
-            </p>
-            <div className="space-y-2">
-              {contributions.map((c) => {
-                const displayName = c.gifter_name || c.gifter_email || "Anonymous";
-                const subLine =
-                  c.gifter_name &&
-                  c.gifter_email &&
-                  c.gifter_name !== c.gifter_email
+            {contributions.length === 0 ? (
+              <div className="text-center py-12">
+                <p className="text-2xl mb-2">🎁</p>
+                <p className="text-sm font-semibold text-gray-700">No gifts yet</p>
+                <p className="text-xs text-gray-400 mt-1">Gifts will appear here once someone contributes to your wishlist</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {contributions.map((c) => {
+                  const displayName = c.gifter_name || c.gifter_email || "Anonymous";
+                  const subLabel = c.gifter_name && c.gifter_email && c.gifter_name !== c.gifter_email
                     ? c.gifter_email
                     : null;
-                return (
-                  <div
-                    key={c.id}
-                    className="bg-white rounded-2xl p-4 flex items-center gap-3 border border-gray-100"
-                  >
-                    <GifterAvatar name={c.gifter_name} email={c.gifter_email} />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-gray-800 truncate">
-                        {displayName}
-                      </p>
-                      {subLine && (
-                        <p className="text-xs text-gray-400 truncate">{subLine}</p>
-                      )}
-                      <p className="text-xs text-gray-400">
-                        {c.quantity} share{c.quantity !== 1 ? "s" : ""} ·{" "}
-                        {centsToRand(c.executed_amount_cents || c.quoted_amount_cents)}
-                      </p>
-                    </div>
-                    <span
-                      className={`text-[10px] px-2 py-0.5 rounded-full font-medium shrink-0 ${
-                        c.status === "SETTLED"
-                          ? "bg-green-100 text-green-700"
-                          : c.status === "FAILED"
-                          ? "bg-red-100 text-red-600"
-                          : "bg-yellow-100 text-yellow-700"
-                      }`}
+                  const amountCents = c.executed_amount_cents || c.quoted_amount_cents || 0;
+                  const itemForContrib = items.find((it) => it.id === c.registry_item_id);
+                  const itemLabel = itemForContrib?.name || itemForContrib?.isin || null;
+
+                  return (
+                    <div
+                      key={c.id}
+                      className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm"
                     >
-                      {c.status}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
+                      <div className="flex items-center gap-3">
+                        <GifterAvatar name={c.gifter_name} email={c.gifter_email} />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-gray-800 truncate">{displayName}</p>
+                          {subLabel && (
+                            <p className="text-xs text-gray-400 truncate">{subLabel}</p>
+                          )}
+                          {itemLabel && (
+                            <p className="text-xs text-violet-600 font-medium truncate mt-0.5">{itemLabel}</p>
+                          )}
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className="text-sm font-bold text-gray-800">{amountCents > 0 ? centsToRand(amountCents) : "—"}</p>
+                          <span
+                            className={`inline-block text-[10px] px-2 py-0.5 rounded-full font-medium mt-1 ${
+                              c.status === "SETTLED"
+                                ? "bg-green-100 text-green-700"
+                                : c.status === "FAILED"
+                                ? "bg-red-100 text-red-600"
+                                : "bg-amber-100 text-amber-700"
+                            }`}
+                          >
+                            {c.status === "PAID" ? "Processing" : c.status === "SETTLED" ? "Settled" : c.status}
+                          </span>
+                        </div>
+                      </div>
+                      {c.gifter_message && (
+                        <p className="mt-3 text-xs text-gray-500 italic border-t border-gray-100 pt-2">
+                          "{c.gifter_message}"
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
       </div>

@@ -724,7 +724,13 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
       }
 
       // Get live price (Decision 8)
-      const livePriceCents = await getLatestPriceCents(item.isin, supabaseAdmin);
+      // For BASKET items, item.isin is the strategy UUID — not a real stock ISIN.
+      // getLatestPriceCents queries stock_intraday_c/securities_c which won't match
+      // a strategy UUID, so it returns 0. Use price_snapshot_cents instead, which
+      // enrichItems calculates as sum(shares × last_price_cents) for the basket.
+      const livePriceCents = item.instrument_type === 'BASKET'
+        ? (item.price_snapshot_cents || 0)
+        : await getLatestPriceCents(item.isin, supabaseAdmin);
 
       // Atomic conditional UPDATE — optimistic locking via two guards:
       //   1. eq('filled_quantity', item.filled_quantity) — fails if a concurrent fill happened
@@ -785,7 +791,7 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
       const user = await getUser(req, supabaseAdmin);
       if (!user) return res.status(401).json({ error: 'Unauthorized' });
 
-      const { reservationId, registryId } = req.body;
+      const { reservationId, registryId, totalAmount } = req.body;
       if (!reservationId) return res.status(400).json({ error: 'Missing reservationId' });
 
       // Idempotency key
@@ -827,7 +833,11 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
         feeCents = feeResult?.totalCents || feeCents;
       } catch { /* fees module optional */ }
 
-      const quotedAmountCents = livePriceCents * reservation.quantity + feeCents;
+      // Use the totalAmount the checkout UI calculated (includes all fees + markup),
+      // falling back to our server-side estimate. totalAmount comes in as Rands.
+      const quotedAmountCents = totalAmount && Number(totalAmount) > 0
+        ? Math.round(Number(totalAmount) * 100)
+        : livePriceCents * reservation.quantity + feeCents;
 
       // Step 1: Mark reservation CONSUMED — conditional on: HELD + not expired.
       // This is the idempotency gate: a second attempt on the same reservation will
@@ -939,44 +949,121 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
           .eq('id', registryId);
       }
 
-      // ── Post-contribution notifications (fire-and-forget; errors do not fail the contribution) ──
+      // ── Post-contribution: pending holdings + notifications (fire-and-forget) ──
       try {
         const { gifterMessage } = req.body;
 
-        // Fetch registry owner + item details
-        const { data: registryRow } = await supabaseAdmin
-          .from('gift_events')
-          .select('creator_user_id, title')
-          .eq('id', registryId)
-          .single();
+        // Fetch registry owner + item details (include item instrument_type and isin for holdings)
+        const [registryRow, filledItemRow] = await Promise.all([
+          supabaseAdmin.from('gift_events').select('creator_user_id, title').eq('id', registryId).single().then(r => r.data),
+          supabaseAdmin.from('gift_registry_items').select('isin, instrument_type').eq('id', reservedItemId).single().then(r => r.data),
+        ]);
 
-        const filledItem = allItems?.find(i => i.id === reservedItemId);
-        const itemName = filledItem?.name || filledItem?.isin || 'an item';
         const ownerUserId = registryRow?.creator_user_id;
         const registryTitle = registryRow?.title || 'your wishlist';
+        const itemIsin = filledItemRow?.isin || '';
+        const isBasket = filledItemRow?.instrument_type === 'BASKET';
 
-        // Gifter display name
-        const gifterName = gifterEmail
-          ? gifterEmail.split('@')[0]
-          : 'Someone';
+        // Resolve item display name: for baskets look up strategy name
+        let itemName = 'an item';
+        if (isBasket && itemIsin) {
+          const { data: strat } = await supabaseAdmin.from('strategies_c').select('name').eq('id', itemIsin).maybeSingle();
+          if (strat?.name) itemName = strat.name;
+        } else if (itemIsin) {
+          const { data: sec } = await supabaseAdmin.from('securities_c').select('name, symbol').eq('isin', itemIsin).maybeSingle();
+          itemName = sec?.name || sec?.symbol || itemIsin;
+        }
 
+        // Resolve gifter display name from profiles
+        const { data: gifterProfile } = await supabaseAdmin.from('profiles').select('first_name, last_name, mint_number').eq('id', user.id).maybeSingle();
+        const gifterName = [gifterProfile?.first_name, gifterProfile?.last_name].filter(Boolean).join(' ') || gifterEmail.split('@')[0] || 'Someone';
+        const gifterMintNumber = gifterProfile?.mint_number || null;
+
+        // ── 1. Insert pending holdings for the recipient so the purple pending card appears ──
+        if (ownerUserId && isBasket && itemIsin) {
+          try {
+            const { data: strategy } = await supabaseAdmin.from('strategies_c').select('id, holdings').eq('id', itemIsin).maybeSingle();
+            const stratHoldings = strategy?.holdings || [];
+            const symbols = stratHoldings.map(h => h.symbol).filter(Boolean);
+            let holdingsInserted = 0;
+
+            if (symbols.length > 0) {
+              const { data: securities } = await supabaseAdmin.from('securities_c').select('id, symbol, last_price').in('symbol', symbols);
+              const secMap = {};
+              for (const s of securities || []) secMap[s.symbol] = s;
+
+              // Calculate scale: invested amount (base price before markup) vs basket cost
+              const investRands = (reservation.price_lock_cents * qty) / 100;
+              let totalCostRands = 0;
+              for (const h of stratHoldings) {
+                const sec = secMap[h.symbol];
+                if (sec?.last_price) totalCostRands += (sec.last_price / 100) * (h.weight || 1);
+              }
+              const scale = totalCostRands > 0 ? investRands / totalCostRands : 1;
+
+              for (const h of stratHoldings) {
+                const sec = secMap[h.symbol];
+                if (!sec?.last_price || !sec?.id) continue;
+                const holdingQty = Math.max(1, Math.round((h.weight || 1) * scale));
+                try {
+                  await supabaseAdmin.from('stock_holdings_c').insert({
+                    user_id: ownerUserId,
+                    security_id: sec.id,
+                    strategy_id: itemIsin,
+                    quantity: holdingQty,
+                    avg_fill: null,
+                    market_value: 0,
+                    unrealized_pnl: 0,
+                    as_of_date: null,
+                    Status: 'active',
+                  });
+                  holdingsInserted++;
+                } catch (he) { console.warn('[gift-registry] contribute: pending holding insert:', he.message); }
+              }
+            }
+
+            // Fallback: insert one placeholder row so the pending card still appears
+            if (holdingsInserted === 0) {
+              const { data: fallbackSec } = await supabaseAdmin.from('securities_c').select('id').limit(1).maybeSingle();
+              if (fallbackSec?.id) {
+                await supabaseAdmin.from('stock_holdings_c').insert({
+                  user_id: ownerUserId,
+                  security_id: fallbackSec.id,
+                  strategy_id: itemIsin,
+                  quantity: 1,
+                  avg_fill: null,
+                  market_value: 0,
+                  unrealized_pnl: 0,
+                  as_of_date: null,
+                  Status: 'active',
+                });
+              }
+            }
+          } catch (holdingErr) {
+            console.warn('[gift-registry] contribute: pending holdings block error:', holdingErr.message);
+          }
+        }
+
+        // ── 2. Notify the registry owner that someone gifted them ──
         if (ownerUserId && ownerUserId !== user.id) {
           const msgPart = gifterMessage ? ` — "${gifterMessage.slice(0, 80)}"` : '';
+          const mintPart = gifterMintNumber ? ` (${gifterMintNumber})` : '';
           await supabaseAdmin.from('notifications').insert({
             user_id: ownerUserId,
-            title: `${gifterName} gifted your wishlist 🎁`,
-            body: `${qty} share${qty !== 1 ? 's' : ''} of ${itemName} contributed to "${registryTitle}"${msgPart}`,
+            title: `${gifterName} gifted you 🎁`,
+            body: `${gifterName}${mintPart} gifted "${itemName}" on your "${registryTitle}" wishlist${msgPart}`,
             type: 'investment',
             payload: {
               action: 'OPEN_GIFT_REGISTRY',
               registry_id: registryId,
+              registry_item_id: reservedItemId,
               gifter_user_id: user.id,
               gifter_message: gifterMessage || null,
             },
           });
         }
 
-        // If this item is now FILLED — send thank-you to every gifter of that item
+        // ── 3. If item is now FILLED — thank-you to every gifter ──
         const itemNowFilled = currentItem && (currentItem.filled_quantity || 0) + qty >= (currentItem.target_quantity || 1);
         if (itemNowFilled) {
           const { data: allContribs } = await supabaseAdmin
@@ -988,8 +1075,8 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
           const uniqueGifterIds = [...new Set((allContribs || []).map(c => c.gifter_user_id).filter(Boolean))];
           const thankYouRows = uniqueGifterIds.map(gId => ({
             user_id: gId,
-            title: `Your gift came together! 🙌`,
-            body: `${itemName} on "${registryTitle}" is fully funded — thanks to you and others ✨`,
+            title: 'Your gift came together! 🙌',
+            body: `"${itemName}" on "${registryTitle}" is fully funded — thanks to you and others ✨`,
             type: 'investment',
             payload: {
               action: 'OPEN_GIFT_REGISTRY',
@@ -1003,7 +1090,7 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
           }
         }
       } catch (notifErr) {
-        console.error('[gift-registry] contribute: notification error (non-fatal):', notifErr.message);
+        console.error('[gift-registry] contribute: post-contribution error (non-fatal):', notifErr.message);
       }
 
       return res.json({ success: true, contribution });
