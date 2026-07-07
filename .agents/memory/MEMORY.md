@@ -7,5 +7,6 @@
 - [Portfolio period P&L source](portfolio-period-pnl-source.md) — hook must use stock_holdings_c.market_value (not a batch intraday query without ordering) to match home card's live total exactly.
 - [Fee config Express route](fee-config-express.md) — /api/fees-config only existed as a Vercel function; added to Express server so dev env picks up CRM values from app_settings instead of hardcoded defaults.
 - [Yahoo JSE price units](yahoo-jse-price-units.md) — Yahoo Finance returns JSE (.JO) prices in ZAp (South African cents), same unit as securities_c.last_price; do NOT multiply by 100.
+- [Gift registry DB split](gift-registry-db-split.md) — pgPool=local PostgreSQL (schema only, no data); all gift/securities data lives in Supabase via supabaseAdmin REST only.
 - [Yahoo bad-data incident Jun-2026](yahoo-bad-data-recovery.md) — EOD snapshot corruption playbook: identify, fix stock_returns_c, clean intraday, retrigger strategy returns; anomaly guard threshold is 20%.
 - [pgPool optional-connection-string danger](pgpool-fallback-danger.md) — an unreachable SUPABASE_DB_URL is worse than none: null pgPool degrades gracefully, a broken one times out and breaks unrelated features.

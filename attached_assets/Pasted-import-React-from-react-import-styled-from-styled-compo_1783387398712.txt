@@ -1,0 +1,126 @@
+import React from 'react';
+import styled from 'styled-components';
+
+const Card = () => {
+  return (
+    <StyledWrapper>
+      <article className="vl-kpi-tile">
+        <div className="vl-kpi-tile__head">
+          <span className="vl-kpi-tile__ticker">VOLT / USD</span>
+          <span className="vl-kpi-tile__delta">+2.84%</span>
+        </div>
+        <div className="vl-kpi-tile__value">$64,189.10</div>
+        <div className="vl-kpi-tile__foot">
+          <span className="vl-kpi-tile__sub">+$1,824.40 last 7d</span>
+          <div className="vl-kpi-tile__spark" aria-hidden="true">
+            <span className="vl-kpi-tile__bar" style={{height: '28%'}} />
+            <span className="vl-kpi-tile__bar vl-kpi-tile__bar--deep" style={{height: '42%'}} />
+            <span className="vl-kpi-tile__bar vl-kpi-tile__bar--lime" style={{height: '68%'}} />
+            <span className="vl-kpi-tile__bar vl-kpi-tile__bar--lime" style={{height: '100%'}} />
+            <span className="vl-kpi-tile__bar vl-kpi-tile__bar--deep" style={{height: '55%'}} />
+            <span className="vl-kpi-tile__bar vl-kpi-tile__bar--ink" style={{height: '38%'}} />
+            <span className="vl-kpi-tile__bar vl-kpi-tile__bar--lime" style={{height: '82%'}} />
+          </div>
+        </div>
+      </article>
+    </StyledWrapper>
+  );
+}
+
+const StyledWrapper = styled.div`
+  .vl-kpi-tile {
+    --vl-ink: #0b1015;
+    --vl-paper: #ffffff;
+    --vl-mist-deep: #e8edf2;
+    --vl-slate: #6b7785;
+    --vl-hairline: #d6dce3;
+    --vl-lime: #d6ff3d;
+    --vl-lime-deep: #a8cc22;
+    background: var(--vl-paper);
+    border: 1px solid var(--vl-hairline);
+    border-radius: 18px;
+    padding: 20px 24px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    width: 100%;
+    max-width: 280px;
+    font-family: inherit;
+    box-shadow:
+      0 1px 0 rgba(11, 16, 21, 0.04),
+      0 1px 2px rgba(11, 16, 21, 0.04);
+  }
+
+  .vl-kpi-tile__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .vl-kpi-tile__ticker {
+    font-family: ui-monospace, monospace;
+    font-size: 12px;
+    color: var(--vl-slate);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  .vl-kpi-tile__delta {
+    font-family: ui-monospace, monospace;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: var(--vl-lime);
+    color: var(--vl-ink);
+  }
+
+  .vl-kpi-tile__value {
+    font-weight: 600;
+    font-size: 36px;
+    letter-spacing: -0.015em;
+    line-height: 1;
+    color: var(--vl-ink);
+  }
+
+  .vl-kpi-tile__foot {
+    display: flex;
+    align-items: end;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .vl-kpi-tile__sub {
+    font-family: ui-monospace, monospace;
+    font-size: 12px;
+    color: var(--vl-slate);
+  }
+
+  .vl-kpi-tile__spark {
+    display: flex;
+    align-items: end;
+    gap: 4px;
+    height: 56px;
+    flex: 1;
+    max-width: 120px;
+  }
+
+  .vl-kpi-tile__bar {
+    flex: 1;
+    background: var(--vl-mist-deep);
+    border-radius: 3px;
+    min-height: 6px;
+  }
+
+  .vl-kpi-tile__bar--lime {
+    background: var(--vl-lime);
+  }
+  .vl-kpi-tile__bar--deep {
+    background: var(--vl-lime-deep);
+  }
+  .vl-kpi-tile__bar--ink {
+    background: var(--vl-ink);
+  }`;
+
+export default Card;
