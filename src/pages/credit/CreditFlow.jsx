@@ -1240,6 +1240,11 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
               <style>{`
                 @keyframes cfFadeUp { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
                 .cf-fade { opacity: 0; animation: cfFadeUp .55s cubic-bezier(.22,1,.36,1) forwards; }
+                /* Each statement check "ticks in": row slides, icon springs. */
+                @keyframes cfCheckRow { from { opacity: 0; transform: translateX(-8px); } to { opacity: 1; transform: translateX(0); } }
+                @keyframes cfTickPop { 0% { opacity: 0; transform: scale(0.2); } 60% { opacity: 1; transform: scale(1.25); } 100% { opacity: 1; transform: scale(1); } }
+                .cf-check-row { opacity: 0; animation: cfCheckRow .4s cubic-bezier(.22,1,.36,1) forwards; }
+                .cf-tick { transform-origin: center; animation: cfTickPop .45s cubic-bezier(.34,1.56,.64,1) both; }
               `}</style>
 
               {/* HERO */}
@@ -1356,32 +1361,32 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
                         <div className="cf-fade mt-4 rounded-[28px] border border-slate-100 bg-white p-6 shadow-xl">
                           <p className="text-sm font-semibold text-slate-900">Statement checks</p>
                           <div className="mt-3 space-y-3">
-                            <div className="flex items-center gap-3">
-                              <CheckCircle2 className={`h-5 w-5 flex-shrink-0 ${found ? "text-emerald-500" : "text-slate-300"}`} />
+                            <div className="cf-check-row flex items-center gap-3" style={{ animationDelay: ".05s" }}>
+                              <CheckCircle2 className={`cf-tick h-5 w-5 flex-shrink-0 ${found ? "text-emerald-500" : "text-slate-300"}`} style={{ animationDelay: ".15s" }} />
                               <div className="flex-1">
                                 <p className="text-xs font-semibold text-slate-800">Pay amount</p>
                                 <p className="text-[11px] text-slate-400">{found ? `R${monthlyIncome.toLocaleString("en-ZA")} per month` : "Not detected"}</p>
                               </div>
                             </div>
-                            <div className="flex items-center gap-3">
-                              <CheckCircle2 className={`h-5 w-5 flex-shrink-0 ${det.pay_day_of_month ? "text-emerald-500" : "text-slate-300"}`} />
+                            <div className="cf-check-row flex items-center gap-3" style={{ animationDelay: ".2s" }}>
+                              <CheckCircle2 className={`cf-tick h-5 w-5 flex-shrink-0 ${det.pay_day_of_month ? "text-emerald-500" : "text-slate-300"}`} style={{ animationDelay: ".3s" }} />
                               <div className="flex-1">
                                 <p className="text-xs font-semibold text-slate-800">Pay date</p>
                                 <p className="text-[11px] text-slate-400">{det.pay_day_of_month ? `Around the ${ordinal(det.pay_day_of_month)} of each month` : "Not detected"}</p>
                               </div>
                             </div>
-                            <div className="flex items-center gap-3">
-                              <CheckCircle2 className={`h-5 w-5 flex-shrink-0 ${det.bank_name ? "text-emerald-500" : "text-slate-300"}`} />
+                            <div className="cf-check-row flex items-center gap-3" style={{ animationDelay: ".35s" }}>
+                              <CheckCircle2 className={`cf-tick h-5 w-5 flex-shrink-0 ${det.bank_name ? "text-emerald-500" : "text-slate-300"}`} style={{ animationDelay: ".45s" }} />
                               <div className="flex-1">
                                 <p className="text-xs font-semibold text-slate-800">Bank</p>
                                 <p className="text-[11px] text-slate-400">{det.bank_name || "Not identified"}</p>
                               </div>
                             </div>
-                            <div className="flex items-start gap-3">
+                            <div className="cf-check-row flex items-start gap-3" style={{ animationDelay: ".5s" }}>
                               {(det.flagged_summary?.count || 0) > 0 ? (
-                                <span className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-amber-100 text-[11px] font-bold text-amber-600">!</span>
+                                <span className="cf-tick flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-amber-100 text-[11px] font-bold text-amber-600" style={{ animationDelay: ".6s" }}>!</span>
                               ) : (
-                                <CheckCircle2 className="h-5 w-5 flex-shrink-0 text-emerald-500" />
+                                <CheckCircle2 className="cf-tick h-5 w-5 flex-shrink-0 text-emerald-500" style={{ animationDelay: ".6s" }} />
                               )}
                               <div className="flex-1">
                                 <div className="flex items-center justify-between gap-2">
