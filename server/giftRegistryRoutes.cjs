@@ -21,119 +21,33 @@ const crypto = require('crypto');
 // ─── DB migration ────────────────────────────────────────────────────────────
 
 async function ensureGiftRegistryTables(pgPool, supabaseAdmin) {
-  if (!pgPool) return;
-  const client = await pgPool.connect();
-  try {
-    // gift_events — the registry itself
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS gift_events (
-        id                       uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-        creator_user_id          uuid NOT NULL,
-        beneficiary_type         text NOT NULL CHECK (beneficiary_type IN ('SELF','CHILD','OTHER')),
-        beneficiary_ref          uuid,
-        beneficiary_display_name text NOT NULL,
-        beneficiary_mint_number  text,
-        occasion                 text NOT NULL CHECK (occasion IN ('BIRTHDAY','WEDDING','BABY','GRADUATION','FESTIVE','CUSTOM')),
-        custom_occasion          text,
-        title                    text NOT NULL,
-        event_date               date NOT NULL,
-        expiry_at                timestamptz NOT NULL,
-        status                   text NOT NULL DEFAULT 'DRAFT' CHECK (status IN ('DRAFT','ACTIVE','PAUSED','COMPLETED','EXPIRED','CANCELLED')),
-        share_token              text UNIQUE,
-        message                  text,
-        created_at               timestamptz DEFAULT now(),
-        updated_at               timestamptz DEFAULT now()
-      )
-    `);
-    await client.query(`CREATE INDEX IF NOT EXISTS idx_gift_events_creator ON gift_events(creator_user_id)`);
-    await client.query(`CREATE INDEX IF NOT EXISTS idx_gift_events_token ON gift_events(share_token)`);
-    await client.query(`CREATE INDEX IF NOT EXISTS idx_gift_events_status ON gift_events(status)`);
+  // All gift registry tables live in Supabase — NOT in the local pgPool.
+  // pgPool is only used for atomic reservation/contribution transactions.
+  // Skip pgPool table creation entirely to avoid connection timeout noise at startup.
 
-    // gift_registry_items — each wishlist line
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS gift_registry_items (
-        id                    uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-        gift_event_id         uuid NOT NULL REFERENCES gift_events(id) ON DELETE CASCADE,
-        isin                  text NOT NULL,
-        instrument_type       text NOT NULL DEFAULT 'SHARE' CHECK (instrument_type IN ('SHARE','ETF','BASKET')),
-        target_quantity       int NOT NULL CHECK (target_quantity > 0),
-        filled_quantity       int NOT NULL DEFAULT 0,
-        reserved_quantity     int NOT NULL DEFAULT 0,
-        min_tranche_quantity  int,
-        price_snapshot_cents  int,
-        status                text NOT NULL DEFAULT 'OPEN' CHECK (status IN ('OPEN','PARTIALLY_FILLED','FILLED','REMOVED','SUSPENDED')),
-        display_order         int DEFAULT 0,
-        created_at            timestamptz DEFAULT now(),
-        updated_at            timestamptz DEFAULT now(),
-        CONSTRAINT no_oversell CHECK (filled_quantity + reserved_quantity <= target_quantity)
-      )
-    `);
-    await client.query(`CREATE INDEX IF NOT EXISTS idx_gift_items_event ON gift_registry_items(gift_event_id)`);
-
-    // gift_reservations — 10-min seat-hold while someone is in checkout
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS gift_reservations (
-        id                uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-        registry_item_id  uuid NOT NULL REFERENCES gift_registry_items(id),
-        gifter_user_id    uuid NOT NULL,
-        quantity          int NOT NULL CHECK (quantity > 0),
-        expires_at        timestamptz NOT NULL DEFAULT (now() + interval '10 minutes'),
-        status            text NOT NULL DEFAULT 'HELD' CHECK (status IN ('HELD','CONSUMED','RELEASED','EXPIRED')),
-        price_lock_cents  int NOT NULL,
-        created_at        timestamptz DEFAULT now()
-      )
-    `);
-    await client.query(`CREATE INDEX IF NOT EXISTS idx_gift_res_item ON gift_reservations(registry_item_id)`);
-    await client.query(`CREATE INDEX IF NOT EXISTS idx_gift_res_status ON gift_reservations(status, expires_at)`);
-
-    // gift_contributions — one row per successful payment
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS gift_contributions (
-        id                    uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-        registry_item_id      uuid NOT NULL REFERENCES gift_registry_items(id),
-        gifter_user_id        uuid NOT NULL,
-        gifter_email          text NOT NULL,
-        quantity              int NOT NULL,
-        quoted_amount_cents   int NOT NULL,
-        executed_amount_cents int,
-        fee_cents             int,
-        status                text NOT NULL DEFAULT 'INITIATED' CHECK (status IN (
-          'INITIATED','RESERVED','PAID','EXECUTING','SETTLED','REFUNDED','FAILED','RESERVATION_EXPIRED'
-        )),
-        reservation_id        uuid REFERENCES gift_reservations(id),
-        payment_ref           text,
-        order_ref             text,
-        idempotency_key       text UNIQUE NOT NULL,
-        created_at            timestamptz DEFAULT now()
-      )
-    `);
-    await client.query(`CREATE INDEX IF NOT EXISTS idx_gift_contrib_item ON gift_contributions(registry_item_id)`);
-    await client.query(`CREATE INDEX IF NOT EXISTS idx_gift_contrib_gifter ON gift_contributions(gifter_user_id)`);
-
-    // Notify PostgREST to reload its schema cache so Supabase client can see the new tables
-    await client.query(`NOTIFY pgrst, 'reload schema'`);
-    console.log('[gift-registry] Local DB tables ready');
-  } catch (e) {
-    console.error('[gift-registry] Local DB migration error:', e.message);
-  } finally {
-    client.release();
+  if (!supabaseAdmin) {
+    console.warn('[gift-registry] No supabaseAdmin client — skipping health check');
+    return;
   }
 
-  // Health-check: confirm gift_events also exists in Supabase (where REST routes write to)
-  if (supabaseAdmin) {
-    const { error: tableCheck } = await supabaseAdmin
+  try {
+    const { data, error: tableCheck } = await supabaseAdmin
       .from('gift_events')
       .select('id')
       .limit(1);
+
     if (tableCheck) {
       console.error(
-        '\n⚠️  [gift-registry] gift_events table NOT found in Supabase (error:', tableCheck.message, ')' +
-        '\n   Gift registry CREATE / LIST will fail with "Not Found" until the schema is applied.' +
-        '\n   Fix: run  supabase-gift-registry-schema.sql  in your Supabase Dashboard → SQL Editor.\n'
+        '\n⚠️  [gift-registry] gift_events table NOT found in Supabase!' +
+        '\n   Error code:', tableCheck.code, '| message:', tableCheck.message,
+        '\n   Gift registry CREATE / LIST will fail until the schema is applied.' +
+        '\n   Fix: run supabase-gift-registry-schema.sql in your Supabase Dashboard → SQL Editor.\n'
       );
     } else {
-      console.log('[gift-registry] Supabase gift_events table confirmed ✓');
+      console.log(`[gift-registry] Supabase gift_events confirmed ✓ (${data?.length ?? 0} sample row(s))`);
     }
+  } catch (e) {
+    console.error('[gift-registry] Health check threw:', e.message);
   }
 }
 
@@ -230,8 +144,12 @@ function registerGiftRegistryRoutes(app, supabaseAdmin, pgPool) {
       if (!user) return res.status(401).json({ error: 'Unauthorized' });
 
       const { occasion, customOccasion, beneficiaryType, beneficiaryDisplayName, title, eventDate, expiryAt, message } = req.body;
+      console.log(`[gift-registry] CREATE: user=${user.id} occasion=${occasion} beneficiaryType=${beneficiaryType} title=${title} eventDate=${eventDate} expiryAt=${expiryAt}`);
+
       if (!occasion || !beneficiaryType || !beneficiaryDisplayName || !title || !eventDate || !expiryAt) {
-        return res.status(400).json({ error: 'Missing required fields' });
+        const missing = ['occasion','beneficiaryType','beneficiaryDisplayName','title','eventDate','expiryAt'].filter(k => !req.body[k]);
+        console.warn(`[gift-registry] CREATE: missing fields: ${missing.join(', ')}`);
+        return res.status(400).json({ error: 'Missing required fields', missing });
       }
 
       const { data: registry, error } = await supabaseAdmin
@@ -251,7 +169,11 @@ function registerGiftRegistryRoutes(app, supabaseAdmin, pgPool) {
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error(`[gift-registry] CREATE: Supabase insert error code=${error.code} message=${error.message}`);
+        throw error;
+      }
+      console.log(`[gift-registry] CREATE: success registryId=${registry.id} title=${registry.title}`);
       return res.json({ success: true, registry });
     } catch (e) {
       console.error('[gift-registry] create error:', e.message);
@@ -271,28 +193,37 @@ function registerGiftRegistryRoutes(app, supabaseAdmin, pgPool) {
         .eq('creator_user_id', user.id)
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        console.error(`[gift-registry] my-registries: Supabase error code=${error.code} msg=${error.message}`);
+        throw error;
+      }
 
       const registries = data || [];
+      console.log(`[gift-registry] my-registries: user=${user.id} found=${registries.length} registries`);
 
       // Enrich all items across all registries with logo_url in one query
       // Separate real ISINs (SHARE/ETF) from strategy UUIDs (BASKET)
       const allItems = registries.flatMap(r => r.items || []);
       const shareIsins = [...new Set(allItems.filter(i => i.instrument_type !== 'BASKET').map(i => i.isin))];
       const basketStrategyIds = [...new Set(allItems.filter(i => i.instrument_type === 'BASKET').map(i => i.isin))];
+      console.log(`[gift-registry] my-registries: allItems=${allItems.length} shares=${shareIsins.length} baskets=${basketStrategyIds.length}`);
+      if (basketStrategyIds.length) console.log(`[gift-registry] my-registries: basketIds=${JSON.stringify(basketStrategyIds)}`);
 
       let secMap = {};
       if (shareIsins.length) {
         const { data: securities } = await supabaseAdmin
           .from('securities_c').select('isin, name, logo_url').in('isin', shareIsins);
         secMap = Object.fromEntries((securities || []).map(s => [s.isin, s]));
+        console.log(`[gift-registry] my-registries: secMap resolved=${Object.keys(secMap).length}/${shareIsins.length}`);
       }
 
       // Enrich strategy baskets from strategies_c
       let strategyMap = {};
       if (basketStrategyIds.length) {
-        const { data: strategies } = await supabaseAdmin
+        const { data: strategies, error: stratErr } = await supabaseAdmin
           .from('strategies_c').select('id, name, holdings').in('id', basketStrategyIds);
+        if (stratErr) console.error(`[gift-registry] my-registries: strategies_c error=${stratErr.message}`);
+        console.log(`[gift-registry] my-registries: strategies found=${strategies?.length ?? 0} ids=${strategies?.map(s => s.id+':'+s.name).join(',')}`);
         // For each strategy, also fetch holding logos
         const allTickers = (strategies || []).flatMap(s => (s.holdings || []).map(h => h.ticker || h.symbol || h).filter(Boolean));
         const uniqueTickers = [...new Set(allTickers)];
@@ -308,6 +239,7 @@ function registerGiftRegistryRoutes(app, supabaseAdmin, pgPool) {
             .slice(0, 5);
           return [s.id, { name: s.name, holdingsSnap }];
         }));
+        console.log(`[gift-registry] my-registries: strategyMap keys=${Object.keys(strategyMap).join(',')}`);
       }
 
       const userMeta = user.user_metadata || {};
@@ -358,6 +290,8 @@ function registerGiftRegistryRoutes(app, supabaseAdmin, pgPool) {
       const user = await getUser(req, supabaseAdmin);
       if (!user) return res.status(401).json({ error: 'Unauthorized' });
 
+      console.log(`[gift-registry] GET /:id user=${user.id} id=${req.params.id}`);
+
       const { data: registry, error } = await supabaseAdmin
         .from('gift_events')
         .select(`*, items:gift_registry_items(*)`)
@@ -365,13 +299,19 @@ function registerGiftRegistryRoutes(app, supabaseAdmin, pgPool) {
         .eq('creator_user_id', user.id)
         .single();
 
-      if (error || !registry) return res.status(404).json({ error: 'Registry not found' });
+      if (error || !registry) {
+        console.warn(`[gift-registry] GET /:id NOT FOUND id=${req.params.id} sbError=${error?.code}:${error?.message}`);
+        return res.status(404).json({ error: 'Registry not found' });
+      }
+      console.log(`[gift-registry] GET /:id found registry title="${registry.title}" items=${registry.items?.length}`);
 
       // Enrich items — SHARE/ETF from securities_c, BASKET from strategies_c
       if (registry.items?.length) {
         const activeItems = registry.items.filter(i => i.status !== 'REMOVED');
         const shareItems = activeItems.filter(i => i.instrument_type !== 'BASKET');
         const basketItems = activeItems.filter(i => i.instrument_type === 'BASKET');
+        console.log(`[gift-registry] GET /:id enrichment: active=${activeItems.length} shares=${shareItems.length} baskets=${basketItems.length}`);
+        if (basketItems.length) console.log(`[gift-registry] GET /:id basket isins=${JSON.stringify(basketItems.map(i => ({ id: i.id, isin: i.isin, type: i.instrument_type })))}`);
         const enrichedMap = {};
 
         if (shareItems.length) {
@@ -391,8 +331,11 @@ function registerGiftRegistryRoutes(app, supabaseAdmin, pgPool) {
 
         if (basketItems.length) {
           const strategyIds = basketItems.map(i => i.isin);
-          const { data: strategies } = await supabaseAdmin
+          console.log(`[gift-registry] GET /:id BASKET lookup strategyIds=${JSON.stringify(strategyIds)}`);
+          const { data: strategies, error: stratErr } = await supabaseAdmin
             .from('strategies_c').select('id, name, holdings').in('id', strategyIds);
+          if (stratErr) console.error(`[gift-registry] GET /:id strategies_c error: ${stratErr.message}`);
+          console.log(`[gift-registry] GET /:id strategies found=${strategies?.length ?? 0} names=${strategies?.map(s => s.name).join(',')}`);
           const allTickers = (strategies || []).flatMap(s =>
             (s.holdings || []).map(h => h.ticker || h.symbol || h).filter(Boolean)
           );
@@ -405,7 +348,10 @@ function registerGiftRegistryRoutes(app, supabaseAdmin, pgPool) {
 
           basketItems.forEach(item => {
             const strategy = stratMap[item.isin];
-            if (!strategy) { enrichedMap[item.id] = { ...item, name: item.isin }; return; }
+            if (!strategy) {
+              console.warn(`[gift-registry] GET /:id BASKET item isin=${item.isin} NOT found in strategies_c`);
+              enrichedMap[item.id] = { ...item, name: item.isin }; return;
+            }
             const holdings = strategy.holdings || [];
             const holdingsSnapshot = holdings
               .map(h => { const t = h.ticker || h.symbol || String(h); return { symbol: t, name: secBySymbol[t]?.name || t, logo_url: secBySymbol[t]?.logo_url || null }; })
@@ -428,6 +374,7 @@ function registerGiftRegistryRoutes(app, supabaseAdmin, pgPool) {
 
       return res.json({ registry });
     } catch (e) {
+      console.error(`[gift-registry] GET /:id error: ${e.message}`);
       return res.status(500).json({ error: e.message });
     }
   });
@@ -1135,45 +1082,60 @@ function registerGiftRegistryRoutes(app, supabaseAdmin, pgPool) {
 }
 
 // ─── Reservation sweeper cron ─────────────────────────────────────────────────
-// Call this to get the cron function — schedule with cron.schedule('* * * * *', ...)
-// Decision 5: only expires reservations past their OWN expires_at (not event expiry)
+// Uses supabaseAdmin — gift_reservations and gift_registry_items live in Supabase, not local pgPool.
 
-async function sweepExpiredReservations(pgPool) {
-  if (!pgPool) return;
-  const pg = await pgPool.connect();
+async function sweepExpiredReservations(supabaseAdmin) {
+  if (!supabaseAdmin) return;
   try {
-    // Step 1: expire HELD reservations past their TTL
-    const expired = await pg.query(`
-      UPDATE gift_reservations
-         SET status = 'EXPIRED'
-       WHERE status = 'HELD'
-         AND expires_at < now()
-      RETURNING id, registry_item_id, quantity
-    `);
+    // Step 1: find HELD reservations past their TTL
+    const now = new Date().toISOString();
+    const { data: expired, error: fetchErr } = await supabaseAdmin
+      .from('gift_reservations')
+      .select('id, registry_item_id, quantity')
+      .eq('status', 'HELD')
+      .lt('expires_at', now);
 
-    if (expired.rowCount === 0) return;
+    if (fetchErr) {
+      console.error('[gift-registry] sweeper fetch error:', fetchErr.message);
+      return;
+    }
+    if (!expired || expired.length === 0) return;
 
-    // Step 2: return reserved_quantity to each affected item
-    // Group by registry_item_id
+    // Step 2: mark them EXPIRED
+    const ids = expired.map(r => r.id);
+    const { error: updateErr } = await supabaseAdmin
+      .from('gift_reservations')
+      .update({ status: 'EXPIRED' })
+      .in('id', ids);
+
+    if (updateErr) {
+      console.error('[gift-registry] sweeper update error:', updateErr.message);
+      return;
+    }
+
+    // Step 3: return reserved_quantity to each affected item
     const groups = {};
-    for (const row of expired.rows) {
+    for (const row of expired) {
       groups[row.registry_item_id] = (groups[row.registry_item_id] || 0) + row.quantity;
     }
 
     for (const [itemId, qty] of Object.entries(groups)) {
-      await pg.query(`
-        UPDATE gift_registry_items
-           SET reserved_quantity = GREATEST(0, reserved_quantity - $1),
-               updated_at = now()
-         WHERE id = $2
-      `, [qty, itemId]);
+      const { data: item } = await supabaseAdmin
+        .from('gift_registry_items')
+        .select('reserved_quantity')
+        .eq('id', itemId)
+        .single();
+      if (!item) continue;
+      const newQty = Math.max(0, (item.reserved_quantity || 0) - qty);
+      await supabaseAdmin
+        .from('gift_registry_items')
+        .update({ reserved_quantity: newQty, updated_at: now })
+        .eq('id', itemId);
     }
 
-    console.log(`[gift-registry] Released ${expired.rowCount} expired reservation(s)`);
+    console.log(`[gift-registry] Released ${expired.length} expired reservation(s)`);
   } catch (e) {
     console.error('[gift-registry] sweeper error:', e.message);
-  } finally {
-    pg.release();
   }
 }
 

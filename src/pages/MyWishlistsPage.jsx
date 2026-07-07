@@ -3,7 +3,6 @@ import { ArrowLeft, Gift, Plus, Trash2, Link2, Check } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useMyRegistries } from "../lib/useGiftRegistry.js";
 import { getRegistryProgress, REGISTRY_STATUS_META, OCCASION_LABELS, registryShareUrl } from "../lib/giftRegistryUtils.js";
-import GiftRegistryCreateSheet from "../components/GiftRegistryCreateSheet.jsx";
 import { supabaseReady } from "../lib/supabase.js";
 
 // ─── Registry (wishlist) card — pricing-card aesthetic ───────────────────────
@@ -190,9 +189,12 @@ function EmptyState({ onCreate }) {
 // ─── Page ──────────────────────────────────────────────────────────────────────
 export default function MyWishlistsPage({ onBack, onNavigate }) {
   const { registries, loading, reload } = useMyRegistries();
-  const [showCreate, setShowCreate] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
   const [error, setError] = useState(null);
+
+  function openCreate() {
+    if (typeof onNavigate === "function") onNavigate("giftRegistryCreate");
+  }
 
   const totalItems = registries.reduce((t, r) => {
     const active = (r.items || []).filter(i => i.status !== "REMOVED");
@@ -279,7 +281,7 @@ export default function MyWishlistsPage({ onBack, onNavigate }) {
             ))}
           </div>
         ) : registries.length === 0 ? (
-          <EmptyState onCreate={() => setShowCreate(true)} />
+          <EmptyState onCreate={openCreate} />
         ) : (
           <>
             <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide mb-3">
@@ -300,21 +302,11 @@ export default function MyWishlistsPage({ onBack, onNavigate }) {
                   />
                 ))}
               </AnimatePresence>
-              <AddCard onTap={() => setShowCreate(true)} />
+              <AddCard onTap={openCreate} />
             </div>
           </>
         )}
       </div>
-
-      {/* Create sheet */}
-      <GiftRegistryCreateSheet
-        open={showCreate}
-        onClose={() => setShowCreate(false)}
-        onSaved={() => {
-          setShowCreate(false);
-          reload();
-        }}
-      />
     </div>
   );
 }

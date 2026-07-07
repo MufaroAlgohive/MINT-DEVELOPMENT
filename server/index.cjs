@@ -13147,7 +13147,7 @@ app.get('/api/fees-config', async (req, res) => {
 
 // Gift Registry routes + reservation sweeper cron
 registerGiftRegistryRoutes(app, supabaseAdmin, pgPool);
-cron.schedule('* * * * *', () => sweepExpiredReservations(pgPool));
+cron.schedule('* * * * *', () => sweepExpiredReservations(supabaseAdmin));
 console.log('[gift-registry] Reservation sweeper scheduled (every minute)');
 
 // ─── Wishlists ────────────────────────────────────────────────────────────────
