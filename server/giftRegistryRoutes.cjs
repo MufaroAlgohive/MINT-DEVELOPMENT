@@ -112,13 +112,29 @@ async function ensureGiftRegistryTables(pgPool, supabaseAdmin) {
 
     // Notify PostgREST to reload its schema cache so Supabase client can see the new tables
     await client.query(`NOTIFY pgrst, 'reload schema'`);
-    console.log('[gift-registry] All tables ready');
+    console.log('[gift-registry] Local DB tables ready');
   } catch (e) {
-    console.error('[gift-registry] Migration error:', e.message);
+    console.error('[gift-registry] Local DB migration error:', e.message);
   } finally {
     client.release();
   }
 
+  // Health-check: confirm gift_events also exists in Supabase (where REST routes write to)
+  if (supabaseAdmin) {
+    const { error: tableCheck } = await supabaseAdmin
+      .from('gift_events')
+      .select('id')
+      .limit(1);
+    if (tableCheck) {
+      console.error(
+        '\n⚠️  [gift-registry] gift_events table NOT found in Supabase (error:', tableCheck.message, ')' +
+        '\n   Gift registry CREATE / LIST will fail with "Not Found" until the schema is applied.' +
+        '\n   Fix: run  supabase-gift-registry-schema.sql  in your Supabase Dashboard → SQL Editor.\n'
+      );
+    } else {
+      console.log('[gift-registry] Supabase gift_events table confirmed ✓');
+    }
+  }
 }
 
 // ─── Auth helper ─────────────────────────────────────────────────────────────

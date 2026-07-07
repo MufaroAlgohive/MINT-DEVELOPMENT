@@ -1,93 +1,22 @@
 import React, { useState } from "react";
-import { ArrowLeft, Gift, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, Gift, Plus, Trash2, Link2, Check } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useMyRegistries } from "../lib/useGiftRegistry.js";
-import { getRegistryProgress, REGISTRY_STATUS_META, OCCASION_LABELS } from "../lib/giftRegistryUtils.js";
+import { getRegistryProgress, REGISTRY_STATUS_META, OCCASION_LABELS, registryShareUrl } from "../lib/giftRegistryUtils.js";
 import GiftRegistryCreateSheet from "../components/GiftRegistryCreateSheet.jsx";
 import { supabaseReady } from "../lib/supabase.js";
 
-// ─── Sparkline bar chart ──────────────────────────────────────────────────────
-// One bar per item (capped at 7); height = funded %. Violet-themed, high-contrast.
-function RegistryBars({ items }) {
-  // Colours match the reference card's visual rhythm adapted to MINT violet palette:
-  // full = deep violet (like reference lime), partial = medium violet (like reference lime-deep),
-  // empty = light gray (like reference mist), accent = near-black (like reference ink bar)
-  const C = {
-    full:    "#6d28d9",
-    partial: "#8b5cf6",
-    empty:   "#ddd6fe",
-    muted:   "#c4b5fd",
-    ink:     "#1e1b4b",
-    ghost:   "#e5e7eb",
-  };
-
-  let bars;
-  if (items.length === 0) {
-    // Decorative placeholder matching the reference bar rhythm exactly
-    bars = [
-      { h: 28, c: C.ghost  },
-      { h: 42, c: C.ghost  },
-      { h: 68, c: C.empty  },
-      { h: 100,c: C.empty  },
-      { h: 55, c: C.muted  },
-      { h: 38, c: C.ink    },
-      { h: 82, c: C.full   },
-    ];
-  } else {
-    bars = items.slice(0, 7).map(item => {
-      const pct = item.target_quantity > 0
-        ? (item.filled_quantity ?? 0) / item.target_quantity
-        : 0;
-      const h = Math.max(10, Math.round(pct * 100));
-      const c = pct >= 1 ? C.full : pct > 0 ? C.partial : C.empty;
-      return { h, c };
-    });
-    // Pad to at least 5 bars (deterministic heights)
-    const PAD = [{ h: 22, c: C.ghost }, { h: 38, c: C.muted }, { h: 18, c: C.ghost }, { h: 55, c: C.empty }, { h: 30, c: C.ghost }];
-    while (bars.length < 5) bars.push(PAD[bars.length]);
-  }
-
-  return (
-    <div
-      className="flex items-end gap-[3px]"
-      style={{ height: 56, flex: 1, maxWidth: 96 }}
-      aria-hidden="true"
-    >
-      {bars.map((bar, i) => (
-        <div
-          key={i}
-          className="flex-1 rounded-[3px]"
-          style={{ height: `${bar.h}%`, background: bar.c, minHeight: 6 }}
-        />
-      ))}
-    </div>
-  );
-}
-
-// ─── Registry (wishlist) card — KPI tile aesthetic ────────────────────────────
+// ─── Registry (wishlist) card — pricing-card aesthetic ───────────────────────
 function RegistryCard({ registry, onTap, onDelete, deletingId }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [copied, setCopied] = useState(false);
   const items = (registry.items || []).filter(i => i.status !== "REMOVED");
   const progress = getRegistryProgress(items);
-  const meta = REGISTRY_STATUS_META[registry.status] || REGISTRY_STATUS_META.DRAFT;
   const occasionLabel = registry.occasion
     ? (OCCASION_LABELS[registry.occasion] ?? registry.occasion)
     : "Gift";
   const isDeleting = deletingId === registry.id;
-
-  // Funding badge colour — green when fully funded, violet otherwise
-  const isFunded = progress.percent >= 100 && items.length > 0;
-  const badgeStyle = isFunded
-    ? { background: "#d1fae5", color: "#059669" }
-    : registry.status === "ACTIVE"
-    ? { background: "#ede9fe", color: "#7c3aed" }
-    : { background: "#f1f5f9", color: "#64748b" };
-
-  const badgeLabel = items.length === 0
-    ? "New"
-    : isFunded
-    ? "Funded ✓"
-    : `${progress.percent}%`;
+  const hasShareLink = !!registry.share_token && ["ACTIVE", "PAUSED"].includes(registry.status);
 
   function handleDeleteTap(e) {
     e.stopPropagation();
@@ -99,86 +28,39 @@ function RegistryCard({ registry, onTap, onDelete, deletingId }) {
     }
   }
 
+  async function handleShareLink(e) {
+    e.stopPropagation();
+    if (hasShareLink) {
+      try {
+        await navigator.clipboard.writeText(registryShareUrl(registry.share_token));
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      } catch {
+        // fallback: open in new tab
+        window.open(registryShareUrl(registry.share_token), "_blank");
+      }
+    } else {
+      // DRAFT — navigate to detail to publish
+      onTap(registry);
+    }
+  }
+
+  const subtitleText = items.length === 0
+    ? `${occasionLabel} · no items yet`
+    : `${occasionLabel} · ${items.length} ${items.length === 1 ? "item" : "items"}`;
+
   return (
     <motion.div
       layout
-      className="relative rounded-2xl bg-white overflow-hidden"
-      style={{
-        border: "1px solid #e8edf2",
-        boxShadow: "0 1px 0 rgba(11,16,21,0.04), 0 1px 3px rgba(11,16,21,0.06)",
-      }}
+      className="relative flex flex-col bg-white rounded-3xl"
+      style={{ border: "1px solid #e8edf2" }}
     >
-      {/* Tappable body — padding matches reference: 20px sides, 20px top, 24px bottom */}
-      <button
-        onClick={() => !confirmDelete && onTap(registry)}
-        className="w-full text-left flex flex-col gap-4 active:bg-slate-50 transition-colors"
-        style={{ padding: "20px 24px 24px" }}
-      >
-        {/* ── Head: occasion / status label ── */}
-        <div className="flex items-center justify-between gap-3">
-          <span
-            className="truncate"
-            style={{
-              fontFamily: "ui-monospace, monospace",
-              fontSize: 12,
-              color: "#8b9aad",
-              letterSpacing: "0.1em",
-              textTransform: "uppercase",
-            }}
-          >
-            {occasionLabel} / {meta.label}
-          </span>
-          {/* Badge — exact reference sizing: 12px, 600, 4px/10px */}
-          <span
-            style={{
-              fontFamily: "ui-monospace, monospace",
-              fontSize: 12,
-              fontWeight: 600,
-              padding: "4px 10px",
-              borderRadius: 999,
-              flexShrink: 0,
-              ...badgeStyle,
-            }}
-          >
-            {badgeLabel}
-          </span>
-        </div>
-
-        {/* ── Value: registry title — the "big number" equivalent ── */}
-        <div
-          className="font-semibold leading-snug line-clamp-2 text-slate-900"
-          style={{ fontSize: 28, letterSpacing: "-0.015em" }}
-        >
-          {registry.title}
-        </div>
-
-        {/* ── Footer: item count | sparkline ── */}
-        <div className="flex items-end justify-between gap-2">
-          <span
-            style={{
-              fontFamily: "ui-monospace, monospace",
-              fontSize: 12,
-              color: "#8b9aad",
-              lineHeight: 1.5,
-            }}
-          >
-            {items.length === 0
-              ? "No items yet"
-              : `${items.length} ${items.length === 1 ? "item" : "items"} saved`}
-            {progress.total > 0 && progress.percent > 0 && (
-              <><br />{`+${progress.percent}% funded`}</>
-            )}
-          </span>
-          <RegistryBars items={items} />
-        </div>
-      </button>
-
-      {/* Delete — subtle icon in top-right; doesn't compete with the badge */}
+      {/* Delete button — top-right corner */}
       <button
         onClick={handleDeleteTap}
         disabled={isDeleting}
         className={[
-          "absolute bottom-3.5 left-3.5 z-20 flex h-6 w-6 items-center justify-center rounded-full transition-all active:scale-90 disabled:opacity-50",
+          "absolute top-3 right-3 z-20 flex h-6 w-6 items-center justify-center rounded-full transition-all active:scale-90 disabled:opacity-50",
           confirmDelete ? "bg-red-500 shadow-md" : "bg-slate-100 hover:bg-slate-200",
         ].join(" ")}
       >
@@ -189,6 +71,48 @@ function RegistryCard({ registry, onTap, onDelete, deletingId }) {
         )}
       </button>
 
+      {/* Tappable body */}
+      <button
+        onClick={() => !confirmDelete && onTap(registry)}
+        className="flex-1 text-left px-6 pt-8 pb-6 active:opacity-80 transition-opacity"
+      >
+        <div className="grid items-center justify-center w-full grid-cols-1 text-left">
+          {/* Title + subtitle */}
+          <div>
+            <h2 className="text-lg font-medium tracking-tighter text-gray-600 leading-snug line-clamp-2 pr-6">
+              {registry.title}
+            </h2>
+            <p className="mt-2 text-sm text-gray-500">{subtitleText}</p>
+          </div>
+
+          {/* Big number — funded % */}
+          <div className="mt-6">
+            <p>
+              <span className="text-5xl font-light tracking-tight text-black">
+                {progress.percent}
+              </span>
+              <span className="text-base font-medium text-gray-500">% funded</span>
+            </p>
+          </div>
+        </div>
+      </button>
+
+      {/* Share Link button */}
+      <div className="px-6 pb-8">
+        <button
+          onClick={handleShareLink}
+          className="flex items-center justify-center gap-2 w-full px-6 py-2.5 text-center text-white duration-200 bg-black border-2 border-black rounded-full hover:bg-transparent hover:text-black focus:outline-none text-sm"
+        >
+          {copied ? (
+            <><Check size={14} /> Copied!</>
+          ) : hasShareLink ? (
+            <><Link2 size={14} /> Share Link</>
+          ) : (
+            "Publish to Share"
+          )}
+        </button>
+      </div>
+
       {/* Confirm-delete overlay */}
       <AnimatePresence>
         {confirmDelete && (
@@ -196,7 +120,7 @@ function RegistryCard({ registry, onTap, onDelete, deletingId }) {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="absolute inset-0 flex items-center justify-center rounded-2xl pointer-events-none"
+            className="absolute inset-0 flex items-center justify-center rounded-3xl pointer-events-none"
             style={{ background: "rgba(255,255,255,0.88)" }}
           >
             <p className="text-[11px] font-bold text-slate-700 text-center leading-snug">
@@ -342,15 +266,14 @@ export default function MyWishlistsPage({ onBack, onNavigate }) {
       {/* Card grid — max-w-md keeps cards from stretching on desktop */}
       <div className="mx-auto px-4 pt-5 pb-24" style={{ maxWidth: 480 }}>
         {loading && registries.length === 0 ? (
-          <div className="grid grid-cols-2 gap-3">
-            {[1, 2, 3, 4].map(i => (
+          <div className="grid grid-cols-1 gap-4">
+            {[1, 2].map(i => (
               <div
                 key={i}
-                className="rounded-2xl bg-white animate-pulse"
+                className="rounded-3xl bg-white animate-pulse"
                 style={{
                   border: "1px solid #e8edf2",
-                  height: 150,
-                  boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+                  height: 220,
                 }}
               />
             ))}
@@ -365,7 +288,7 @@ export default function MyWishlistsPage({ onBack, onNavigate }) {
             {error && (
               <p className="text-[11px] font-semibold text-red-500 mb-3">{error}</p>
             )}
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-4">
               <AnimatePresence>
                 {registries.map((registry) => (
                   <RegistryCard
