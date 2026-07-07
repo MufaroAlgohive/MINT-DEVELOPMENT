@@ -1,25 +1,11 @@
 import { supabaseAdmin } from '../../_lib/supabase.js';
 
-async function enrichContributionsWithGifterNames(contributions) {
+function sanitizeContributions(contributions) {
   if (!contributions?.length) return contributions;
-  const uniqueIds = [...new Set(contributions.map(c => c.gifter_user_id).filter(Boolean))];
-  const nameMap = {};
-  await Promise.all(uniqueIds.map(async (uid) => {
-    try {
-      const { data } = await supabaseAdmin.auth.admin.getUserById(uid);
-      const u = data?.user;
-      const fullName =
-        u?.user_metadata?.full_name ||
-        u?.user_metadata?.name ||
-        [u?.user_metadata?.first_name, u?.user_metadata?.last_name].filter(Boolean).join(' ') ||
-        '';
-      nameMap[uid] = { name: fullName };
-    } catch { nameMap[uid] = { name: '' }; }
-  }));
+  // Public endpoint — return only non-identifying fields; no names, emails, or user IDs.
   return contributions.map(c => ({
     id: c.id,
     registry_item_id: c.registry_item_id,
-    gifter_name: nameMap[c.gifter_user_id]?.name || '',
     quantity: c.quantity,
     status: c.status,
     created_at: c.created_at,
@@ -77,7 +63,7 @@ export default async function handler(req, res) {
           .in('status', ['PAID', 'EXECUTING', 'SETTLED'])
           .order('created_at', { ascending: false });
 
-        const enriched = await enrichContributionsWithGifterNames(contributions || []);
+        const enriched = sanitizeContributions(contributions || []);
 
         // Attach contributions to their items and also expose a flat list
         const contribsByItem = {};

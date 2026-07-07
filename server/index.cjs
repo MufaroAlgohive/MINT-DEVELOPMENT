@@ -9287,8 +9287,9 @@ async function ensureFamilyMembersTablePg() {
 ensureFamilyMembersTable();
 ensureGiftRegistryTables(pgPool, supabaseAdmin);
 
-// Drop gift-registry columns that were defined in schema but never populated
-if (pgPool) {
+// Drop gift-registry columns that were defined in schema but never populated.
+// Guarded by SCHEMA_CLEANUP=true to prevent accidental data loss on every startup.
+if (pgPool && process.env.SCHEMA_CLEANUP === 'true') {
   pgPool.query('ALTER TABLE gift_events DROP COLUMN IF EXISTS beneficiary_ref')
     .then(() => console.log('[gift-registry] dropped unused column: gift_events.beneficiary_ref'))
     .catch(() => {}); // table may not exist yet on first run
