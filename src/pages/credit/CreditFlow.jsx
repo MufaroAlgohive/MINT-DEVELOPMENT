@@ -465,6 +465,19 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
       // Never route an application with no contactable number — the lender intake
       // rejects it. Prompt for it inline instead (finally clears the loader).
       if (!borrowerPhone) { setNeedPhone(true); return; }
+      // Bureau result forwarded to the lender (informational, so their reviewer
+      // can see MINT's bureau score). Field names match EXACTLY what the lender
+      // reads: creditScore / scoreBand / riskCategory / enquiriesLast12Months /
+      // pulledAt / raw. Sent as `bureau` and mirrored to `creditProfile` (the
+      // shape AlgoLend stores on the quote request). Omitted when no score yet.
+      const bureau = (Number.isFinite(Number(score)) && Number(score) > 0)
+        ? {
+            creditScore: Number(score),
+            scoreBand: scoreBand || bandFor(Number(score)),
+            riskCategory: scoreBand || bandFor(Number(score)),
+            pulledAt: creditAt || undefined,
+          }
+        : null;
       const res = await fetch(`${ALGOLEND_URL}/api/marketplace/evaluate`, {
         method: "POST",
         headers: {
@@ -483,6 +496,8 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
           requestedAmount: Number(app.requested_amount),
           termMonths: Number(app.requested_term_months),
           mintUserId: email,
+          bureau,
+          creditProfile: bureau,
         }),
       });
       const data = await res.json();
@@ -499,7 +514,7 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
     } finally {
       setAlgolendLoading(false);
     }
-  }, [score, profile, monthlyIncome, idOnFile, idNumber, phoneOnFile, phone]);
+  }, [score, scoreBand, creditAt, profile, monthlyIncome, idOnFile, idNumber, phoneOnFile, phone]);
 
   // Save the number entered on the offers step's last-resort prompt, then retry
   // the evaluation so offers load with the borrower now fully contactable.
