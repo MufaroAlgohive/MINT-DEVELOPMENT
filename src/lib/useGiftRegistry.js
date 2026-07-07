@@ -79,7 +79,17 @@ export function usePublicRegistry(token) {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/gift-registry/public/${token}`);
+      // Include auth header when logged in — server uses it to record the view
+      // in gift_registry_views for nudge eligibility tracking.
+      const headers = {};
+      try {
+        const { supabase } = await supabaseReady();
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.access_token) {
+          headers['Authorization'] = `Bearer ${session.access_token}`;
+        }
+      } catch {}
+      const res = await fetch(`/api/gift-registry/public/${token}`, { headers });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Wishlist not found");
       setRegistry(json.registry);

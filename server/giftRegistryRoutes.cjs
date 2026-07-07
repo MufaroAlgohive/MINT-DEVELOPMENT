@@ -855,7 +855,7 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
       // Check if all items are FILLED — mark registry COMPLETED
       const { data: allItems } = await supabaseAdmin
         .from('gift_registry_items')
-        .select('id, status, name, isin')
+        .select('id, status, isin')
         .eq('gift_event_id', registryId)
         .neq('status', 'REMOVED');
 
