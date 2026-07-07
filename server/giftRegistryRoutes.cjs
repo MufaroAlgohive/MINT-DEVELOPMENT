@@ -996,7 +996,7 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
           .from('notifications')
           .select('id, created_at')
           .eq('user_id', targetUserId)
-          .eq('type', 'WISHLIST_SHARE')
+          .eq('type', 'investment')
           .filter('payload->>registry_id', 'eq', registryId)
           .order('created_at', { ascending: false })
           .limit(1)
@@ -1057,7 +1057,7 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
           user_id: targetUserId,
           title: notifTitle,
           body: notifBody,
-          type: 'WISHLIST_SHARE',
+          type: 'investment',
           payload: {
             action: 'OPEN_GIFT_REGISTRY',
             registry_id: registryId,
