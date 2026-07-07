@@ -413,12 +413,13 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
       try {
         const itemIds = (registry.items || []).map(i => i.id).filter(Boolean);
         if (itemIds.length > 0) {
-          const { data: contribs } = await supabaseAdmin
+          const { data: contribs, error: contribFetchErr } = await supabaseAdmin
             .from('gift_contributions')
-            .select('id, registry_item_id, gifter_user_id, gifter_email, quantity, quoted_amount_cents, executed_amount_cents, fee_cents, status, gifter_message, created_at')
+            .select('id, registry_item_id, gifter_user_id, gifter_email, quantity, quoted_amount_cents, executed_amount_cents, fee_cents, status, created_at')
             .in('registry_item_id', itemIds)
             .eq('status', 'PAID')
             .order('created_at', { ascending: false });
+          if (contribFetchErr) console.warn('[gift-registry] public: contributions query error:', contribFetchErr.message);
 
           if (contribs && contribs.length > 0) {
             // Enrich with gifter names from profiles

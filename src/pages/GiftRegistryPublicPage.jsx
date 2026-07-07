@@ -382,11 +382,6 @@ export default function GiftRegistryPublicPage({
                           </span>
                         </div>
                       </div>
-                      {c.gifter_message && (
-                        <p className="mt-3 text-xs text-slate-500 italic border-t border-slate-100 pt-2">
-                          "{c.gifter_message}"
-                        </p>
-                      )}
                     </div>
                   );
                 })}
