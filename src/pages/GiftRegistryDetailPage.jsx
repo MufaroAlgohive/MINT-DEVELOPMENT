@@ -250,6 +250,7 @@ export default function GiftRegistryDetailPage({ registryId, onNavigate, onBack 
   const { contributions } = useRegistryContributions(registryId);
   const [showShare, setShowShare] = useState(false);
   const [publishLoading, setPublishLoading] = useState(false);
+  const [publishedToken, setPublishedToken] = useState(null); // share_token from publish response, before reload settles
 
   useGiftRegistryRealtime(registryId, () => reload());
 
@@ -294,6 +295,10 @@ export default function GiftRegistryDetailPage({ registryId, onNavigate, onBack 
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Could not publish wishlist");
+      // Capture the share_token immediately from the API response so the
+      // popup can open before the reload() re-fetch settles.
+      const newToken = json.registry?.share_token;
+      if (newToken) setPublishedToken(newToken);
       reload();
       setShowShare(true);
     } catch (e) {
@@ -376,6 +381,22 @@ export default function GiftRegistryDetailPage({ registryId, onNavigate, onBack 
           </div>
         )}
 
+        {/* Share CTA — shown prominently when registry is published */}
+        {registry?.share_token && ["ACTIVE", "PAUSED"].includes(registry?.status) && (
+          <button
+            onClick={() => setShowShare(true)}
+            className="w-full flex items-center justify-between gap-3 rounded-2xl bg-[#6B21A8] px-5 py-4 text-white active:opacity-80 transition-opacity"
+          >
+            <div className="text-left">
+              <p className="text-sm font-bold leading-tight">Share your wishlist</p>
+              <p className="text-[11px] text-purple-200 mt-0.5">Send the link to friends &amp; family</p>
+            </div>
+            <svg className="w-5 h-5 shrink-0 text-purple-200" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+            </svg>
+          </button>
+        )}
+
         {/* Contributions */}
         {contributions.length > 0 && (
           <div>
@@ -428,12 +449,12 @@ export default function GiftRegistryDetailPage({ registryId, onNavigate, onBack 
         )}
       </div>
 
-      {showShare && registry?.share_token && (
+      {showShare && (publishedToken || registry?.share_token) && (
         <GiftRegistrySharePopup
-          token={registry.share_token}
-          title={registry.title}
+          token={publishedToken || registry.share_token}
+          title={registry?.title}
           registryId={registryId}
-          onClose={() => setShowShare(false)}
+          onClose={() => { setShowShare(false); setPublishedToken(null); }}
           onNavigate={onNavigate}
         />
       )}
