@@ -125,10 +125,26 @@ async function enrichItems(items, supabaseAdmin) {
 
   if (basketItems.length) {
     const strategyIds = basketItems.map(i => i.isin);
-    const { data: strategies } = await supabaseAdmin
+
+    // Only select columns that actually exist in strategies_c.
+    // r_ytd / ytd_as_of_date live in strategies_returns_c — fetched separately below.
+    const { data: strategies, error: stratErr } = await supabaseAdmin
       .from('strategies_c')
-      .select('id, name, short_name, holdings, tags, risk_level, r_ytd, ytd_as_of_date, objective, is_featured, min_investment')
+      .select('id, name, short_name, holdings, tags, risk_level, objective, is_featured, min_investment')
       .in('id', strategyIds);
+    if (stratErr) console.warn('[gift-registry] enrichItems strategies_c error:', stratErr.message);
+
+    // Fetch latest YTD return per strategy from the returns table
+    const { data: returnsRows } = await supabaseAdmin
+      .from('strategies_returns_c')
+      .select('strategy_id, as_of_date, ytd_pct')
+      .in('strategy_id', strategyIds)
+      .order('as_of_date', { ascending: false });
+    const latestReturn = {};
+    for (const row of (returnsRows || [])) {
+      if (!latestReturn[row.strategy_id]) latestReturn[row.strategy_id] = row;
+    }
+
     const allTickers = (strategies || []).flatMap(s =>
       (s.holdings || []).map(h => h.ticker || h.symbol || h).filter(Boolean)
     );
@@ -142,21 +158,25 @@ async function enrichItems(items, supabaseAdmin) {
     basketItems.forEach(item => {
       const strategy = stratMap[item.isin];
       if (!strategy) { enrichedMap[item.id] = { ...item, name: item.isin }; return; }
-      const holdings = strategy.holdings || [];
+      const holdings = Array.isArray(strategy.holdings) ? strategy.holdings : [];
       const holdingsSnapshot = holdings
         .map(h => { const t = h.ticker || h.symbol || String(h); return { symbol: t, name: secBySymbol[t]?.name || t, logo_url: secBySymbol[t]?.logo_url || null }; })
         .sort((a, b) => (b.logo_url ? 1 : 0) - (a.logo_url ? 1 : 0))
         .slice(0, 5);
 
-      // Recalculate live price from current holdings prices (same formula as item creation)
+      // Live price: sum(shares × last_price_cents) matching calculateMinInvestmentSync logic.
+      // last_price is in cents; display layer applies /100 × 1.08 for the Rand figure.
       const livePriceCents = holdings.reduce((sum, h) => {
         const ticker = h.ticker || h.symbol || String(h);
-        return sum + (secBySymbol[ticker]?.last_price || 0);
+        const shares = Number(h.shares || h.quantity || 1);
+        return sum + shares * (secBySymbol[ticker]?.last_price || 0);
       }, 0);
-      // Fall back to stored DB min_investment (in cents) if live calc has no data
+      // Fall back to stored DB min_investment (in cents) if live data is unavailable
       const effectivePriceCents = livePriceCents > 0
         ? livePriceCents
         : (strategy.min_investment || item.price_snapshot_cents || 0);
+
+      const ret = latestReturn[strategy.id];
 
       enrichedMap[item.id] = {
         ...item,
@@ -168,8 +188,8 @@ async function enrichItems(items, supabaseAdmin) {
         price_snapshot_cents: effectivePriceCents,
         tags: strategy.tags,
         risk_level: strategy.risk_level,
-        r_ytd: strategy.r_ytd,
-        ytd_as_of_date: strategy.ytd_as_of_date,
+        r_ytd: ret ? ret.ytd_pct / 100 : null,
+        ytd_as_of_date: ret?.as_of_date || null,
         objective: strategy.objective,
         is_featured: strategy.is_featured,
       };
