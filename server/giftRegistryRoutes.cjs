@@ -945,25 +945,29 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
   app.post('/api/gift-registry/:id/notify-beneficiary', async (req, res) => {
     try {
       const user = await getUser(req, supabaseAdmin);
+      console.log('[notify-beneficiary] step1 auth: user=', user?.id || 'NONE');
       if (!user) return res.status(401).json({ error: 'Unauthorized' });
 
       const registryId = req.params.id;
       const { email, firstName, isNudge } = req.body;
+      console.log('[notify-beneficiary] step2 params: registryId=', registryId, 'email=', email, 'isNudge=', isNudge);
       if (!email) return res.status(400).json({ error: 'Missing email' });
 
       // Verify caller owns this registry
-      const { data: registry } = await supabaseAdmin
+      const { data: registry, error: regErr } = await supabaseAdmin
         .from('gift_events')
         .select('id, title, creator_user_id, share_token, occasion')
         .eq('id', registryId)
         .eq('creator_user_id', user.id)
         .single();
+      console.log('[notify-beneficiary] step3 registry:', registry?.id || 'NOT FOUND', 'err:', regErr?.message);
 
       if (!registry) return res.status(403).json({ error: 'Wishlist not found or not yours' });
 
       // Look up target user by email via Supabase admin REST API
       const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
       const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+      console.log('[notify-beneficiary] step4 lookup: supabaseUrl set=', !!supabaseUrl, 'serviceKey set=', !!serviceKey);
       let targetUserId = null;
 
       if (supabaseUrl && serviceKey) {
@@ -974,29 +978,32 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
           );
           const lookupJson = await lookupRes.json();
           const found = lookupJson?.users?.[0];
+          console.log('[notify-beneficiary] step4 lookup result: found=', !!found, 'id=', found?.id || 'none', 'total=', lookupJson?.total);
           if (found?.id) targetUserId = found.id;
         } catch (lookupErr) {
-          console.error('[gift-registry] notify-beneficiary: email lookup failed:', lookupErr.message);
+          console.error('[notify-beneficiary] step4 email lookup failed:', lookupErr.message);
         }
       }
 
       if (!targetUserId) {
+        console.log('[notify-beneficiary] step4 no Mint account for email:', email);
         return res.status(200).json({ sent: false, has_account: false, reason: 'no_mint_account' });
       }
 
       // Do not notify yourself
       if (targetUserId === user.id) {
+        console.log('[notify-beneficiary] step5 self-notify blocked');
         return res.status(400).json({ error: 'Cannot notify yourself' });
       }
+      console.log('[notify-beneficiary] step5 targetUserId=', targetUserId);
 
-      // Compute beneficiary notification state server-side (authoritative)
-      // Nudge eligibility is checked against gift_registry_views (has the beneficiary viewed the registry?)
+      // Check existing notification state
       const [notifResult, viewResult] = await Promise.all([
         supabaseAdmin
           .from('notifications')
           .select('id, created_at')
           .eq('user_id', targetUserId)
-          .eq('type', 'investment')
+          .eq('type', 'system')
           .filter('payload->>registry_id', 'eq', registryId)
           .order('created_at', { ascending: false })
           .limit(1)
@@ -1011,19 +1018,14 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
 
       const existingNotif = notifResult.data;
       const hasViewed = !!viewResult.data;
+      console.log('[notify-beneficiary] step6 existingNotif=', !!existingNotif, 'hasViewed=', hasViewed, 'notifErr=', notifResult.error?.message);
 
-      let notifState = 'none'; // 'none' | 'sent' | 'nudge'
+      let notifState = 'none';
       if (existingNotif) {
         const diffH = (Date.now() - new Date(existingNotif.created_at).getTime()) / 3_600_000;
-        if (diffH < 24) {
-          notifState = 'sent'; // sent < 24h ago — too soon
-        } else if (diffH < 48) {
-          notifState = 'sent'; // 24–48h grace period — still too soon
-        } else if (!hasViewed) {
-          notifState = 'nudge'; // ≥ 48h, has not opened the wishlist — eligible for nudge
-        } else {
-          notifState = 'none'; // ≥ 48h and has viewed the registry — allow fresh resend
-        }
+        if (diffH < 48) notifState = 'sent';
+        else if (!hasViewed) notifState = 'nudge';
+        else notifState = 'none';
       }
 
       if (notifState === 'sent') {
@@ -1040,6 +1042,7 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
       const senderName = senderMeta.first_name
         ? `${senderMeta.first_name} ${senderMeta.last_name || ''}`.trim()
         : (senderEmail.split('@')[0] || 'Someone');
+      console.log('[notify-beneficiary] step7 senderName=', senderName);
 
       const OCCASION_EMOJI = { BIRTHDAY: '🎂', WEDDING: '💍', BABY: '👶', GRADUATION: '🎓', FESTIVE: '🎄', CUSTOM: '🎉' };
       const emoji = OCCASION_EMOJI[registry.occasion] || '🎁';
@@ -1051,13 +1054,14 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
         ? `Don't forget — ${senderName} wants your gift for "${registry.title}"`
         : `"${registry.title}" — gift the shares they actually want`;
 
-      const { error: insertErr } = await supabaseAdmin
+      console.log('[notify-beneficiary] step8 inserting notification: user_id=', targetUserId, 'title=', notifTitle);
+      const { data: insertData, error: insertErr } = await supabaseAdmin
         .from('notifications')
         .insert({
           user_id: targetUserId,
           title: notifTitle,
           body: notifBody,
-          type: 'investment',
+          type: 'system',
           payload: {
             action: 'OPEN_GIFT_REGISTRY',
             registry_id: registryId,
@@ -1066,17 +1070,21 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
             sent_by: user.id,
             is_nudge: !!isNudge,
           },
-        });
+        })
+        .select('id');
+
+      console.log('[notify-beneficiary] step8 insert result: data=', insertData, 'err=', insertErr?.message, 'code=', insertErr?.code, 'details=', insertErr?.details);
 
       if (insertErr) {
-        console.error('[gift-registry] notify-beneficiary: insert error:', insertErr.message);
-        return res.status(500).json({ error: 'Could not send notification' });
+        console.error('[notify-beneficiary] INSERT FAILED:', JSON.stringify(insertErr));
+        return res.status(500).json({ error: 'Could not send notification', detail: insertErr.message });
       }
 
+      console.log('[notify-beneficiary] SUCCESS: notification sent, id=', insertData?.[0]?.id);
       const nowIso = new Date().toISOString();
       return res.json({ sent: true, nudge: !!isNudge, state: 'sent', sentAt: nowIso });
     } catch (e) {
-      console.error('[gift-registry] notify-beneficiary error:', e.message);
+      console.error('[notify-beneficiary] CAUGHT ERROR:', e.message, e.stack);
       return res.status(500).json({ error: e.message });
     }
   });
