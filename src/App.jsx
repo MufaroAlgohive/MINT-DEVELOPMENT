@@ -2972,6 +2972,7 @@ const App = () => {
         <Suspense fallback={<div className="min-h-screen bg-[#f8f9fc]" />}>
           <GiftRegistryPublicPage
             token={giftRegistryNavState.token}
+            context={giftRegistryNavState.context}
             user={profile}
             isKycComplete={onboardingComplete}
             onBack={goBack}

@@ -28,6 +28,7 @@ const OCCASION_EMOJI = {
  */
 export default function GiftRegistryPublicPage({
   token,
+  context,
   user,
   isKycComplete,
   onAuthPrompt,
@@ -176,6 +177,30 @@ export default function GiftRegistryPublicPage({
       {shareToast && (
         <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 bg-slate-800 text-white text-sm rounded-full px-5 py-2.5 shadow-lg">
           Link copied!
+        </div>
+      )}
+
+      {/* ── Context banner — tells you immediately what you're looking at ── */}
+      {context === "gift_received" && (
+        <div className="mx-5 mt-4 rounded-2xl bg-[#6B21A8] px-5 py-4 shadow-md">
+          <p className="text-[11px] font-bold text-purple-200 uppercase tracking-widest mb-1">🎁 You received a gift</p>
+          <p className="text-[15px] font-bold text-white leading-snug">
+            Someone gifted you from this wishlist
+          </p>
+          <p className="text-[13px] text-purple-200 mt-1">
+            Scroll down to see the gift history and what was sent to you.
+          </p>
+        </div>
+      )}
+      {context === "shared_wishlist" && (
+        <div className="mx-5 mt-4 rounded-2xl bg-violet-50 border-2 border-violet-200 px-5 py-4">
+          <p className="text-[11px] font-bold text-violet-400 uppercase tracking-widest mb-1">🛍️ You're invited to gift</p>
+          <p className="text-[15px] font-bold text-violet-900 leading-snug">
+            Browsing {registry?.beneficiary_display_name || "their"}'s wishlist
+          </p>
+          <p className="text-[13px] text-violet-500 mt-1">
+            Browse the items below and gift shares they actually want.
+          </p>
         </div>
       )}
 

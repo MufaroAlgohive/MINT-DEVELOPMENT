@@ -106,7 +106,11 @@ const NotificationThreadView = ({ notification, onBack, onDelete, onNavigate }) 
   const { icon }       = getNotificationIcon(notification.type);
   const IconComp       = ICON_MAP[icon] || Info;
   const occasion       = notification.payload?.occasion;
+  const registryTitle  = notification.payload?.registry_title || notification.title?.match(/"([^"]+)"/)?.[1] || "";
+  const itemCount      = notification.payload?.item_count;
   const endRef         = useRef(null);
+
+  const navContext = isGiftReceived ? "gift_received" : "shared_wishlist";
 
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, []);
 
@@ -115,8 +119,7 @@ const NotificationThreadView = ({ notification, onBack, onDelete, onNavigate }) 
 
       {/* ── Header ── */}
       <div className="bg-white border-b border-slate-100 shadow-sm shrink-0 overflow-hidden">
-        {/* type-coloured top bar */}
-        <div className={`h-1 w-full ${style.threadBar}`} />
+        <div className={`h-1.5 w-full ${style.threadBar}`} />
 
         <div className="flex items-center px-4 pt-3 pb-4 gap-3">
           <button
@@ -136,6 +139,17 @@ const NotificationThreadView = ({ notification, onBack, onDelete, onNavigate }) 
               }
             </div>
             <p className="text-[13px] font-semibold text-slate-700 leading-none">{sender}</p>
+            {/* Context subtitle — immediately tells you what's happening */}
+            {isGiftReceived && (
+              <span className="text-[11px] font-bold text-purple-700 bg-purple-50 border border-purple-100 rounded-full px-2.5 py-0.5">
+                🎁 Gifted you
+              </span>
+            )}
+            {isWishlist && !isGiftReceived && (
+              <span className="text-[11px] font-bold text-violet-600 bg-violet-50 border border-violet-100 rounded-full px-2.5 py-0.5">
+                🛍️ Shared their wishlist
+              </span>
+            )}
           </div>
 
           <button
@@ -176,32 +190,38 @@ const NotificationThreadView = ({ notification, onBack, onDelete, onNavigate }) 
           </div>
         </div>
 
-        {/* Wishlist card bubble */}
-        {isWishlist && shareToken && (
+        {/* ── Gift received card — celebration style ── */}
+        {isGiftReceived && shareToken && (
           <div className="flex items-end gap-3">
             <div className="w-8 shrink-0" />
             <button
               type="button"
-              onClick={() => onNavigate?.("giftRegistryPublic", { token: shareToken })}
-              className={`rounded-2xl rounded-bl-sm px-5 py-4 text-left active:scale-95 transition-transform shadow-md max-w-[76%] w-full ${style.pillBg}`}
+              onClick={() => onNavigate?.("giftRegistryPublic", { token: shareToken, context: navContext })}
+              className="bg-[#6B21A8] rounded-2xl rounded-bl-sm px-5 py-5 text-left active:scale-95 transition-transform shadow-lg max-w-[80%] w-full"
             >
-              <div className="flex items-center gap-2 mb-1">
-                <span className="text-xl leading-none">{OCCASION_EMOJI[occasion] || "🎁"}</span>
-                <div className="min-w-0">
-                  <p className={`text-[10px] font-bold uppercase tracking-widest ${style.pillCount}`}>
-                    {isGiftReceived ? "Gift received" : "Wishlist"}
-                  </p>
-                  <p className={`text-[15px] font-bold leading-snug truncate ${style.pillText}`}>
-                    {notification.payload?.registry_title ||
-                      notification.title?.match(/"([^"]+)"/)?.[1] ||
-                      "View Wishlist"}
-                  </p>
-                </div>
+              <p className="text-[11px] font-bold text-purple-200 uppercase tracking-widest mb-2">🎁 You received a gift</p>
+              <p className="text-[17px] font-bold text-white leading-snug mb-1">{registryTitle || "Your Wishlist"}</p>
+              <p className="text-[13px] text-purple-200">Tap to see what was gifted to you →</p>
+            </button>
+          </div>
+        )}
+
+        {/* ── Shared wishlist card — shopping invitation style ── */}
+        {isWishlist && !isGiftReceived && shareToken && (
+          <div className="flex items-end gap-3">
+            <div className="w-8 shrink-0" />
+            <button
+              type="button"
+              onClick={() => onNavigate?.("giftRegistryPublic", { token: shareToken, context: navContext })}
+              className="bg-violet-50 border-2 border-violet-200 rounded-2xl rounded-bl-sm px-5 py-5 text-left active:scale-95 transition-transform shadow-sm max-w-[80%] w-full"
+            >
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-xl">{OCCASION_EMOJI[occasion] || "🎁"}</span>
+                <p className="text-[11px] font-bold text-violet-500 uppercase tracking-widest">Their wishlist</p>
               </div>
-              {notification.payload?.item_count > 0 && (
-                <p className={`text-[12px] mt-1 ${style.pillCount}`}>
-                  {notification.payload.item_count} item{notification.payload.item_count !== 1 ? "s" : ""}
-                </p>
+              <p className="text-[17px] font-bold text-violet-900 leading-snug mb-1">{registryTitle || "Browse their wishlist"}</p>
+              {itemCount > 0 && (
+                <p className="text-[13px] text-violet-500">{itemCount} item{itemCount !== 1 ? "s" : ""} · Tap to browse and gift →</p>
               )}
             </button>
           </div>
@@ -210,15 +230,23 @@ const NotificationThreadView = ({ notification, onBack, onDelete, onNavigate }) 
         <div ref={endRef} />
       </div>
 
-      {/* ── Bottom CTA ── */}
+      {/* ── Bottom CTA — distinct per scenario ── */}
       <div className="bg-white border-t border-slate-100 px-5 py-4 pb-[max(env(safe-area-inset-bottom),16px)] shrink-0">
-        {isWishlist && shareToken ? (
+        {isGiftReceived && shareToken ? (
           <button
             type="button"
-            onClick={() => onNavigate?.("giftRegistryPublic", { token: shareToken })}
-            className={`w-full ${style.ctaBg} text-white text-[15px] font-semibold py-4 rounded-full shadow-md active:opacity-80 transition-opacity`}
+            onClick={() => onNavigate?.("giftRegistryPublic", { token: shareToken, context: navContext })}
+            className="w-full bg-[#6B21A8] text-white text-[15px] font-semibold py-4 rounded-full shadow-md active:opacity-80 transition-opacity"
           >
-            View Wishlist
+            See Your Gift →
+          </button>
+        ) : isWishlist && shareToken ? (
+          <button
+            type="button"
+            onClick={() => onNavigate?.("giftRegistryPublic", { token: shareToken, context: navContext })}
+            className="w-full bg-violet-600 text-white text-[15px] font-semibold py-4 rounded-full shadow-md active:opacity-80 transition-opacity"
+          >
+            Browse &amp; Gift →
           </button>
         ) : (
           <button
@@ -249,13 +277,14 @@ const NotificationItem = ({ notification, onMarkRead, onDelete, onOpen }) => {
     else if (d < -50) setSwiped(false);
   };
 
-  const unread      = !notification.read_at;
-  const style       = getTypeStyle(notification);
-  const { icon }    = getNotificationIcon(notification.type);
-  const IconComp    = ICON_MAP[icon] || Info;
-  const isWishlist  = notification.payload?.action === "OPEN_GIFT_REGISTRY";
-  const occasion    = notification.payload?.occasion;
-  const sender      = getSender(notification);
+  const unread         = !notification.read_at;
+  const style          = getTypeStyle(notification);
+  const { icon }       = getNotificationIcon(notification.type);
+  const IconComp       = ICON_MAP[icon] || Info;
+  const isWishlist     = notification.payload?.action === "OPEN_GIFT_REGISTRY";
+  const isGiftReceived = isWishlist && !!notification.payload?.gifter_user_id;
+  const occasion       = notification.payload?.occasion;
+  const sender         = getSender(notification);
 
   const handleClick = () => {
     if (swiped) return;
@@ -306,18 +335,23 @@ const NotificationItem = ({ notification, onMarkRead, onDelete, onOpen }) => {
             {notification.title}
           </p>
 
-          {/* Wishlist pill */}
-          {isWishlist && notification.payload?.registry_title && (
-            <div className={`mt-1.5 inline-flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 ${style.pillBg}`}>
-              <span className="text-sm leading-none">{OCCASION_EMOJI[occasion] || "🎁"}</span>
-              <span className={`text-[12px] font-semibold truncate max-w-[140px] ${style.pillText}`}>
+          {/* Gift received — celebration badge */}
+          {isWishlist && isGiftReceived && (
+            <div className="mt-1.5 inline-flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 bg-purple-50 border border-purple-100">
+              <span className="text-sm leading-none">🎁</span>
+              <span className="text-[12px] font-bold text-purple-800">You received a gift</span>
+              <span className="text-[10px] text-purple-400 shrink-0">· tap to see →</span>
+            </div>
+          )}
+
+          {/* Shared wishlist — browse invitation badge */}
+          {isWishlist && !isGiftReceived && notification.payload?.registry_title && (
+            <div className="mt-1.5 inline-flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 bg-violet-50 border border-violet-100">
+              <span className="text-sm leading-none">🛍️</span>
+              <span className={`text-[12px] font-semibold truncate max-w-[120px] text-violet-700`}>
                 {notification.payload.registry_title}
               </span>
-              {notification.payload?.item_count > 0 && (
-                <span className={`text-[10px] shrink-0 ${style.pillCount}`}>
-                  · {notification.payload.item_count} item{notification.payload.item_count !== 1 ? "s" : ""}
-                </span>
-              )}
+              <span className="text-[10px] text-violet-400 shrink-0">· browse &amp; gift →</span>
             </div>
           )}
 
