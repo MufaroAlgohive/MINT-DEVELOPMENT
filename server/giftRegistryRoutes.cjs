@@ -789,6 +789,18 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
         throw contribErr;
       }
 
+      // Best-effort: persist gifter message on contribution record (column added via migration)
+      const { gifterMessage } = req.body;
+      if (gifterMessage && contribution?.id) {
+        supabaseAdmin
+          .from('gift_contributions')
+          .update({ gifter_message: String(gifterMessage).slice(0, 120) })
+          .eq('id', contribution.id)
+          .then(({ error: msgErr }) => {
+            if (msgErr) console.warn('[gift-registry] contribute: gifter_message not stored (run migration to add column):', msgErr.code);
+          });
+      }
+
       // Step 3: Update item quantities now that the contribution record is safely committed.
       // If this update fails the contribution still exists (idempotency key prevents duplicate),
       // and the sweeper will eventually correct reserved_quantity via the CONSUMED reservation.
@@ -950,19 +962,36 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
         return res.status(400).json({ error: 'Cannot notify yourself' });
       }
 
-      // Check for existing notification in the last 24 hours (duplicate guard)
-      const windowStart = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
-      const { data: existing } = await supabaseAdmin
+      // Compute beneficiary notification state server-side (authoritative — not localStorage)
+      const { data: existingNotif } = await supabaseAdmin
         .from('notifications')
         .select('id, created_at, read_at')
         .eq('user_id', targetUserId)
         .eq('type', 'WISHLIST_SHARE')
         .filter('payload->>registry_id', 'eq', registryId)
-        .gte('created_at', windowStart)
+        .order('created_at', { ascending: false })
+        .limit(1)
         .maybeSingle();
 
-      if (existing && !isNudge) {
-        return res.json({ sent: false, reason: 'already_sent' });
+      let notifState = 'none'; // 'none' | 'sent' | 'nudge'
+      if (existingNotif) {
+        const diffH = (Date.now() - new Date(existingNotif.created_at).getTime()) / 3_600_000;
+        if (diffH < 24) {
+          notifState = 'sent'; // sent < 24h ago — too soon
+        } else if (diffH < 48) {
+          notifState = 'sent'; // 24–48h window — still too soon
+        } else if (!existingNotif.read_at) {
+          notifState = 'nudge'; // ≥ 48h, not viewed — eligible for nudge
+        } else {
+          notifState = 'none'; // ≥ 48h and was read — allow fresh send
+        }
+      }
+
+      if (notifState === 'sent') {
+        return res.json({ sent: false, reason: 'already_sent', state: 'sent' });
+      }
+      if (notifState === 'nudge' && !isNudge) {
+        return res.json({ sent: false, reason: 'eligible_nudge', state: 'nudge' });
       }
 
       // Get sender's display name
@@ -1004,7 +1033,8 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
         return res.status(500).json({ error: 'Could not send notification' });
       }
 
-      return res.json({ sent: true, nudge: !!isNudge });
+      const nowIso = new Date().toISOString();
+      return res.json({ sent: true, nudge: !!isNudge, state: 'sent', sentAt: nowIso });
     } catch (e) {
       console.error('[gift-registry] notify-beneficiary error:', e.message);
       return res.status(500).json({ error: e.message });

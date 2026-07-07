@@ -61,9 +61,10 @@ async function upsertBeneficiary({ firstName, lastName, email }) {
 function getBeneficiaryState(email, registryId) {
   const entry = getSentMap(registryId)[email?.toLowerCase()];
   if (!entry) return "none";
+  // Use server-synced 'state' field if present; fall back to time-based for old entries
+  if (entry.state) return entry.state;
   const diffH = (Date.now() - new Date(entry.sentAt).getTime()) / 3_600_000;
   if (diffH < 24) return "sent";
-  if (diffH >= 48 && !entry.read) return "nudge";
   return "sent";
 }
 
@@ -98,6 +99,7 @@ export default function GiftRegistrySharePopup({ token, title, registryId, onClo
     if (sendingFor) return;
     setSendingFor(b.email);
     setSendError(null);
+    const emailKey = b.email.toLowerCase();
     try {
       const session = await (await supabaseReady).auth.getSession();
       const tok = session?.data?.session?.access_token;
@@ -110,8 +112,9 @@ export default function GiftRegistrySharePopup({ token, title, registryId, onClo
       });
       const json = await res.json();
 
-      if (!res.ok) {
-        if (json.has_account === false) {
+      // No Mint account — check both http error AND explicit has_account flag (server returns 200)
+      if (json.has_account === false) {
+        try {
           await fetch("/api/user/invite-beneficiary", {
             method: "POST",
             headers: { "Content-Type": "application/json", Authorization: `Bearer ${tok}` },
@@ -122,19 +125,39 @@ export default function GiftRegistrySharePopup({ token, title, registryId, onClo
               registry_url: url,
             }),
           });
-          const map = getSentMap(registryId);
-          map[b.email.toLowerCase()] = { sentAt: new Date().toISOString(), read: false, invite: true };
-          writeSentMap(registryId, map);
-          await upsertBeneficiary(b);
-          setSentTick(t => t + 1);
-          return;
-        }
+        } catch { /* non-critical — invite failure is silent */ }
+        const map = getSentMap(registryId);
+        map[emailKey] = { sentAt: new Date().toISOString(), state: "sent", invite: true };
+        writeSentMap(registryId, map);
+        await upsertBeneficiary(b);
+        setSentTick(t => t + 1);
+        return;
+      }
+
+      if (!res.ok) {
         setSendError(json.error || "Could not send notification");
         return;
       }
 
+      // Server determines authoritative state — sync to localStorage
+      if (json.reason === "already_sent") {
+        const map = getSentMap(registryId);
+        map[emailKey] = { ...map[emailKey], state: "sent" };
+        writeSentMap(registryId, map);
+        setSentTick(t => t + 1);
+        return;
+      }
+      if (json.reason === "eligible_nudge") {
+        const map = getSentMap(registryId);
+        map[emailKey] = { ...map[emailKey], state: "nudge" };
+        writeSentMap(registryId, map);
+        setSentTick(t => t + 1);
+        return;
+      }
+
+      // Success — notification sent
       const map = getSentMap(registryId);
-      map[b.email.toLowerCase()] = { sentAt: new Date().toISOString(), read: false };
+      map[emailKey] = { sentAt: json.sentAt || new Date().toISOString(), state: "sent" };
       writeSentMap(registryId, map);
       await upsertBeneficiary(b);
       setSentTick(t => t + 1);
