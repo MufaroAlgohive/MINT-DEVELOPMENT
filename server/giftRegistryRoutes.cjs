@@ -816,20 +816,197 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
       // Check if all items are FILLED — mark registry COMPLETED
       const { data: allItems } = await supabaseAdmin
         .from('gift_registry_items')
-        .select('status')
+        .select('id, status, name, isin')
         .eq('gift_event_id', registryId)
         .neq('status', 'REMOVED');
 
-      if (allItems?.every(i => i.status === 'FILLED')) {
+      const registryNowComplete = allItems?.every(i => i.status === 'FILLED');
+      if (registryNowComplete) {
         await supabaseAdmin
           .from('gift_events')
           .update({ status: 'COMPLETED', updated_at: new Date().toISOString() })
           .eq('id', registryId);
       }
 
+      // ── Post-contribution notifications (fire-and-forget; errors do not fail the contribution) ──
+      try {
+        const { gifterMessage } = req.body;
+
+        // Fetch registry owner + item details
+        const { data: registryRow } = await supabaseAdmin
+          .from('gift_events')
+          .select('creator_user_id, title')
+          .eq('id', registryId)
+          .single();
+
+        const filledItem = allItems?.find(i => i.id === reservedItemId);
+        const itemName = filledItem?.name || filledItem?.isin || 'an item';
+        const ownerUserId = registryRow?.creator_user_id;
+        const registryTitle = registryRow?.title || 'your wishlist';
+
+        // Gifter display name
+        const gifterName = gifterEmail
+          ? gifterEmail.split('@')[0]
+          : 'Someone';
+
+        if (ownerUserId && ownerUserId !== user.id) {
+          const msgPart = gifterMessage ? ` — "${gifterMessage.slice(0, 80)}"` : '';
+          await supabaseAdmin.from('notifications').insert({
+            user_id: ownerUserId,
+            title: `${gifterName} gifted your wishlist 🎁`,
+            body: `${qty} share${qty !== 1 ? 's' : ''} of ${itemName} contributed to "${registryTitle}"${msgPart}`,
+            type: 'investment',
+            payload: {
+              action: 'OPEN_GIFT_REGISTRY',
+              registry_id: registryId,
+              gifter_user_id: user.id,
+              gifter_message: gifterMessage || null,
+            },
+          });
+        }
+
+        // If this item is now FILLED — send thank-you to every gifter of that item
+        const itemNowFilled = currentItem && (currentItem.filled_quantity || 0) + qty >= (currentItem.target_quantity || 1);
+        if (itemNowFilled) {
+          const { data: allContribs } = await supabaseAdmin
+            .from('gift_contributions')
+            .select('gifter_user_id')
+            .eq('registry_item_id', reservedItemId)
+            .eq('status', 'PAID');
+
+          const uniqueGifterIds = [...new Set((allContribs || []).map(c => c.gifter_user_id).filter(Boolean))];
+          const thankYouRows = uniqueGifterIds.map(gId => ({
+            user_id: gId,
+            title: `Your gift came together! 🙌`,
+            body: `${itemName} on "${registryTitle}" is fully funded — thanks to you and others ✨`,
+            type: 'investment',
+            payload: {
+              action: 'OPEN_GIFT_REGISTRY',
+              registry_id: registryId,
+              registry_item_id: reservedItemId,
+            },
+          }));
+
+          if (thankYouRows.length > 0) {
+            await supabaseAdmin.from('notifications').insert(thankYouRows);
+          }
+        }
+      } catch (notifErr) {
+        console.error('[gift-registry] contribute: notification error (non-fatal):', notifErr.message);
+      }
+
       return res.json({ success: true, contribution });
     } catch (e) {
       console.error('[gift-registry] contribute error:', e.message);
+      return res.status(500).json({ error: e.message });
+    }
+  });
+
+  // POST /api/gift-registry/:id/notify-beneficiary — send wishlist notification to a Mint user by email
+  app.post('/api/gift-registry/:id/notify-beneficiary', async (req, res) => {
+    try {
+      const user = await getUser(req, supabaseAdmin);
+      if (!user) return res.status(401).json({ error: 'Unauthorized' });
+
+      const registryId = req.params.id;
+      const { email, firstName, isNudge } = req.body;
+      if (!email) return res.status(400).json({ error: 'Missing email' });
+
+      // Verify caller owns this registry
+      const { data: registry } = await supabaseAdmin
+        .from('gift_events')
+        .select('id, title, creator_user_id, share_token, occasion')
+        .eq('id', registryId)
+        .eq('creator_user_id', user.id)
+        .single();
+
+      if (!registry) return res.status(403).json({ error: 'Wishlist not found or not yours' });
+
+      // Look up target user by email via Supabase admin REST API
+      const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
+      const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+      let targetUserId = null;
+
+      if (supabaseUrl && serviceKey) {
+        try {
+          const lookupRes = await fetch(
+            `${supabaseUrl}/auth/v1/admin/users?email=${encodeURIComponent(email.toLowerCase())}&page=1&per_page=1`,
+            { headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` } }
+          );
+          const lookupJson = await lookupRes.json();
+          const found = lookupJson?.users?.[0];
+          if (found?.id) targetUserId = found.id;
+        } catch (lookupErr) {
+          console.error('[gift-registry] notify-beneficiary: email lookup failed:', lookupErr.message);
+        }
+      }
+
+      if (!targetUserId) {
+        return res.status(200).json({ sent: false, has_account: false, reason: 'no_mint_account' });
+      }
+
+      // Do not notify yourself
+      if (targetUserId === user.id) {
+        return res.status(400).json({ error: 'Cannot notify yourself' });
+      }
+
+      // Check for existing notification in the last 24 hours (duplicate guard)
+      const windowStart = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+      const { data: existing } = await supabaseAdmin
+        .from('notifications')
+        .select('id, created_at, read_at')
+        .eq('user_id', targetUserId)
+        .eq('type', 'WISHLIST_SHARE')
+        .filter('payload->>registry_id', 'eq', registryId)
+        .gte('created_at', windowStart)
+        .maybeSingle();
+
+      if (existing && !isNudge) {
+        return res.json({ sent: false, reason: 'already_sent' });
+      }
+
+      // Get sender's display name
+      const { data: senderData } = await supabaseAdmin.auth.admin.getUserById(user.id);
+      const senderEmail = senderData?.user?.email || '';
+      const senderMeta = senderData?.user?.user_metadata || {};
+      const senderName = senderMeta.first_name
+        ? `${senderMeta.first_name} ${senderMeta.last_name || ''}`.trim()
+        : (senderEmail.split('@')[0] || 'Someone');
+
+      const OCCASION_EMOJI = { BIRTHDAY: '🎂', WEDDING: '💍', BABY: '👶', GRADUATION: '🎓', FESTIVE: '🎄', CUSTOM: '🎉' };
+      const emoji = OCCASION_EMOJI[registry.occasion] || '🎁';
+
+      const notifTitle = isNudge
+        ? `${senderName} is nudging you ${emoji}`
+        : `${senderName} shared a wishlist with you ${emoji}`;
+      const notifBody = isNudge
+        ? `Don't forget — ${senderName} wants your gift for "${registry.title}"`
+        : `"${registry.title}" — gift the shares they actually want`;
+
+      const { error: insertErr } = await supabaseAdmin
+        .from('notifications')
+        .insert({
+          user_id: targetUserId,
+          title: notifTitle,
+          body: notifBody,
+          type: 'WISHLIST_SHARE',
+          payload: {
+            action: 'OPEN_GIFT_REGISTRY',
+            registry_id: registryId,
+            share_token: registry.share_token,
+            sent_by: user.id,
+            is_nudge: !!isNudge,
+          },
+        });
+
+      if (insertErr) {
+        console.error('[gift-registry] notify-beneficiary: insert error:', insertErr.message);
+        return res.status(500).json({ error: 'Could not send notification' });
+      }
+
+      return res.json({ sent: true, nudge: !!isNudge });
+    } catch (e) {
+      console.error('[gift-registry] notify-beneficiary error:', e.message);
       return res.status(500).json({ error: e.message });
     }
   });

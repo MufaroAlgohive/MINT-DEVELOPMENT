@@ -5,14 +5,12 @@ import { useRegistryDetail, useRegistryContributions } from "../lib/useGiftRegis
 import { useGiftRegistryRealtime } from "../lib/useGiftRegistryRealtime.js";
 import { supabaseReady } from "../lib/supabase.js";
 import {
-  getRegistryProgress,
   getItemFillPercent,
   OCCASION_LABELS,
   REGISTRY_STATUS_META,
   centsToRand,
 } from "../lib/giftRegistryUtils.js";
-import GiftRegistryProgressBar from "../components/GiftRegistryProgressBar.jsx";
-import GiftRegistryShareSheet from "../components/GiftRegistryShareSheet.jsx";
+import GiftRegistrySharePopup from "../components/GiftRegistrySharePopup.jsx";
 
 /* ─── Sparkline helpers (deterministic, same approach as GiftStrategyPickerPage) ─── */
 
@@ -251,15 +249,21 @@ export default function GiftRegistryDetailPage({ registryId, onNavigate, onBack 
   const { registry, loading, reload } = useRegistryDetail(registryId);
   const { contributions } = useRegistryContributions(registryId);
   const [showShare, setShowShare] = useState(false);
-  const [actionLoading, setActionLoading] = useState(false);
-  const [actionError, setActionError] = useState(null);
   const [publishLoading, setPublishLoading] = useState(false);
 
   useGiftRegistryRealtime(registryId, () => reload());
 
   const items = registry?.items || [];
-  const progress = getRegistryProgress(items);
   const meta = REGISTRY_STATUS_META[registry?.status] || REGISTRY_STATUS_META.DRAFT;
+
+  const daysRemaining = useMemo(() => {
+    if (!registry?.event_date) return null;
+    const diff = new Date(registry.event_date).getTime() - Date.now();
+    const d = Math.ceil(diff / 86_400_000);
+    return d > 0 ? d : null;
+  }, [registry?.event_date]);
+
+  const OCCASION_EMOJI = { BIRTHDAY: "🎂", WEDDING: "💍", BABY: "👶", GRADUATION: "🎓", FESTIVE: "🎄", CUSTOM: "🎉" };
 
   async function removeItem(itemId) {
     try {
@@ -279,29 +283,8 @@ export default function GiftRegistryDetailPage({ registryId, onNavigate, onBack 
     }
   }
 
-  async function performAction(action) {
-    setActionLoading(true);
-    setActionError(null);
-    try {
-      const session = await (await supabaseReady).auth.getSession();
-      const token = session?.data?.session?.access_token;
-      const res = await fetch(`/api/gift-registry/${registryId}/${action}`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || `Could not ${action} wishlist`);
-      reload();
-    } catch (e) {
-      setActionError(e.message);
-    } finally {
-      setActionLoading(false);
-    }
-  }
-
   async function handlePublish() {
     setPublishLoading(true);
-    setActionError(null);
     try {
       const session = await (await supabaseReady).auth.getSession();
       const token = session?.data?.session?.access_token;
@@ -314,7 +297,7 @@ export default function GiftRegistryDetailPage({ registryId, onNavigate, onBack 
       reload();
       setShowShare(true);
     } catch (e) {
-      setActionError(e.message);
+      console.error("[registry] publish error:", e.message);
     } finally {
       setPublishLoading(false);
     }
@@ -362,63 +345,22 @@ export default function GiftRegistryDetailPage({ registryId, onNavigate, onBack 
         </div>
       </div>
 
-      <div className="px-5 pt-5 space-y-5">
-        {/* Overall progress */}
-        <div className="bg-white rounded-2xl p-4 border border-gray-100">
-          <div className="flex justify-between items-center mb-3">
-            <p className="text-sm font-semibold text-gray-700">Overall progress</p>
-            <p className="text-sm font-bold text-[#6B21A8]">{progress.percent}%</p>
+      {/* Countdown pill — below header, above content */}
+      {daysRemaining && (
+        <div className="px-5 pt-4">
+          <div className="inline-flex items-center gap-1.5 bg-amber-50 border border-amber-200 rounded-full px-3 py-1.5">
+            <span className="text-base leading-none">{OCCASION_EMOJI[registry?.occasion] || "🎉"}</span>
+            <span className="text-xs font-semibold text-amber-700">
+              {daysRemaining} day{daysRemaining !== 1 ? "s" : ""} to go
+            </span>
           </div>
-          <GiftRegistryProgressBar
-            percent={progress.percent}
-            filledQty={progress.funded}
-            targetQty={progress.total}
-            height="h-2.5"
-          />
-          <p className="text-xs text-gray-400 mt-2">
-            {progress.funded} of {progress.total} shares funded ·{" "}
-            {contributions.length} gift{contributions.length !== 1 ? "s" : ""} received
-          </p>
         </div>
+      )}
 
-        {/* Registry actions */}
-        {(registry?.status === "ACTIVE" || registry?.status === "PAUSED") && (
-          <div>
-            {actionError && <p className="text-sm text-red-600 mb-2">{actionError}</p>}
-            <div className="flex gap-2">
-              {registry.status === "ACTIVE" && (
-                <button
-                  onClick={() => performAction("pause")}
-                  disabled={actionLoading}
-                  className="flex-1 py-2.5 rounded-2xl border border-gray-200 text-sm text-gray-600 font-medium disabled:opacity-40"
-                >
-                  Pause
-                </button>
-              )}
-              {registry.status === "PAUSED" && (
-                <button
-                  onClick={() => performAction("resume")}
-                  disabled={actionLoading}
-                  className="flex-1 py-2.5 rounded-2xl bg-green-50 border border-green-200 text-sm text-green-700 font-medium disabled:opacity-40"
-                >
-                  Resume
-                </button>
-              )}
-              <button
-                onClick={() => performAction("cancel")}
-                disabled={actionLoading}
-                className="flex-1 py-2.5 rounded-2xl border border-red-200 text-sm text-red-500 font-medium disabled:opacity-40"
-              >
-                Cancel wishlist
-              </button>
-            </div>
-          </div>
-        )}
-
+      <div className="px-5 pt-5 space-y-5">
         {/* Wishlist items — identical card layout to Mint Baskets horizontal strip */}
         {items.length > 0 && (
           <div>
-            <p className="text-xs text-gray-500 font-medium mb-3">Wishlist items</p>
             <div className="flex gap-4 overflow-x-auto snap-x snap-mandatory pb-2 -mx-5 px-5">
               {items.map((item) => (
                 <WishlistItemCard
@@ -487,10 +429,12 @@ export default function GiftRegistryDetailPage({ registryId, onNavigate, onBack 
       </div>
 
       {showShare && registry?.share_token && (
-        <GiftRegistryShareSheet
+        <GiftRegistrySharePopup
           token={registry.share_token}
           title={registry.title}
+          registryId={registryId}
           onClose={() => setShowShare(false)}
+          onNavigate={onNavigate}
         />
       )}
     </div>
