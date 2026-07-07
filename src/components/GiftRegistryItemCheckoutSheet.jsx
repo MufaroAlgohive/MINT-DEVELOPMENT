@@ -1,10 +1,80 @@
 import React, { useState, useMemo } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { ShieldCheck, ArrowRight, X } from "lucide-react";
 import { centsToRand, calcMinTrancheForAsset } from "../lib/giftRegistryUtils.js";
 import { supabaseReady } from "../lib/supabase.js";
 import { useFees } from "../lib/useFees.js";
 import PaymentMethodModal from "./PaymentMethodModal.jsx";
 
 const QUICK_EMOJIS = ["🎉", "🎂", "💜", "🌱", "🚀", "✨", "🙌", "❤️"];
+
+/** Full-screen modal telling the user they need to finish onboarding before gifting. */
+function KycRequiredModal({ onClose }) {
+  function goToOnboarding() {
+    onClose();
+    window.dispatchEvent(
+      new CustomEvent("navigate-within-app", { detail: { page: "userOnboarding" } })
+    );
+  }
+
+  return (
+    <AnimatePresence>
+      <motion.div
+        className="fixed inset-0 z-[60] flex items-center justify-center px-5 bg-black/50 backdrop-blur-sm"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      >
+        <motion.div
+          className="relative w-full max-w-sm bg-white rounded-3xl p-7 shadow-2xl text-center"
+          initial={{ scale: 0.92, opacity: 0, y: 24 }}
+          animate={{ scale: 1, opacity: 1, y: 0 }}
+          exit={{ scale: 0.92, opacity: 0, y: 24 }}
+          transition={{ type: "spring", damping: 22, stiffness: 320 }}
+        >
+          {/* Close */}
+          <button
+            onClick={onClose}
+            className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 text-gray-400 hover:bg-gray-200 transition"
+          >
+            <X className="w-4 h-4" />
+          </button>
+
+          {/* Icon */}
+          <div className="w-16 h-16 rounded-full bg-purple-100 flex items-center justify-center mx-auto mb-5">
+            <ShieldCheck className="w-8 h-8 text-purple-600" />
+          </div>
+
+          <h2 className="text-lg font-bold text-gray-900 mb-2">
+            Verification required
+          </h2>
+          <p className="text-sm text-gray-500 leading-relaxed mb-6">
+            To gift from a wishlist you need to complete your MINT verification first.
+            It only takes a few minutes — pick up right where you left off.
+          </p>
+
+          {/* Primary CTA */}
+          <button
+            onClick={goToOnboarding}
+            className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl bg-gradient-to-r from-[#5b21b6] to-[#7c3aed] text-white text-sm font-semibold shadow-md active:scale-95 transition"
+          >
+            Complete verification
+            <ArrowRight className="w-4 h-4" />
+          </button>
+
+          {/* Secondary dismiss */}
+          <button
+            onClick={onClose}
+            className="mt-3 w-full py-2.5 rounded-2xl text-sm font-medium text-gray-400 hover:text-gray-600 transition"
+          >
+            Maybe later
+          </button>
+        </motion.div>
+      </motion.div>
+    </AnimatePresence>
+  );
+}
 
 /**
  * Bottom sheet checkout for a single registry item.
@@ -23,6 +93,7 @@ export default function GiftRegistryItemCheckoutSheet({ item, registryId, onSucc
   const [error, setError] = useState(null);
   const [reserved, setReserved] = useState(null);
   const [showPayment, setShowPayment] = useState(false);
+  const [showKycPrompt, setShowKycPrompt] = useState(false);
 
   const {
     ISIN_FEE_PER_ASSET,
@@ -71,7 +142,7 @@ export default function GiftRegistryItemCheckoutSheet({ item, registryId, onSucc
       const json = await res.json();
       if (!res.ok) {
         if (json.code === "SOLD_OUT") setError(`Only ${json.remaining ?? 0} shares left — try a smaller quantity.`);
-        else if (json.code === "KYC_INCOMPLETE") setError("Complete your MINT verification to gift from a wishlist.");
+        else if (json.code === "KYC_INCOMPLETE") { setShowKycPrompt(true); return; }
         else setError(json.error || "Could not reserve. Please try again.");
         return;
       }
@@ -299,6 +370,11 @@ export default function GiftRegistryItemCheckoutSheet({ item, registryId, onSucc
             )}
           </div>
         </div>
+      )}
+
+      {/* ── KYC / onboarding required modal ── */}
+      {showKycPrompt && (
+        <KycRequiredModal onClose={() => { setShowKycPrompt(false); onClose(); }} />
       )}
 
       {/* ── PaymentMethodModal — exact same component as the invest flow ── */}
