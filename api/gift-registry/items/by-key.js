@@ -56,8 +56,16 @@ export default async function handler(req, res) {
 
       const tickers = [...new Set(holdings.map(h => h.ticker || h.symbol || h).filter(Boolean))];
       const { data: securities } = await supabaseAdmin
-        .from('securities_c').select('isin, symbol, last_price').in('symbol', tickers);
+        .from('securities_c').select('isin, symbol, name, logo_url, last_price').in('symbol', tickers);
       const secBySymbol = Object.fromEntries((securities || []).map(s => [s.symbol, s]));
+
+      // Build preview logos from ALL strategy holdings (logo-having entries first)
+      const previewLogos = holdings.slice(0, 6).map(h => {
+        const ticker = h.ticker || h.symbol || String(h);
+        const sec = secBySymbol[ticker];
+        return { symbol: ticker, name: sec?.name || h.name || ticker, logo_url: sec?.logo_url || null };
+      });
+      previewLogos.sort((a, b) => (b.logo_url ? 1 : 0) - (a.logo_url ? 1 : 0));
 
       // Find already-added ISINs to avoid duplicates
       const { data: existing } = await supabaseAdmin
@@ -84,6 +92,15 @@ export default async function handler(req, res) {
       const { data: items, error: insertErr } = await supabaseAdmin
         .from('gift_registry_items').insert(toInsert).select();
       if (insertErr) throw insertErr;
+
+      // Persist preview logos as a dedicated top-level user_metadata key.
+      // Supabase merges user_metadata at the top level, so this is atomic — no read-modify-write.
+      try {
+        await supabaseAdmin.auth.admin.updateUserById(user.id, {
+          user_metadata: { [`gift_rp_${registryId}`]: previewLogos },
+        });
+      } catch { /* non-fatal — preview degrades to item-derived logos */ }
+
       return res.status(200).json({ success: true, items });
 
     } else {

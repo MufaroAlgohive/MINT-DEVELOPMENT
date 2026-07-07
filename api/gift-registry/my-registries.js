@@ -31,14 +31,34 @@ export default async function handler(req, res) {
       secMap = Object.fromEntries((securities || []).map(s => [s.isin, s]));
     }
 
-    const enriched = registries.map(r => ({
-      ...r,
-      items: (r.items || []).map(item => ({
-        ...item,
-        name: secMap[item.isin]?.name || item.isin,
-        logo_url: secMap[item.isin]?.logo_url || null,
-      })),
-    }));
+    // preview logos stored as per-registry top-level keys in user_metadata (gift_rp_<id>)
+    // authenticateUser returns the full user object including user_metadata
+    const userMeta = user.user_metadata || {};
+
+    const enriched = registries.map(r => {
+      // Prefer metadata-stored preview; fall back to deriving from items' logo_url
+      let previewLogos = userMeta[`gift_rp_${r.id}`] || null;
+      if (!previewLogos) {
+        const activeItems = (r.items || []).filter(i => i.status !== 'REMOVED');
+        if (activeItems.length) {
+          const derived = activeItems.map(i => ({
+            symbol: i.isin,
+            name: secMap[i.isin]?.name || i.isin,
+            logo_url: secMap[i.isin]?.logo_url || null,
+          })).sort((a, b) => (b.logo_url ? 1 : 0) - (a.logo_url ? 1 : 0)).slice(0, 6);
+          if (derived.some(d => d.logo_url)) previewLogos = derived;
+        }
+      }
+      return {
+        ...r,
+        preview_logos: previewLogos,
+        items: (r.items || []).map(item => ({
+          ...item,
+          name: secMap[item.isin]?.name || item.isin,
+          logo_url: secMap[item.isin]?.logo_url || null,
+        })),
+      };
+    });
 
     return res.status(200).json({ registries: enriched });
   } catch (e) {

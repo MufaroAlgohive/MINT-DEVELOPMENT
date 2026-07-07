@@ -118,6 +118,7 @@ async function ensureGiftRegistryTables(pgPool, supabaseAdmin) {
   } finally {
     client.release();
   }
+
 }
 
 // ─── Auth helper ─────────────────────────────────────────────────────────────
@@ -269,14 +270,34 @@ function registerGiftRegistryRoutes(app, supabaseAdmin, pgPool) {
         secMap = Object.fromEntries((securities || []).map(s => [s.isin, s]));
       }
 
-      const enriched = registries.map(r => ({
-        ...r,
-        items: (r.items || []).map(item => ({
-          ...item,
-          name: secMap[item.isin]?.name || item.isin,
-          logo_url: secMap[item.isin]?.logo_url || null,
-        })),
-      }));
+      // preview logos stored as per-registry top-level keys in user_metadata (gift_rp_<id>)
+      // user already has user_metadata from auth.getUser() call inside getUser()
+      const userMeta = user.user_metadata || {};
+
+      const enriched = registries.map(r => {
+        // Prefer metadata-stored preview; fall back to deriving from items' logo_url
+        let previewLogos = userMeta[`gift_rp_${r.id}`] || null;
+        if (!previewLogos) {
+          const activeItems = (r.items || []).filter(i => i.status !== 'REMOVED');
+          if (activeItems.length) {
+            const derived = activeItems.map(i => ({
+              symbol: i.isin,
+              name: secMap[i.isin]?.name || i.isin,
+              logo_url: secMap[i.isin]?.logo_url || null,
+            })).sort((a, b) => (b.logo_url ? 1 : 0) - (a.logo_url ? 1 : 0)).slice(0, 6);
+            if (derived.some(d => d.logo_url)) previewLogos = derived;
+          }
+        }
+        return {
+          ...r,
+          preview_logos: previewLogos,
+          items: (r.items || []).map(item => ({
+            ...item,
+            name: secMap[item.isin]?.name || item.isin,
+            logo_url: secMap[item.isin]?.logo_url || null,
+          })),
+        };
+      });
 
       return res.json({ registries: enriched });
     } catch (e) {
@@ -573,8 +594,17 @@ function registerGiftRegistryRoutes(app, supabaseAdmin, pgPool) {
 
         const tickers = [...new Set(holdings.map(h => h.ticker || h.symbol || h).filter(Boolean))];
         const { data: securities } = await supabaseAdmin
-          .from('securities_c').select('isin, symbol, last_price').in('symbol', tickers);
+          .from('securities_c').select('isin, symbol, name, logo_url, last_price').in('symbol', tickers);
         const secBySymbol = Object.fromEntries((securities || []).map(s => [s.symbol, s]));
+
+        // Build preview logos from ALL strategy holdings (logo-having entries first)
+        const previewLogos = holdings.slice(0, 6).map(h => {
+          const ticker = h.ticker || h.symbol || String(h);
+          const sec = secBySymbol[ticker];
+          return { symbol: ticker, name: sec?.name || h.name || ticker, logo_url: sec?.logo_url || null };
+        });
+        // Move entries with a logo_url to the front
+        previewLogos.sort((a, b) => (b.logo_url ? 1 : 0) - (a.logo_url ? 1 : 0));
 
         // Find already-added ISINs to avoid duplicates
         const { data: existing } = await supabaseAdmin
@@ -601,6 +631,16 @@ function registerGiftRegistryRoutes(app, supabaseAdmin, pgPool) {
         const { data: items, error: insertErr } = await supabaseAdmin
           .from('gift_registry_items').insert(toInsert).select();
         if (insertErr) throw insertErr;
+
+        // Persist preview logos for this registry as a dedicated top-level user_metadata key.
+        // Supabase merges user_metadata at the top level on updateUserById, so each registry
+        // key is written atomically — no read-modify-write and no race between concurrent adds.
+        try {
+          await supabaseAdmin.auth.admin.updateUserById(user.id, {
+            user_metadata: { [`gift_rp_${registryId}`]: previewLogos },
+          });
+        } catch { /* non-fatal — preview degrades to item-derived logos */ }
+
         return res.json({ success: true, items });
 
       } else {

@@ -46,8 +46,14 @@ function RegistryCard({ registry, index, onTap, onDelete, deletingId }) {
         aspectRatio: "1 / 1",
       }}
     >
-      {/* Asset mosaic preview */}
-      <WishlistPreviewGrid items={items} />
+      {/* Asset mosaic preview — prefer strategy snapshot logos, fall back to item logos */}
+      <WishlistPreviewGrid
+        items={
+          Array.isArray(registry.preview_logos) && registry.preview_logos.length > 0
+            ? registry.preview_logos
+            : items
+        }
+      />
 
       <button
         onClick={() => !confirmDelete && onTap(registry)}

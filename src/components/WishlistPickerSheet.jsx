@@ -47,6 +47,7 @@ export default function WishlistPickerSheet({ itemKey, onClose, onSaved, onCreat
                 const registryLists = registries.map((r) => ({
                   id: r.id,
                   name: r.title,
+                  preview_logos: Array.isArray(r.preview_logos) ? r.preview_logos : null,
                   items: (r.items || []).filter((i) => i.isin && i.status !== 'REMOVED').map((i) => ({
                     isin: i.isin,
                     name: i.name || i.isin,
@@ -207,9 +208,13 @@ export default function WishlistPickerSheet({ itemKey, onClose, onSaved, onCreat
                           background: `linear-gradient(135deg, ${fromColor}, ${toColor})`,
                         }}
                       >
-                        {/* Asset mosaic preview */}
+                        {/* Asset mosaic preview — prefer strategy snapshot logos */}
                         <WishlistPreviewGrid
-                          items={Array.isArray(list.items) ? list.items : []}
+                          items={
+                            Array.isArray(list.preview_logos) && list.preview_logos.length > 0
+                              ? list.preview_logos
+                              : Array.isArray(list.items) ? list.items : []
+                          }
                         />
 
                         <AnimatePresence>
