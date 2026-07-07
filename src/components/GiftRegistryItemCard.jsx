@@ -119,12 +119,9 @@ export default function GiftRegistryItemCard({
               Fully funded
             </div>
           ) : alreadyGifted ? (
-            <button
-              onClick={handleGiftTap}
-              className="w-full py-2.5 rounded-xl bg-violet-50 border border-violet-200 text-violet-600 text-sm text-center font-semibold active:opacity-80"
-            >
-              Gift again
-            </button>
+            <div className="w-full py-2.5 rounded-xl bg-violet-50 border border-violet-200 text-violet-600 text-sm text-center font-medium">
+              Already gifted ✓
+            </div>
           ) : remainderOnly ? (
             <button
               onClick={handleGiftTap}

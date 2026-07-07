@@ -66,7 +66,7 @@ export default function GiftRegistryPublicPage({
   }, [token, user]);
 
   async function handleShare() {
-    const url = `${window.location.origin}/registry/${token}`;
+    const url = `${window.location.origin}/gift/${token}`;
     const title = registry?.title || "MINT Wishlist";
     const text = `Check out "${title}" on MINT — gift the shares they actually want!`;
     try {
@@ -90,9 +90,14 @@ export default function GiftRegistryPublicPage({
     setSuccessMsg(null);
   }
 
-  function handleGiftSuccess() {
+  function handleGiftSuccess(json) {
     setCheckoutItem(null);
     setSuccessMsg("Your gift is on its way! 🎁");
+    // Update gifted badge immediately — add the item ID optimistically so the badge
+    // appears right away without waiting for the /my-contributions refetch.
+    if (checkoutItem?.id) {
+      setMyGiftedItemIds(prev => new Set([...prev, checkoutItem.id]));
+    }
     reload();
   }
 
