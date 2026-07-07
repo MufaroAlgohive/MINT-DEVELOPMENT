@@ -1062,6 +1062,7 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
             action: 'OPEN_GIFT_REGISTRY',
             registry_id: registryId,
             share_token: registry.share_token,
+            deep_link: `/gift/${registry.share_token}`,
             sent_by: user.id,
             is_nudge: !!isNudge,
           },

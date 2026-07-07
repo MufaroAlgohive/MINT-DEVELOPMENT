@@ -8,7 +8,7 @@ import {
   registryShareUrl,
 } from "../lib/giftRegistryUtils.js";
 import GiftRegistryProgressBar from "../components/GiftRegistryProgressBar.jsx";
-import GiftRegistryShareSheet from "../components/GiftRegistryShareSheet.jsx";
+import GiftRegistrySharePopup from "../components/GiftRegistrySharePopup.jsx";
 
 /**
  * Preview a registry before publishing, or view a published one.
@@ -202,10 +202,12 @@ export default function GiftRegistryPreviewPage({ registryId, registry: initialR
       )}
 
       {showShare && registry?.share_token && (
-        <GiftRegistryShareSheet
+        <GiftRegistrySharePopup
           token={registry.share_token}
           title={registry.title}
+          registryId={registry.id}
           onClose={() => setShowShare(false)}
+          onNavigate={onNavigate}
         />
       )}
     </div>

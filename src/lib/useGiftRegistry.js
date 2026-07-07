@@ -83,7 +83,7 @@ export function usePublicRegistry(token) {
       // in gift_registry_views for nudge eligibility tracking.
       const headers = {};
       try {
-        const { supabase } = await supabaseReady();
+        const supabase = await supabaseReady;
         const { data: { session } } = await supabase.auth.getSession();
         if (session?.access_token) {
           headers['Authorization'] = `Bearer ${session.access_token}`;
