@@ -37,6 +37,11 @@ const bandFor = (s) => {
   return "Below average";
 };
 
+// 1 → "1st", 22 → "22nd" — for the detected pay date.
+const ordinal = (n) => { const s = ["th", "st", "nd", "rd"], v = n % 100; return n + (s[(v - 20) % 10] || s[v] || s[0]); };
+// Friendly labels for flagged-transaction categories from detect-income.
+const FLAG_LABELS = { gambling: "Gambling", betting: "Betting", casino: "Casino", lottery: "Lottery", crypto: "Crypto", payday_loan: "Short-term loan", other_high_risk: "High-risk" };
+
 // Normalise a South African mobile number to local 10-digit form (0XXXXXXXXX).
 // Accepts "+27 82 123 4567", "2782...", "082 123 4567" etc. Returns "" if it
 // can't be coerced into a valid 10-digit SA mobile (must start 0, then 6/7/8).
@@ -188,6 +193,7 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
   const [statementError, setStatementError] = useState("");
   // Gemini's salary-detection draft — the user confirms/edits before it becomes monthlyIncome.
   const [incomeDetection, setIncomeDetection] = useState(null);
+  const [showFlagged, setShowFlagged] = useState(false); // expand the flagged-transactions list
   const [incomeSaving, setIncomeSaving] = useState(false);
   // Address (Experian requires street + suburb + postal). Prompted if missing/rejected.
   const [addrPrompt, setAddrPrompt] = useState(false);
@@ -1310,6 +1316,7 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
                     const confColor = score >= 0.85 ? "text-emerald-600" : score >= 0.5 ? "text-amber-600" : "text-slate-500";
                     const lastTxn = det?.salary_transactions?.[det.salary_transactions.length - 1];
                     return (
+                      <>
                       <div className="cf-fade mt-4 rounded-[28px] border border-slate-100 bg-white p-6 shadow-xl">
                         <p className="text-sm font-semibold text-slate-900">{found ? "Detected salary" : "Couldn't confidently detect a salary"}</p>
                         {det && (
@@ -1342,6 +1349,75 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
                             : "We couldn't detect a salary automatically — enter your monthly income to continue."}
                         </p>
                       </div>
+
+                      {/* Statement checks — what the AI verified, as tickable rows.
+                          Flaggable transactions expand via "See more". */}
+                      {det && (
+                        <div className="cf-fade mt-4 rounded-[28px] border border-slate-100 bg-white p-6 shadow-xl">
+                          <p className="text-sm font-semibold text-slate-900">Statement checks</p>
+                          <div className="mt-3 space-y-3">
+                            <div className="flex items-center gap-3">
+                              <CheckCircle2 className={`h-5 w-5 flex-shrink-0 ${found ? "text-emerald-500" : "text-slate-300"}`} />
+                              <div className="flex-1">
+                                <p className="text-xs font-semibold text-slate-800">Pay amount</p>
+                                <p className="text-[11px] text-slate-400">{found ? `R${monthlyIncome.toLocaleString("en-ZA")} per month` : "Not detected"}</p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <CheckCircle2 className={`h-5 w-5 flex-shrink-0 ${det.pay_day_of_month ? "text-emerald-500" : "text-slate-300"}`} />
+                              <div className="flex-1">
+                                <p className="text-xs font-semibold text-slate-800">Pay date</p>
+                                <p className="text-[11px] text-slate-400">{det.pay_day_of_month ? `Around the ${ordinal(det.pay_day_of_month)} of each month` : "Not detected"}</p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <CheckCircle2 className={`h-5 w-5 flex-shrink-0 ${det.bank_name ? "text-emerald-500" : "text-slate-300"}`} />
+                              <div className="flex-1">
+                                <p className="text-xs font-semibold text-slate-800">Bank</p>
+                                <p className="text-[11px] text-slate-400">{det.bank_name || "Not identified"}</p>
+                              </div>
+                            </div>
+                            <div className="flex items-start gap-3">
+                              {(det.flagged_summary?.count || 0) > 0 ? (
+                                <span className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-amber-100 text-[11px] font-bold text-amber-600">!</span>
+                              ) : (
+                                <CheckCircle2 className="h-5 w-5 flex-shrink-0 text-emerald-500" />
+                              )}
+                              <div className="flex-1">
+                                <div className="flex items-center justify-between gap-2">
+                                  <div>
+                                    <p className="text-xs font-semibold text-slate-800">Flaggable transactions</p>
+                                    <p className="text-[11px] text-slate-400">
+                                      {(det.flagged_summary?.count || 0) > 0
+                                        ? `${det.flagged_summary.count} found — R${Number(det.flagged_summary.total || 0).toLocaleString("en-ZA")} total`
+                                        : "None found"}
+                                    </p>
+                                  </div>
+                                  {(det.flagged_summary?.count || 0) > 0 && (
+                                    <button type="button" onClick={() => setShowFlagged((v) => !v)} className="flex-shrink-0 text-[11px] font-semibold text-violet-600">
+                                      {showFlagged ? "Hide" : "See more"}
+                                    </button>
+                                  )}
+                                </div>
+                                {showFlagged && (det.flagged_transactions || []).length > 0 && (
+                                  <div className="mt-2 space-y-1.5 rounded-2xl bg-slate-50 p-3">
+                                    {(det.flagged_transactions || []).map((t, i) => (
+                                      <div key={i} className="flex items-center justify-between gap-2">
+                                        <div className="min-w-0">
+                                          <p className="truncate text-[11px] font-medium text-slate-700">{t.description}</p>
+                                          <p className="text-[10px] text-slate-400">{t.date} · {FLAG_LABELS[t.category] || "High-risk"}</p>
+                                        </div>
+                                        <p className="flex-shrink-0 text-[11px] font-bold text-slate-800">R{Number(t.amount).toLocaleString("en-ZA")}</p>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                      </>
                     );
                   })()}
                   </>
