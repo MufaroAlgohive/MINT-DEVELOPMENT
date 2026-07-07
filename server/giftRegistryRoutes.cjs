@@ -336,21 +336,63 @@ function registerGiftRegistryRoutes(app, supabaseAdmin, pgPool) {
 
       if (error || !registry) return res.status(404).json({ error: 'Registry not found' });
 
-      // Enrich items with security name/logo
+      // Enrich items — SHARE/ETF from securities_c, BASKET from strategies_c
       if (registry.items?.length) {
-        const isins = registry.items.map(i => i.isin);
-        const { data: securities } = await supabaseAdmin
-          .from('securities_c')
-          .select('isin, name, logo_url, last_price')
-          .in('isin', isins);
+        const activeItems = registry.items.filter(i => i.status !== 'REMOVED');
+        const shareItems = activeItems.filter(i => i.instrument_type !== 'BASKET');
+        const basketItems = activeItems.filter(i => i.instrument_type === 'BASKET');
+        const enrichedMap = {};
 
-        const secMap = Object.fromEntries((securities || []).map(s => [s.isin, s]));
-        registry.items = registry.items.map(item => ({
-          ...item,
-          name: secMap[item.isin]?.name || item.isin,
-          logo_url: secMap[item.isin]?.logo_url || null,
-          price_snapshot_cents: item.price_snapshot_cents || secMap[item.isin]?.last_price || 0,
-        }));
+        if (shareItems.length) {
+          const isins = shareItems.map(i => i.isin);
+          const { data: securities } = await supabaseAdmin
+            .from('securities_c').select('isin, name, logo_url, last_price').in('isin', isins);
+          const secMap = Object.fromEntries((securities || []).map(s => [s.isin, s]));
+          shareItems.forEach(item => {
+            enrichedMap[item.id] = {
+              ...item,
+              name: secMap[item.isin]?.name || item.isin,
+              logo_url: secMap[item.isin]?.logo_url || null,
+              price_snapshot_cents: item.price_snapshot_cents || secMap[item.isin]?.last_price || 0,
+            };
+          });
+        }
+
+        if (basketItems.length) {
+          const strategyIds = basketItems.map(i => i.isin);
+          const { data: strategies } = await supabaseAdmin
+            .from('strategies_c').select('id, name, holdings').in('id', strategyIds);
+          const allTickers = (strategies || []).flatMap(s =>
+            (s.holdings || []).map(h => h.ticker || h.symbol || h).filter(Boolean)
+          );
+          const uniqueTickers = [...new Set(allTickers)];
+          const { data: secs } = uniqueTickers.length
+            ? await supabaseAdmin.from('securities_c').select('symbol, name, logo_url').in('symbol', uniqueTickers)
+            : { data: [] };
+          const secBySymbol = Object.fromEntries((secs || []).map(s => [s.symbol, s]));
+          const stratMap = Object.fromEntries((strategies || []).map(s => [s.id, s]));
+
+          basketItems.forEach(item => {
+            const strategy = stratMap[item.isin];
+            if (!strategy) { enrichedMap[item.id] = { ...item, name: item.isin }; return; }
+            const holdings = strategy.holdings || [];
+            const holdingsSnapshot = holdings
+              .map(h => { const t = h.ticker || h.symbol || String(h); return { symbol: t, name: secBySymbol[t]?.name || t, logo_url: secBySymbol[t]?.logo_url || null }; })
+              .sort((a, b) => (b.logo_url ? 1 : 0) - (a.logo_url ? 1 : 0))
+              .slice(0, 5);
+            enrichedMap[item.id] = {
+              ...item,
+              name: strategy.name,
+              logo_url: null,
+              holdings_snapshot: holdingsSnapshot,
+              total_holdings: holdings.length,
+            };
+          });
+        }
+
+        registry.items = activeItems
+          .map(item => enrichedMap[item.id] || item)
+          .sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
       }
 
       return res.json({ registry });
@@ -531,24 +573,63 @@ function registerGiftRegistryRoutes(app, supabaseAdmin, pgPool) {
 
       if (error || !registry) return res.status(404).json({ error: 'Registry not found' });
 
-      // Enrich items with name/logo only — never join to users or holdings
+      // Enrich items — SHARE/ETF from securities_c, BASKET from strategies_c
       if (registry.items?.length) {
-        const isins = registry.items.map(i => i.isin);
-        const { data: securities } = await supabaseAdmin
-          .from('securities_c')
-          .select('isin, name, logo_url, last_price')
-          .in('isin', isins);
+        const activeItems = registry.items.filter(i => i.status !== 'REMOVED');
+        const shareItems = activeItems.filter(i => i.instrument_type !== 'BASKET');
+        const basketItems = activeItems.filter(i => i.instrument_type === 'BASKET');
+        const enrichedMap = {};
 
-        const secMap = Object.fromEntries((securities || []).map(s => [s.isin, s]));
-        registry.items = registry.items
-          .filter(i => i.status !== 'REMOVED')
-          .sort((a, b) => a.display_order - b.display_order)
-          .map(item => ({
-            ...item,
-            name: secMap[item.isin]?.name || item.isin,
-            logo_url: secMap[item.isin]?.logo_url || null,
-            price_snapshot_cents: item.price_snapshot_cents || secMap[item.isin]?.last_price || 0,
-          }));
+        if (shareItems.length) {
+          const isins = shareItems.map(i => i.isin);
+          const { data: securities } = await supabaseAdmin
+            .from('securities_c').select('isin, name, logo_url, last_price').in('isin', isins);
+          const secMap = Object.fromEntries((securities || []).map(s => [s.isin, s]));
+          shareItems.forEach(item => {
+            enrichedMap[item.id] = {
+              ...item,
+              name: secMap[item.isin]?.name || item.isin,
+              logo_url: secMap[item.isin]?.logo_url || null,
+              price_snapshot_cents: item.price_snapshot_cents || secMap[item.isin]?.last_price || 0,
+            };
+          });
+        }
+
+        if (basketItems.length) {
+          const strategyIds = basketItems.map(i => i.isin);
+          const { data: strategies } = await supabaseAdmin
+            .from('strategies_c').select('id, name, holdings').in('id', strategyIds);
+          const allTickers = (strategies || []).flatMap(s =>
+            (s.holdings || []).map(h => h.ticker || h.symbol || h).filter(Boolean)
+          );
+          const uniqueTickers = [...new Set(allTickers)];
+          const { data: secs } = uniqueTickers.length
+            ? await supabaseAdmin.from('securities_c').select('symbol, name, logo_url').in('symbol', uniqueTickers)
+            : { data: [] };
+          const secBySymbol = Object.fromEntries((secs || []).map(s => [s.symbol, s]));
+          const stratMap = Object.fromEntries((strategies || []).map(s => [s.id, s]));
+
+          basketItems.forEach(item => {
+            const strategy = stratMap[item.isin];
+            if (!strategy) { enrichedMap[item.id] = { ...item, name: item.isin }; return; }
+            const holdings = strategy.holdings || [];
+            const holdingsSnapshot = holdings
+              .map(h => { const t = h.ticker || h.symbol || String(h); return { symbol: t, name: secBySymbol[t]?.name || t, logo_url: secBySymbol[t]?.logo_url || null }; })
+              .sort((a, b) => (b.logo_url ? 1 : 0) - (a.logo_url ? 1 : 0))
+              .slice(0, 5);
+            enrichedMap[item.id] = {
+              ...item,
+              name: strategy.name,
+              logo_url: null,
+              holdings_snapshot: holdingsSnapshot,
+              total_holdings: holdings.length,
+            };
+          });
+        }
+
+        registry.items = activeItems
+          .map(item => enrichedMap[item.id] || item)
+          .sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
       }
 
       return res.json({ registry });
@@ -599,7 +680,7 @@ function registerGiftRegistryRoutes(app, supabaseAdmin, pgPool) {
       const isStrategy = itemKey.startsWith('gift:') || itemKey.startsWith('strategy:');
 
       if (isStrategy) {
-        // ── Strategy basket: expand holdings and insert each as a SHARE item ──
+        // ── Strategy basket: store as a single BASKET row (not expanded) ──
         const strategyId = itemKey.replace(/^(gift:|strategy:)/, '');
         const { data: strategy, error: stratErr } = await supabaseAdmin
           .from('strategies_c').select('id, name, holdings').eq('id', strategyId).single();
@@ -608,56 +689,35 @@ function registerGiftRegistryRoutes(app, supabaseAdmin, pgPool) {
         const holdings = Array.isArray(strategy.holdings) ? strategy.holdings : [];
         if (!holdings.length) return res.status(400).json({ error: 'Strategy has no holdings' });
 
+        // Check if this strategy basket is already in the registry
+        const { data: existing } = await supabaseAdmin
+          .from('gift_registry_items').select('id').eq('gift_event_id', registryId).eq('isin', strategyId).maybeSingle();
+        if (existing) return res.json({ success: true, item: existing, message: 'Already in registry' });
+
+        // Calculate min investment = sum of all holdings' current prices
         const tickers = [...new Set(holdings.map(h => h.ticker || h.symbol || h).filter(Boolean))];
         const { data: securities } = await supabaseAdmin
-          .from('securities_c').select('isin, symbol, name, logo_url, last_price').in('symbol', tickers);
+          .from('securities_c').select('symbol, last_price').in('symbol', tickers);
         const secBySymbol = Object.fromEntries((securities || []).map(s => [s.symbol, s]));
-
-        // Build preview logos from ALL strategy holdings (logo-having entries first)
-        const previewLogos = holdings.slice(0, 6).map(h => {
+        const minInvestmentCents = holdings.reduce((sum, h) => {
           const ticker = h.ticker || h.symbol || String(h);
-          const sec = secBySymbol[ticker];
-          return { symbol: ticker, name: sec?.name || h.name || ticker, logo_url: sec?.logo_url || null };
-        });
-        // Move entries with a logo_url to the front
-        previewLogos.sort((a, b) => (b.logo_url ? 1 : 0) - (a.logo_url ? 1 : 0));
+          return sum + (secBySymbol[ticker]?.last_price || 0);
+        }, 0);
 
-        // Find already-added ISINs to avoid duplicates
-        const { data: existing } = await supabaseAdmin
-          .from('gift_registry_items').select('isin').eq('gift_event_id', registryId);
-        const existingIsins = new Set((existing || []).map(r => r.isin));
-
-        const toInsert = [];
-        const seenIsins = new Set(existingIsins); // dedupe within this request too
-        for (const h of holdings) {
-          const ticker = h.ticker || h.symbol || h;
-          const sec = secBySymbol[ticker];
-          if (!sec?.isin || seenIsins.has(sec.isin)) continue;
-          seenIsins.add(sec.isin);
-          const priceCents = sec.last_price || 0;
-          const minTranche = priceCents > 0 ? Math.max(1, Math.ceil(1000 / priceCents)) : 1;
-          toInsert.push({
-            gift_event_id: registryId, isin: sec.isin, instrument_type: 'SHARE',
-            target_quantity: 1, price_snapshot_cents: priceCents, min_tranche_quantity: minTranche,
-          });
-        }
-
-        if (!toInsert.length) return res.json({ success: true, items: [], message: 'All holdings already in registry' });
-
-        const { data: items, error: insertErr } = await supabaseAdmin
-          .from('gift_registry_items').insert(toInsert).select();
+        // Insert a single BASKET row — strategy ID stored in isin field
+        const { data: item, error: insertErr } = await supabaseAdmin
+          .from('gift_registry_items')
+          .insert({
+            gift_event_id: registryId,
+            isin: strategyId,
+            instrument_type: 'BASKET',
+            target_quantity: 1,
+            price_snapshot_cents: minInvestmentCents,
+            min_tranche_quantity: 1,
+          }).select().single();
         if (insertErr) throw insertErr;
 
-        // Persist preview logos for this registry as a dedicated top-level user_metadata key.
-        // Supabase merges user_metadata at the top level on updateUserById, so each registry
-        // key is written atomically — no read-modify-write and no race between concurrent adds.
-        try {
-          await supabaseAdmin.auth.admin.updateUserById(user.id, {
-            user_metadata: { [`gift_rp_${registryId}`]: previewLogos },
-          });
-        } catch { /* non-fatal — preview degrades to item-derived logos */ }
-
-        return res.json({ success: true, items });
+        return res.json({ success: true, item });
 
       } else {
         // ── Plain ISIN / symbol ──

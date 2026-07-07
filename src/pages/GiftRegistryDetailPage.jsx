@@ -1,5 +1,6 @@
 import React, { useState, useId, useMemo } from "react";
 import { AreaChart, Area, ResponsiveContainer } from "recharts";
+import { Heart } from "lucide-react";
 import { useRegistryDetail, useRegistryContributions } from "../lib/useGiftRegistry.js";
 import { useGiftRegistryRealtime } from "../lib/useGiftRegistryRealtime.js";
 import { supabaseReady } from "../lib/supabase.js";
@@ -65,7 +66,7 @@ function ItemSparkline({ seed }) {
 
 /* ─── Strategy-card-style item card — identical look to Mint Baskets card ─── */
 
-function WishlistItemCard({ item }) {
+function WishlistItemCard({ item, onRemove }) {
   const percent = getItemFillPercent(item);
   const filled = item.filled_quantity || 0;
   const target = item.target_quantity || 0;
@@ -74,28 +75,53 @@ function WishlistItemCard({ item }) {
   const isBasket = item.instrument_type === "BASKET";
   const reserved = item.reserved_quantity ?? 0;
 
+  // For BASKET items: holdings_snapshot is [{logo_url, symbol, name}] from server enrichment
+  const holdingsSnapshot = item.holdings_snapshot || [];
+  const totalHoldings = item.total_holdings || holdingsSnapshot.length;
+
+  // Price label: min investment for baskets, price/share for equities
+  const priceLabel = isBasket
+    ? priceCents > 0
+      ? `Min. ${centsToRand(priceCents)}`
+      : null
+    : priceCents > 0
+    ? `${centsToRand(priceCents)} / share`
+    : null;
+
   return (
     <div
       className={`relative flex-shrink-0 w-80 rounded-2xl border border-slate-100 bg-white p-4 shadow-sm transition-all snap-center hover:shadow-md hover:border-slate-200 ${
         isFunded ? "opacity-70" : ""
       }`}
     >
-      {/* Top row: name block + sparkline — identical to strategy card */}
+      {/* Heart icon — bottom-right, removes item from wishlist */}
+      {onRemove && (
+        <div className="absolute bottom-3 right-3 z-10">
+          <button
+            type="button"
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); onRemove(item.id); }}
+            className="flex h-9 w-9 items-center justify-center rounded-full bg-white/80 backdrop-blur-sm shadow-sm active:scale-90 transition-transform"
+            aria-label="Remove from wishlist"
+          >
+            <Heart className="h-5 w-5 fill-red-500 text-red-500" />
+          </button>
+        </div>
+      )}
+
+      {/* Top row: name block + sparkline — identical layout to Mint Basket strategy card */}
       <div className="flex items-start gap-3">
         <div className="flex-1 flex items-start justify-between gap-4">
-          <div className="text-left space-y-1">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-900">
+          <div className="text-left space-y-1 pr-8">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-900 leading-snug">
               {item.name || item.isin}
             </p>
             <div>
               <p className="text-xs text-slate-600 line-clamp-1">
                 {isBasket ? "Investment Basket" : "Equity"}
-                {item.isin ? ` · ${item.isin}` : ""}
+                {!isBasket && item.isin ? ` · ${item.isin}` : ""}
               </p>
-              {priceCents > 0 && (
-                <p className="text-[11px] text-slate-400">
-                  {centsToRand(priceCents)} / share
-                </p>
+              {priceLabel && (
+                <p className="text-[11px] text-slate-400">{priceLabel}</p>
               )}
             </div>
           </div>
@@ -105,16 +131,18 @@ function WishlistItemCard({ item }) {
         </div>
       </div>
 
-      {/* Tags row — identical pill style */}
+      {/* Tags row — identical pill style to strategy card */}
       <div className="mt-3 flex flex-wrap gap-2">
         <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600">
-          {isBasket ? "Basket" : "Equity"}
+          {isBasket
+            ? totalHoldings > 0 ? `${totalHoldings} holdings` : "Basket"
+            : "Equity"}
         </span>
         {isFunded ? (
           <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-600">
             Funded ✓
           </span>
-        ) : (
+        ) : !isBasket && (
           <span className="rounded-full border border-violet-200 bg-violet-50 px-3 py-1 text-xs font-semibold text-violet-600">
             {filled} / {target} share{target !== 1 ? "s" : ""}
           </span>
@@ -129,35 +157,58 @@ function WishlistItemCard({ item }) {
       {/* Gift-progress row — identical layout to YTD return row */}
       <div className="mt-3 flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2">
         <span className="text-xs font-semibold text-slate-600">Gift progress</span>
-        <div className="flex flex-col items-end gap-1">
-          <span
-            className={`text-xs font-bold ${
-              percent === 100 ? "text-emerald-600" : "text-[#6B21A8]"
-            }`}
-          >
-            {percent}%
-          </span>
-        </div>
+        <span
+          className={`text-xs font-bold ${
+            percent === 100 ? "text-emerald-600" : "text-[#6B21A8]"
+          }`}
+        >
+          {percent}%
+        </span>
       </div>
 
-      {/* Holdings-snapshot strip — identical logo circles + label */}
+      {/* Holdings snapshot — BASKET: overlapping logo circles; SHARE: single logo */}
       <div className="mt-3 flex items-center gap-3">
-        <div className="flex -space-x-2">
-          {item.logo_url ? (
-            <div className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border border-white bg-white shadow-sm">
-              <img
-                src={item.logo_url}
-                alt={item.name}
-                className="h-full w-full object-cover"
-              />
+        {isBasket && holdingsSnapshot.length > 0 ? (
+          <>
+            <div className="flex -space-x-2">
+              {holdingsSnapshot.slice(0, 3).map((h) => (
+                <div
+                  key={h.symbol}
+                  className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border border-white bg-white shadow-sm"
+                >
+                  {h.logo_url ? (
+                    <img src={h.logo_url} alt={h.name} className="h-full w-full object-cover" />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center bg-slate-100 text-[8px] font-bold text-slate-600">
+                      {h.symbol?.substring(0, 2)}
+                    </div>
+                  )}
+                </div>
+              ))}
+              {totalHoldings > 3 && (
+                <div className="flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 bg-slate-50 text-[10px] font-semibold text-slate-500">
+                  +{totalHoldings - 3}
+                </div>
+              )}
             </div>
-          ) : (
-            <div className="flex h-7 w-7 items-center justify-center rounded-full border border-white bg-violet-100 text-[8px] font-bold text-violet-700 shadow-sm">
-              {(item.name || item.isin || "?")[0]}
+            <span className="text-xs font-semibold text-slate-500">Holdings snapshot</span>
+          </>
+        ) : (
+          <>
+            <div className="flex -space-x-2">
+              {item.logo_url ? (
+                <div className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border border-white bg-white shadow-sm">
+                  <img src={item.logo_url} alt={item.name} className="h-full w-full object-cover" />
+                </div>
+              ) : (
+                <div className="flex h-7 w-7 items-center justify-center rounded-full border border-white bg-violet-100 text-[8px] font-bold text-violet-700 shadow-sm">
+                  {(item.name || item.isin || "?")[0]}
+                </div>
+              )}
             </div>
-          )}
-        </div>
-        <span className="text-xs font-semibold text-slate-500">Holdings snapshot</span>
+            <span className="text-xs font-semibold text-slate-500">Holdings snapshot</span>
+          </>
+        )}
       </div>
     </div>
   );
@@ -192,6 +243,24 @@ export default function GiftRegistryDetailPage({ registryId, onNavigate, onBack 
   const items = registry?.items || [];
   const progress = getRegistryProgress(items);
   const meta = REGISTRY_STATUS_META[registry?.status] || REGISTRY_STATUS_META.DRAFT;
+
+  async function removeItem(itemId) {
+    try {
+      const session = await (await supabaseReady).auth.getSession();
+      const token = session?.data?.session?.access_token;
+      const res = await fetch(`/api/gift-registry/items/${itemId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        throw new Error(json.error || "Could not remove item");
+      }
+      reload();
+    } catch (e) {
+      console.error("[registry] remove item error:", e.message);
+    }
+  }
 
   async function performAction(action) {
     setActionLoading(true);
@@ -314,7 +383,7 @@ export default function GiftRegistryDetailPage({ registryId, onNavigate, onBack 
             <p className="text-xs text-gray-500 font-medium mb-3">Wishlist items</p>
             <div className="flex gap-4 overflow-x-auto snap-x snap-mandatory pb-2 -mx-5 px-5">
               {items.map((item) => (
-                <WishlistItemCard key={item.id} item={item} />
+                <WishlistItemCard key={item.id} item={item} onRemove={removeItem} />
               ))}
             </div>
           </div>
