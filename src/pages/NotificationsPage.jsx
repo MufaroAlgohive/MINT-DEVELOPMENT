@@ -1,43 +1,66 @@
 import React, { useState, useRef, useEffect } from "react";
-import { ChevronLeft, Settings, Mailbox, CheckCheck, Trash2 } from "lucide-react";
-import { useNotificationsContext, groupNotificationsByDate } from "../lib/NotificationsContext";
+import {
+  ChevronLeft, Settings, Mailbox, CheckCheck, Trash2,
+  Receipt, Shield, Info, Gift, UserCheck, CreditCard,
+  TrendingUp, Landmark,
+} from "lucide-react";
+import { useNotificationsContext, groupNotificationsByDate, getNotificationIcon } from "../lib/NotificationsContext";
 import NotificationsSkeleton from "../components/NotificationsSkeleton";
 
-/* ── colour palette per notification type ───────────────────────────────── */
-const getAccent = (notification) => {
-  const action = notification.payload?.action;
-  const isGiftReceived = action === "OPEN_GIFT_REGISTRY" && !!notification.payload?.gifter_user_id;
-  const isSharedWishlist = action === "OPEN_GIFT_REGISTRY" && !notification.payload?.gifter_user_id;
+/* ── icon component map ─────────────────────────────────────────────────── */
+const ICON_MAP = {
+  receipt:       Receipt,
+  shield:        Shield,
+  info:          Info,
+  gift:          Gift,
+  "user-check":  UserCheck,
+  "credit-card": CreditCard,
+  "trending-up": TrendingUp,
+  landmark:      Landmark,
+};
+
+const OCCASION_EMOJI = {
+  BIRTHDAY: "🎂", WEDDING: "💍", BABY: "👶",
+  GRADUATION: "🎓", FESTIVE: "🎄", CUSTOM: "🎉",
+};
+
+/* ── wishlist / gift override colours ───────────────────────────────────── */
+const getTypeStyle = (notification) => {
+  const action          = notification.payload?.action;
+  const isWishlist      = action === "OPEN_GIFT_REGISTRY";
+  const isGiftReceived  = isWishlist && !!notification.payload?.gifter_user_id;
 
   if (isGiftReceived) return {
-    avatarBg:   "bg-gradient-to-br from-amber-400 to-orange-500",
-    avatarText: "text-white",
-    border:     "border-l-amber-400",
-    dot:        "bg-amber-400",
-    bubble:     "border-l-4 border-amber-200 bg-amber-50",
-    ctaGrad:    "from-amber-500 to-orange-600",
-    headerBar:  "from-amber-400/20 to-transparent",
-    label:      "text-amber-600",
+    iconBg:    "bg-amber-100 text-amber-600",
+    border:    "border-l-4 border-amber-400",
+    dot:       "bg-amber-400",
+    ctaBg:     "bg-[#6B21A8]",
+    pillBg:    "bg-amber-50 border border-amber-100",
+    pillText:  "text-amber-700",
+    pillCount: "text-amber-400",
+    threadBar: "bg-amber-400",
   };
-  if (isSharedWishlist) return {
-    avatarBg:   "bg-gradient-to-br from-violet-500 to-purple-700",
-    avatarText: "text-white",
-    border:     "border-l-violet-400",
-    dot:        "bg-violet-500",
-    bubble:     "border-l-4 border-violet-200 bg-violet-50",
-    ctaGrad:    "from-violet-600 to-purple-800",
-    headerBar:  "from-violet-400/20 to-transparent",
-    label:      "text-violet-600",
+  if (isWishlist) return {
+    iconBg:    "bg-violet-100 text-violet-600",
+    border:    "border-l-4 border-violet-400",
+    dot:       "bg-violet-500",
+    ctaBg:     "bg-[#6B21A8]",
+    pillBg:    "bg-violet-50 border border-violet-100",
+    pillText:  "text-violet-700",
+    pillCount: "text-violet-400",
+    threadBar: "bg-violet-500",
   };
+  // default — use getNotificationIcon colour for the dot
+  const { icon, color } = getNotificationIcon(notification.type);
   return {
-    avatarBg:   "bg-gradient-to-br from-slate-600 to-slate-800",
-    avatarText: "text-white",
-    border:     "border-l-slate-400",
-    dot:        "bg-slate-500",
-    bubble:     "border-l-4 border-slate-200 bg-slate-50",
-    ctaGrad:    "from-slate-700 to-slate-900",
-    headerBar:  "from-slate-400/10 to-transparent",
-    label:      "text-slate-500",
+    iconBg:    color,
+    border:    "",
+    dot:       "bg-emerald-400",
+    ctaBg:     "bg-slate-900",
+    pillBg:    "",
+    pillText:  "",
+    pillCount: "",
+    threadBar: "bg-blue-400",
   };
 };
 
@@ -51,7 +74,10 @@ const formatBubbleDate = (d) => {
   const yest = new Date(now); yest.setDate(now.getDate() - 1);
   if (date.toDateString() === now.toDateString())  return `Today at ${formatTime(d)}`;
   if (date.toDateString() === yest.toDateString()) return `Yesterday at ${formatTime(d)}`;
-  return date.toLocaleDateString("en-ZA", { weekday: "short", day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  return date.toLocaleDateString("en-ZA", {
+    weekday: "short", day: "numeric", month: "short",
+    year: "numeric", hour: "2-digit", minute: "2-digit",
+  });
 };
 
 const formatListDate = (d) => {
@@ -70,18 +96,17 @@ const getSender = (n) => {
   return "Mint";
 };
 
-const initials = (name) =>
-  name.split(" ").map((p) => p[0]).slice(0, 2).join("").toUpperCase();
-
 /* ── Thread (detail) view ───────────────────────────────────────────────── */
 const NotificationThreadView = ({ notification, onBack, onDelete, onNavigate }) => {
-  const isWishlist    = notification.payload?.action === "OPEN_GIFT_REGISTRY";
+  const isWishlist     = notification.payload?.action === "OPEN_GIFT_REGISTRY";
   const isGiftReceived = isWishlist && !!notification.payload?.gifter_user_id;
-  const shareToken    = notification.payload?.share_token;
-  const sender        = getSender(notification);
-  const ini           = initials(sender);
-  const accent        = getAccent(notification);
-  const endRef        = useRef(null);
+  const shareToken     = notification.payload?.share_token;
+  const sender         = getSender(notification);
+  const style          = getTypeStyle(notification);
+  const { icon }       = getNotificationIcon(notification.type);
+  const IconComp       = ICON_MAP[icon] || Info;
+  const occasion       = notification.payload?.occasion;
+  const endRef         = useRef(null);
 
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, []);
 
@@ -90,31 +115,34 @@ const NotificationThreadView = ({ notification, onBack, onDelete, onNavigate }) 
 
       {/* ── Header ── */}
       <div className="bg-white border-b border-slate-100 shadow-sm shrink-0 overflow-hidden">
-        {/* Colour bar at the very top */}
-        <div className={`h-1 w-full bg-gradient-to-r ${accent.ctaGrad}`} />
+        {/* type-coloured top bar */}
+        <div className={`h-1 w-full ${style.threadBar}`} />
 
-        <div className="flex items-center px-4 pt-3 pb-3 gap-3">
+        <div className="flex items-center px-4 pt-3 pb-4 gap-3">
           <button
             type="button"
             onClick={onBack}
-            className="flex items-center gap-1 text-slate-600 hover:text-slate-900 transition-colors"
+            className="flex items-center gap-1 text-slate-600 hover:text-slate-900 transition-colors shrink-0"
           >
             <ChevronLeft className="h-5 w-5" strokeWidth={2} />
             <span className="text-[15px] font-medium">Back</span>
           </button>
 
           <div className="flex-1 flex flex-col items-center gap-1.5">
-            <div className={`w-11 h-11 rounded-full ${accent.avatarBg} flex items-center justify-center shadow-md`}>
-              <span className={`text-[14px] font-bold tracking-wide ${accent.avatarText}`}>{ini}</span>
+            <div className={`w-12 h-12 rounded-full flex items-center justify-center shadow-sm ${style.iconBg}`}>
+              {isWishlist
+                ? <span className="text-2xl leading-none">{OCCASION_EMOJI[occasion] || "🎁"}</span>
+                : <IconComp className="h-6 w-6" />
+              }
             </div>
-            <p className="text-[13px] font-semibold text-slate-800 leading-none">{sender}</p>
+            <p className="text-[13px] font-semibold text-slate-700 leading-none">{sender}</p>
           </div>
 
           <button
             type="button"
             onClick={() => { onDelete(notification.id); onBack(); }}
-            aria-label="Delete notification"
-            className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 hover:bg-red-50 hover:text-red-500 transition-colors"
+            aria-label="Delete"
+            className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 hover:bg-red-50 hover:text-red-500 transition-colors shrink-0"
           >
             <Trash2 className="h-4 w-4" />
           </button>
@@ -123,16 +151,19 @@ const NotificationThreadView = ({ notification, onBack, onDelete, onNavigate }) 
 
       {/* ── Messages ── */}
       <div className="flex-1 overflow-y-auto px-5 py-7 space-y-3">
-        <p className="text-center text-[11px] font-semibold text-slate-400 uppercase tracking-widest mb-5">
+        <p className="text-center text-[11px] font-semibold text-slate-400 uppercase tracking-widest mb-6">
           {formatBubbleDate(notification.created_at)}
         </p>
 
-        {/* Title bubble */}
+        {/* Icon avatar + title bubble */}
         <div className="flex items-end gap-3">
-          <div className={`w-8 h-8 rounded-full ${accent.avatarBg} flex items-center justify-center shrink-0 mb-0.5 shadow-sm`}>
-            <span className={`text-[11px] font-bold ${accent.avatarText}`}>{ini}</span>
+          <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 mb-0.5 shadow-sm ${style.iconBg}`}>
+            {isWishlist
+              ? <span className="text-base leading-none">{OCCASION_EMOJI[occasion] || "🎁"}</span>
+              : <IconComp className="h-4 w-4" />
+            }
           </div>
-          <div className={`bg-white border border-slate-100 shadow-sm rounded-2xl rounded-bl-sm px-5 py-4 max-w-[76%] ${accent.bubble}`}>
+          <div className="bg-white border border-slate-100 shadow-sm rounded-2xl rounded-bl-sm px-5 py-4 max-w-[76%]">
             <p className="text-[15px] font-semibold text-slate-800 leading-snug">{notification.title}</p>
           </div>
         </div>
@@ -145,25 +176,30 @@ const NotificationThreadView = ({ notification, onBack, onDelete, onNavigate }) 
           </div>
         </div>
 
-        {/* Wishlist / gift card — tappable */}
+        {/* Wishlist card bubble */}
         {isWishlist && shareToken && (
           <div className="flex items-end gap-3">
             <div className="w-8 shrink-0" />
             <button
               type="button"
               onClick={() => onNavigate?.("giftRegistryPublic", { token: shareToken })}
-              className={`bg-gradient-to-br ${accent.ctaGrad} rounded-2xl rounded-bl-sm px-5 py-4 text-left active:scale-95 transition-transform shadow-lg max-w-[76%]`}
+              className={`rounded-2xl rounded-bl-sm px-5 py-4 text-left active:scale-95 transition-transform shadow-md max-w-[76%] w-full ${style.pillBg}`}
             >
-              <p className={`text-[10px] font-bold uppercase tracking-widest mb-1.5 text-white/60`}>
-                {isGiftReceived ? "Gift received" : "Wishlist"}
-              </p>
-              <p className="text-[15px] font-bold text-white leading-snug">
-                {notification.payload?.registry_title ||
-                  notification.title?.match(/"([^"]+)"/)?.[1] ||
-                  "View Wishlist"}
-              </p>
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-xl leading-none">{OCCASION_EMOJI[occasion] || "🎁"}</span>
+                <div className="min-w-0">
+                  <p className={`text-[10px] font-bold uppercase tracking-widest ${style.pillCount}`}>
+                    {isGiftReceived ? "Gift received" : "Wishlist"}
+                  </p>
+                  <p className={`text-[15px] font-bold leading-snug truncate ${style.pillText}`}>
+                    {notification.payload?.registry_title ||
+                      notification.title?.match(/"([^"]+)"/)?.[1] ||
+                      "View Wishlist"}
+                  </p>
+                </div>
+              </div>
               {notification.payload?.item_count > 0 && (
-                <p className="text-[12px] text-white/60 mt-1">
+                <p className={`text-[12px] mt-1 ${style.pillCount}`}>
                   {notification.payload.item_count} item{notification.payload.item_count !== 1 ? "s" : ""}
                 </p>
               )}
@@ -180,7 +216,7 @@ const NotificationThreadView = ({ notification, onBack, onDelete, onNavigate }) 
           <button
             type="button"
             onClick={() => onNavigate?.("giftRegistryPublic", { token: shareToken })}
-            className={`w-full bg-gradient-to-r ${accent.ctaGrad} text-white text-[15px] font-semibold py-4 rounded-full shadow-md active:opacity-80 transition-opacity`}
+            className={`w-full ${style.ctaBg} text-white text-[15px] font-semibold py-4 rounded-full shadow-md active:opacity-80 transition-opacity`}
           >
             View Wishlist
           </button>
@@ -213,11 +249,13 @@ const NotificationItem = ({ notification, onMarkRead, onDelete, onOpen }) => {
     else if (d < -50) setSwiped(false);
   };
 
-  const sender  = getSender(notification);
-  const ini     = initials(sender);
-  const unread  = !notification.read_at;
-  const accent  = getAccent(notification);
-  const isWishlist = notification.payload?.action === "OPEN_GIFT_REGISTRY";
+  const unread      = !notification.read_at;
+  const style       = getTypeStyle(notification);
+  const { icon }    = getNotificationIcon(notification.type);
+  const IconComp    = ICON_MAP[icon] || Info;
+  const isWishlist  = notification.payload?.action === "OPEN_GIFT_REGISTRY";
+  const occasion    = notification.payload?.occasion;
+  const sender      = getSender(notification);
 
   const handleClick = () => {
     if (swiped) return;
@@ -239,34 +277,55 @@ const NotificationItem = ({ notification, onMarkRead, onDelete, onOpen }) => {
         onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}
         onClick={handleClick}
-        className={`relative flex items-center gap-4 bg-white px-4 py-4 cursor-pointer transition-transform duration-200 ${swiped ? "-translate-x-20" : "translate-x-0"} ${unread && isWishlist ? `border-l-4 ${accent.border}` : ""}`}
+        className={`relative flex items-center gap-4 bg-white px-4 py-4 cursor-pointer transition-transform duration-200 ${swiped ? "-translate-x-20" : "translate-x-0"} ${unread && (isWishlist) ? style.border : ""}`}
       >
-        {/* Avatar */}
+        {/* Typed icon circle */}
         <div className="relative shrink-0">
-          <div className={`w-12 h-12 rounded-full flex items-center justify-center shadow-sm ${unread ? accent.avatarBg : "bg-slate-100"}`}>
-            <span className={`text-[14px] font-bold tracking-wide ${unread ? accent.avatarText : "text-slate-500"}`}>{ini}</span>
+          <div className={`w-12 h-12 rounded-full flex items-center justify-center shadow-sm ${unread ? style.iconBg : "bg-slate-100 text-slate-400"}`}>
+            {isWishlist
+              ? <span className="text-xl leading-none">{OCCASION_EMOJI[occasion] || "🎁"}</span>
+              : <IconComp className="h-5 w-5" />
+            }
           </div>
           {unread && (
-            <span className={`absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white ${accent.dot}`} />
+            <span className={`absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white ${style.dot}`} />
           )}
         </div>
 
         {/* Text */}
         <div className="flex-1 min-w-0 py-0.5">
           <div className="flex items-baseline justify-between gap-2 mb-1">
-            <p className={`text-[15px] truncate ${unread ? "font-bold text-slate-900" : "font-semibold text-slate-700"}`}>
+            <p className={`text-[15px] truncate ${unread ? "font-bold text-slate-900" : "font-semibold text-slate-600"}`}>
               {sender}
             </p>
-            <span className={`text-[12px] shrink-0 ${unread ? `font-semibold ${accent.label}` : "text-slate-400"}`}>
+            <span className={`text-[12px] shrink-0 ${unread ? "font-semibold text-slate-600" : "text-slate-400"}`}>
               {formatListDate(notification.created_at)}
             </span>
           </div>
           <p className={`text-[13px] truncate leading-snug ${unread ? "font-medium text-slate-700" : "text-slate-400"}`}>
             {notification.title}
           </p>
-          <p className="text-[13px] text-slate-400 truncate leading-snug mt-0.5">
-            {notification.body}
-          </p>
+
+          {/* Wishlist pill */}
+          {isWishlist && notification.payload?.registry_title && (
+            <div className={`mt-1.5 inline-flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 ${style.pillBg}`}>
+              <span className="text-sm leading-none">{OCCASION_EMOJI[occasion] || "🎁"}</span>
+              <span className={`text-[12px] font-semibold truncate max-w-[140px] ${style.pillText}`}>
+                {notification.payload.registry_title}
+              </span>
+              {notification.payload?.item_count > 0 && (
+                <span className={`text-[10px] shrink-0 ${style.pillCount}`}>
+                  · {notification.payload.item_count} item{notification.payload.item_count !== 1 ? "s" : ""}
+                </span>
+              )}
+            </div>
+          )}
+
+          {!isWishlist && (
+            <p className="text-[13px] text-slate-400 truncate leading-snug mt-0.5">
+              {notification.body}
+            </p>
+          )}
         </div>
 
         <ChevronLeft className="h-4 w-4 text-slate-300 rotate-180 shrink-0" strokeWidth={2} />
@@ -352,7 +411,7 @@ const NotificationsPage = ({ onBack, onOpenSettings, onNavigate }) => {
               onClick={markAllAsRead}
               className="flex items-center gap-2 bg-white border border-slate-200 shadow-sm rounded-full px-4 py-2 text-[13px] font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
             >
-              <CheckCheck className="h-4 w-4 text-violet-500" />
+              <CheckCheck className="h-4 w-4 text-emerald-500" />
               Mark all as read
             </button>
           </div>
