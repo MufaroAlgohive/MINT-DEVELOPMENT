@@ -61,14 +61,17 @@ async function getUser(req, supabaseAdmin) {
   return user;
 }
 
-// KYC check: user must have a completed onboarding record
+// KYC check: user must have a verified onboarding record.
+// Accepts 'approved', 'onboarding_complete', and legacy 'verified' — same logic
+// as parseOnboardingFlags in src/lib/checkOnboardingComplete.js.
 async function isKycComplete(userId, supabaseAdmin) {
   try {
     const { data } = await supabaseAdmin
-      .from('user_onboarding_pack_details')
-      .select('id')
+      .from('user_onboarding')
+      .select('kyc_status')
       .eq('user_id', userId)
-      .single();
+      .in('kyc_status', ['approved', 'onboarding_complete', 'verified'])
+      .maybeSingle();
     return !!data;
   } catch {
     return false;
