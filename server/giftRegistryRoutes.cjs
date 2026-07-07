@@ -364,6 +364,25 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
 
       if (error || !registry) return res.status(404).json({ error: 'Registry not found' });
       registry.items = await enrichItems(registry.items, supabaseAdmin);
+
+      // Record authenticated viewer for nudge eligibility tracking (fire-and-forget)
+      const authHeader = req.headers.authorization || '';
+      const viewerToken = authHeader.replace('Bearer ', '');
+      if (viewerToken) {
+        supabaseAdmin.auth.getUser(viewerToken).then(({ data: { user } }) => {
+          if (user?.id) {
+            supabaseAdmin.from('gift_registry_views').upsert(
+              { registry_id: registry.id, viewer_user_id: user.id, viewed_at: new Date().toISOString() },
+              { onConflict: 'registry_id,viewer_user_id' }
+            ).then(({ error: ve }) => {
+              if (ve && ve.code !== '42P01') {
+                console.warn('[gift-registry] view record failed:', ve.message);
+              }
+            });
+          }
+        }).catch(() => {});
+      }
+
       return res.json({ registry });
     } catch (e) {
       return res.status(500).json({ error: e.message });
@@ -970,16 +989,28 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
         return res.status(400).json({ error: 'Cannot notify yourself' });
       }
 
-      // Compute beneficiary notification state server-side (authoritative — not localStorage)
-      const { data: existingNotif } = await supabaseAdmin
-        .from('notifications')
-        .select('id, created_at, read_at')
-        .eq('user_id', targetUserId)
-        .eq('type', 'WISHLIST_SHARE')
-        .filter('payload->>registry_id', 'eq', registryId)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+      // Compute beneficiary notification state server-side (authoritative)
+      // Nudge eligibility is checked against gift_registry_views (has the beneficiary viewed the registry?)
+      const [notifResult, viewResult] = await Promise.all([
+        supabaseAdmin
+          .from('notifications')
+          .select('id, created_at')
+          .eq('user_id', targetUserId)
+          .eq('type', 'WISHLIST_SHARE')
+          .filter('payload->>registry_id', 'eq', registryId)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+        supabaseAdmin
+          .from('gift_registry_views')
+          .select('id')
+          .eq('registry_id', registryId)
+          .eq('viewer_user_id', targetUserId)
+          .maybeSingle(),
+      ]);
+
+      const existingNotif = notifResult.data;
+      const hasViewed = !!viewResult.data;
 
       let notifState = 'none'; // 'none' | 'sent' | 'nudge'
       if (existingNotif) {
@@ -987,11 +1018,11 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
         if (diffH < 24) {
           notifState = 'sent'; // sent < 24h ago — too soon
         } else if (diffH < 48) {
-          notifState = 'sent'; // 24–48h window — still too soon
-        } else if (!existingNotif.read_at) {
-          notifState = 'nudge'; // ≥ 48h, not viewed — eligible for nudge
+          notifState = 'sent'; // 24–48h grace period — still too soon
+        } else if (!hasViewed) {
+          notifState = 'nudge'; // ≥ 48h, has not opened the wishlist — eligible for nudge
         } else {
-          notifState = 'none'; // ≥ 48h and was read — allow fresh send
+          notifState = 'none'; // ≥ 48h and has viewed the registry — allow fresh resend
         }
       }
 

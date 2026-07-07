@@ -83,6 +83,16 @@ ALTER TABLE gift_contributions ADD COLUMN IF NOT EXISTS gifter_message text;
 CREATE INDEX IF NOT EXISTS idx_gift_contrib_item   ON gift_contributions(registry_item_id);
 CREATE INDEX IF NOT EXISTS idx_gift_contrib_gifter ON gift_contributions(gifter_user_id);
 
+-- Tracks which authenticated users have viewed a public wishlist page (used for nudge eligibility)
+CREATE TABLE IF NOT EXISTS gift_registry_views (
+  id               uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  registry_id      uuid NOT NULL REFERENCES gift_events(id) ON DELETE CASCADE,
+  viewer_user_id   uuid NOT NULL,
+  viewed_at        timestamptz DEFAULT now(),
+  UNIQUE (registry_id, viewer_user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_gift_registry_views ON gift_registry_views(registry_id, viewer_user_id);
+
 -- Row-Level Security
 -- The server uses the Supabase SERVICE ROLE key which bypasses RLS entirely,
 -- so no explicit policies are needed for backend access.

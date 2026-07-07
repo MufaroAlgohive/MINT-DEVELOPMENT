@@ -61,11 +61,19 @@ async function upsertBeneficiary({ firstName, lastName, email }) {
 function getBeneficiaryState(email, registryId) {
   const entry = getSentMap(registryId)[email?.toLowerCase()];
   if (!entry) return "none";
-  // Use server-synced 'state' field if present; fall back to time-based for old entries
+  // Explicit server-returned nudge state takes priority
+  if (entry.state === "nudge") return "nudge";
+  // Invite-sent entries stay "sent" until viewed (no time-based nudge for non-Mint users)
+  if (entry.invite) return "sent";
+  // Time-based transition: sent → nudge after 48h (server will confirm eligibility on click)
+  if (entry.sentAt) {
+    const diffH = (Date.now() - new Date(entry.sentAt).getTime()) / 3_600_000;
+    if (diffH >= 48) return "nudge";
+    if (diffH < 24) return "sent";
+    return "sent"; // 24–48h: still in grace period
+  }
   if (entry.state) return entry.state;
-  const diffH = (Date.now() - new Date(entry.sentAt).getTime()) / 3_600_000;
-  if (diffH < 24) return "sent";
-  return "sent";
+  return "sent"; // safe fallback for legacy entries
 }
 
 export default function GiftRegistrySharePopup({ token, title, registryId, onClose, onNavigate }) {
