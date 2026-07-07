@@ -215,6 +215,7 @@ export default function GiftStrategyPickerPage({ onBack, onNavigate, autoOpenWis
   const [giftStrategyWatchlist, setGiftStrategyWatchlist] = useState([]);
   const [toastMsg, setToastMsg] = useState("");
   const [toastVisible, setToastVisible] = useState(false);
+  const [toastRegistryId, setToastRegistryId] = useState(null);
 
   const searchRef = useRef(null);
   const wishlistMenuRef = useRef(null);
@@ -640,12 +641,13 @@ export default function GiftStrategyPickerPage({ onBack, onNavigate, autoOpenWis
         <WishlistPickerSheet
           itemKey={wishlistPickerKey}
           onClose={() => setWishlistPickerKey(null)}
-          onSaved={(savedItemKey, listName) => {
+          onSaved={(savedItemKey, listName, registryId) => {
             const next = new Set([...wishlistedKeys, savedItemKey]);
             setWishlistedKeys(next);
             updatePrefs({ wishlistedKeys: [...next] });
             setWishlistPickerKey(null);
-            setToastMsg(`Saved to "${listName}"`);
+            setToastMsg(`Added to "${listName}"`);
+            setToastRegistryId(registryId || null);
             setToastVisible(true);
           }}
           onCreateNew={(name) => {
@@ -688,6 +690,15 @@ export default function GiftStrategyPickerPage({ onBack, onNavigate, autoOpenWis
         message={toastMsg}
         visible={toastVisible}
         onHide={() => setToastVisible(false)}
+        actionLabel="View →"
+        onAction={() => {
+          setToastVisible(false);
+          if (toastRegistryId) {
+            onNavigate?.("giftRegistryDashboard", { registryId: toastRegistryId });
+          } else {
+            onNavigate?.("giftRegistryDashboard");
+          }
+        }}
       />
     </div>
   );

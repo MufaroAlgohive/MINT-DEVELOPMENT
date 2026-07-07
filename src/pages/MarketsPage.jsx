@@ -10,6 +10,7 @@ import { useProfile } from "../lib/useProfile";
 import { TrendingUp, Search, SlidersHorizontal, X, ChevronRight, Bookmark, PlayCircle, Gift, Heart } from "lucide-react";
 import WishlistModal from "../components/WishlistModal.jsx";
 import WishlistPickerSheet from "../components/WishlistPickerSheet.jsx";
+import WishlistToast from "../components/WishlistToast.jsx";
 import ChildInvestModal from "../components/ChildInvestModal.jsx";
 import { saveMarketsInvestFilters, loadMarketsInvestFilters, saveMarketsStrategyFilters, loadMarketsStrategyFilters, buildInvestChips, buildChipsFromFilters } from "../lib/usePersistedFilters.js";
 import NotificationBell from "../components/NotificationBell";
@@ -500,6 +501,9 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
   const [wishlistedKeys, setWishlistedKeys] = useState(new Set());
   const [strategyWatchlist, setStrategyWatchlist] = useState([]);
   const [wishlistPickerKey, setWishlistPickerKey] = useState(null); // itemKey awaiting picker
+  const [wishlistToastMsg, setWishlistToastMsg] = useState("");
+  const [wishlistToastVisible, setWishlistToastVisible] = useState(false);
+  const [wishlistToastRegistryId, setWishlistToastRegistryId] = useState(null);
 
   // Load wishlisted keys + strategy watchlist from API on mount
   useEffect(() => {
@@ -3324,11 +3328,14 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
         <WishlistPickerSheet
           itemKey={wishlistPickerKey}
           onClose={() => setWishlistPickerKey(null)}
-          onSaved={(savedItemKey, listName) => {
+          onSaved={(savedItemKey, listName, registryId) => {
             const next = new Set([...wishlistedKeys, savedItemKey]);
             setWishlistedKeys(next);
             updateWishlistPrefs({ wishlistedKeys: [...next] });
             setWishlistPickerKey(null);
+            setWishlistToastMsg(`Added to "${listName}"`);
+            setWishlistToastRegistryId(registryId || null);
+            setWishlistToastVisible(true);
           }}
           onCreateNew={(name) => {
             const key = wishlistPickerKey;
@@ -3337,6 +3344,19 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
           }}
         />
       )}
+
+      <WishlistToast
+        message={wishlistToastMsg}
+        visible={wishlistToastVisible}
+        onHide={() => setWishlistToastVisible(false)}
+        actionLabel="View →"
+        onAction={() => {
+          setWishlistToastVisible(false);
+          window.dispatchEvent(new CustomEvent("navigate-within-app", {
+            detail: { page: "giftRegistryDashboard", registryId: wishlistToastRegistryId }
+          }));
+        }}
+      />
     </div>
   );
 };

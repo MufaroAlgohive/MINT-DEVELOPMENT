@@ -103,7 +103,7 @@ export default function WishlistPickerSheet({ itemKey, onClose, onSaved, onCreat
 
       setSavedId(list.id);
       setTimeout(() => {
-        onSaved?.(itemKey, list.name);
+        onSaved?.(itemKey, list.name, list.id);
         onClose();
       }, 550);
     } catch (e) {
