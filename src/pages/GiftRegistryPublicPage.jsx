@@ -1,34 +1,29 @@
 import React, { useState, useCallback, useEffect } from "react";
+import { ChevronLeft, Share2, Calendar, Clock, Users, Gift } from "lucide-react";
 import { usePublicRegistry } from "../lib/useGiftRegistry.js";
 import { useGiftRegistryRealtime } from "../lib/useGiftRegistryRealtime.js";
 import {
   OCCASION_LABELS,
   getRegistryProgress,
-  centsToRand,
 } from "../lib/giftRegistryUtils.js";
 import GiftRegistryItemCard from "../components/GiftRegistryItemCard.jsx";
 import GiftRegistryItemCheckoutSheet from "../components/GiftRegistryItemCheckoutSheet.jsx";
 import GiftRegistryProgressBar from "../components/GiftRegistryProgressBar.jsx";
 import { supabaseReady } from "../lib/supabase.js";
 
-function GifterAvatar({ name, email }) {
-  const initials = name
-    ? name.split(" ").map(p => p[0]).slice(0, 2).join("").toUpperCase()
-    : email
-    ? email[0].toUpperCase()
-    : "?";
-  return (
-    <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center shrink-0">
-      <span className="text-white font-bold text-xs">{initials}</span>
-    </div>
-  );
-}
+const OCCASION_EMOJI = {
+  BIRTHDAY: "🎂",
+  WEDDING: "💍",
+  BABY: "👶",
+  GRADUATION: "🎓",
+  ANNIVERSARY: "❤️",
+  CHRISTMAS: "🎄",
+  OTHER: "🎁",
+};
 
 /**
- * Public shareable registry page.
- * Decision 1 & 3: anyone can VIEW; only logged-in, KYC-complete users can GIFT.
- * Privacy note (confirmed by owner 2026-07-06): shows gifter full name + email publicly.
- * Entry: navigateTo("giftRegistryPublic", { token }) or via /registry/:token deep link
+ * Public shareable registry page — professional fintech look matching the app.
+ * Entry: navigateTo("giftRegistryPublic", { token }) or via /gift/:token deep link
  */
 export default function GiftRegistryPublicPage({
   token,
@@ -90,11 +85,9 @@ export default function GiftRegistryPublicPage({
     setSuccessMsg(null);
   }
 
-  function handleGiftSuccess(json) {
+  function handleGiftSuccess() {
     setCheckoutItem(null);
     setSuccessMsg("Your gift is on its way! 🎁");
-    // Update gifted badge immediately — add the item ID optimistically so the badge
-    // appears right away without waiting for the /my-contributions refetch.
     if (checkoutItem?.id) {
       setMyGiftedItemIds(prev => new Set([...prev, checkoutItem.id]));
     }
@@ -104,7 +97,7 @@ export default function GiftRegistryPublicPage({
   if (loading) {
     return (
       <div className="min-h-screen bg-[#f8f9fc] flex items-center justify-center">
-        <div className="w-8 h-8 border-2 border-purple-600 border-t-transparent rounded-full animate-spin" />
+        <div className="w-8 h-8 border-2 border-slate-300 border-t-slate-800 rounded-full animate-spin" />
       </div>
     );
   }
@@ -112,202 +105,266 @@ export default function GiftRegistryPublicPage({
   if (error || !registry) {
     return (
       <div className="min-h-screen bg-[#f8f9fc] flex flex-col items-center justify-center px-6 text-center">
-        <span className="text-5xl mb-4">🔍</span>
-        <h2 className="font-bold text-gray-800 text-lg mb-2">Wishlist not found</h2>
-        <p className="text-sm text-gray-500 mb-6">
+        <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center mb-4">
+          <Gift className="w-8 h-8 text-slate-400" />
+        </div>
+        <h2 className="font-bold text-slate-800 text-lg mb-2">Wishlist not found</h2>
+        <p className="text-sm text-slate-500 mb-6">
           This wishlist may have been removed or the link has expired.
         </p>
         {onBack && (
-          <button onClick={onBack} className="text-sm text-[#6B21A8] font-semibold">Go back</button>
+          <button
+            onClick={onBack}
+            className="flex items-center gap-1.5 text-sm text-slate-600 font-semibold"
+          >
+            <ChevronLeft className="w-4 h-4" />
+            Go back
+          </button>
         )}
       </div>
     );
   }
 
   const eventDate = registry.event_date
-    ? new Date(registry.event_date).toLocaleDateString("en-ZA", { day: "numeric", month: "long", year: "numeric" })
+    ? new Date(registry.event_date).toLocaleDateString("en-ZA", {
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+      })
     : null;
   const expiryDate = registry.expiry_at
-    ? new Date(registry.expiry_at).toLocaleDateString("en-ZA", { day: "numeric", month: "short" })
+    ? new Date(registry.expiry_at).toLocaleDateString("en-ZA", {
+        day: "numeric",
+        month: "short",
+      })
     : null;
   const isClosed = ["EXPIRED", "COMPLETED", "CANCELLED"].includes(registry.status);
+  const occasionEmoji = OCCASION_EMOJI[registry.occasion] || "🎁";
+  const occasionLabel = OCCASION_LABELS[registry.occasion] || registry.occasion;
 
   return (
     <div className="min-h-screen bg-[#f8f9fc] pb-24">
-      {/* Back nav + share button */}
-      <div className="absolute top-14 left-4 right-4 z-10 flex items-center justify-between">
-        {onBack ? (
-          <button onClick={onBack} className="p-2 bg-white/80 backdrop-blur rounded-xl shadow-sm text-gray-500">
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
+
+      {/* iOS-style navigation header */}
+      <div className="sticky top-0 z-20 bg-[#f8f9fc]/95 backdrop-blur border-b border-slate-100">
+        <div className="flex items-center justify-between px-4 h-14">
+          {onBack ? (
+            <button
+              onClick={onBack}
+              className="flex items-center gap-1 text-slate-600 font-medium text-sm active:opacity-60"
+            >
+              <ChevronLeft className="w-5 h-5" />
+              Back
+            </button>
+          ) : (
+            <div className="w-16" />
+          )}
+          <span className="text-sm font-semibold text-slate-800">Wishlist</span>
+          <button
+            onClick={handleShare}
+            className="flex items-center gap-1.5 text-sm font-semibold text-slate-600 active:opacity-60"
+            aria-label="Share wishlist"
+          >
+            <Share2 className="w-4 h-4" />
+            Share
           </button>
-        ) : <div />}
-        <button
-          onClick={handleShare}
-          className="p-2 bg-white/80 backdrop-blur rounded-xl shadow-sm text-[#6B21A8] flex items-center gap-1.5 px-3"
-          aria-label="Share wishlist"
-        >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
-          </svg>
-          <span className="text-xs font-semibold">Share</span>
-        </button>
+        </div>
       </div>
 
       {shareToast && (
-        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 bg-gray-800 text-white text-sm rounded-full px-5 py-2.5 shadow-lg">
+        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 bg-slate-800 text-white text-sm rounded-full px-5 py-2.5 shadow-lg">
           Link copied!
         </div>
       )}
 
-      {/* Hero */}
-      <div className="bg-gradient-to-br from-[#6B21A8] to-[#9333EA] px-5 pt-20 pb-8 text-white shadow-lg">
-        <p className="text-xs opacity-70 mb-1">{OCCASION_LABELS[registry.occasion] || registry.occasion}</p>
-        <h1 className="text-2xl font-bold mb-1">{registry.title}</h1>
-        <p className="text-sm opacity-80 mb-2">For {registry.beneficiary_display_name}</p>
+      <div className="px-5 pt-5 space-y-3">
 
-        {registry.message && (
-          <p className="text-sm opacity-90 italic mb-3 bg-white/10 rounded-xl px-3 py-2">
-            "{registry.message}"
-          </p>
-        )}
-
-        <div className="flex gap-4 text-xs opacity-75 mb-4">
-          {eventDate && <span>📅 {eventDate}</span>}
-          {expiryDate && !isClosed && <span>⏳ Closes {expiryDate}</span>}
-        </div>
-
-        {/* Progress */}
-        <div className="mt-2">
-          <div className="flex justify-between text-xs mb-1.5 opacity-80">
-            <span>{progress.funded} / {progress.total} shares funded</span>
-            <span>{progress.percent}%</span>
-          </div>
-          <div className="h-2 bg-white/20 rounded-full overflow-hidden">
-            <div
-              className="h-full bg-white rounded-full transition-all duration-500"
-              style={{ width: `${progress.percent}%` }}
-            />
-          </div>
-        </div>
-
-        {/* Gifters roll — avatars of people who've already gifted */}
-        {allContributions.length > 0 && (
-          <div className="mt-4 flex items-center gap-2">
-            <div className="flex -space-x-2">
-              {allContributions.slice(0, 5).map((c, i) => (
-                <GifterAvatar key={c.id || i} name={c.gifter_name} email={c.gifter_email} />
-              ))}
+        {/* Registry identity card */}
+        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
+          <div className="flex items-start gap-3">
+            <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center text-2xl shrink-0">
+              {occasionEmoji}
             </div>
-            <p className="text-xs text-white/70">
-              {allContributions.length === 1
-                ? "1 person has gifted"
-                : `${allContributions.length} people have gifted`}
+            <div className="flex-1 min-w-0">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400 mb-0.5">
+                {occasionLabel}
+              </p>
+              <h1 className="text-lg font-bold text-slate-900 leading-tight">
+                {registry.title}
+              </h1>
+              <p className="text-sm text-slate-500 mt-0.5">
+                For {registry.beneficiary_display_name}
+              </p>
+            </div>
+          </div>
+
+          {registry.message && (
+            <p className="mt-4 text-sm text-slate-600 italic bg-slate-50 rounded-xl px-4 py-3 leading-relaxed border-l-2 border-slate-200">
+              "{registry.message}"
+            </p>
+          )}
+
+          <div className="mt-4 flex flex-wrap gap-3">
+            {eventDate && (
+              <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                {eventDate}
+              </div>
+            )}
+            {expiryDate && !isClosed && (
+              <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                <Clock className="w-3.5 h-3.5 text-slate-400" />
+                Closes {expiryDate}
+              </div>
+            )}
+            {allContributions.length > 0 && (
+              <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                <Users className="w-3.5 h-3.5 text-slate-400" />
+                {allContributions.length} gifter{allContributions.length !== 1 ? "s" : ""}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Progress card */}
+        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm px-5 py-4">
+          <div className="flex justify-between items-baseline mb-2">
+            <p className="text-xs font-semibold text-slate-600">Funding progress</p>
+            <p className="text-xs font-bold text-slate-800">{progress.percent}%</p>
+          </div>
+          <GiftRegistryProgressBar
+            percent={progress.percent}
+            filledQty={progress.funded}
+            targetQty={progress.total}
+            showLabel={false}
+            height="h-2"
+          />
+          <p className="text-[11px] text-slate-400 mt-2">
+            {progress.funded} of {progress.total} share{progress.total !== 1 ? "s" : ""} funded
+          </p>
+        </div>
+
+        {/* Status banners */}
+        {isClosed && (
+          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm px-5 py-4 text-center">
+            <p className="text-sm text-slate-700 font-medium">
+              {registry.status === "COMPLETED"
+                ? "🎉 This wishlist is fully funded!"
+                : "This wishlist is no longer accepting gifts."}
             </p>
           </div>
         )}
-      </div>
 
-      {/* Closed banner */}
-      {isClosed && (
-        <div className="mx-5 mt-4 bg-gray-100 rounded-2xl px-4 py-3 text-center">
-          <p className="text-sm text-gray-600 font-medium">
-            {registry.status === "COMPLETED"
-              ? "🎉 This wishlist is fully funded!"
-              : "This wishlist is no longer accepting gifts."}
+        {successMsg && (
+          <div className="bg-green-50 border border-green-200 rounded-2xl px-5 py-4 text-center">
+            <p className="text-sm text-green-700 font-medium">{successMsg}</p>
+          </div>
+        )}
+
+        {!user && !isClosed && (
+          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm px-5 py-4 text-center">
+            <p className="text-sm text-slate-700 font-semibold mb-1">
+              Sign up to gift from this wishlist
+            </p>
+            <p className="text-xs text-slate-400 mb-3">
+              Join MINT to contribute shares — the gift that grows.
+            </p>
+            <button
+              onClick={onAuthPrompt}
+              className="px-6 py-2.5 bg-slate-900 text-white text-xs font-semibold rounded-xl active:opacity-80"
+            >
+              Create a free MINT account
+            </button>
+          </div>
+        )}
+
+        {user && !isKycComplete && !isClosed && (
+          <div className="bg-amber-50 border border-amber-100 rounded-2xl px-5 py-4 text-center">
+            <p className="text-sm text-amber-800 font-semibold mb-1">
+              Complete your verification to gift
+            </p>
+            <button
+              onClick={() => onAuthPrompt && onAuthPrompt("kyc")}
+              className="mt-1 px-5 py-2 bg-amber-600 text-white text-xs font-semibold rounded-xl active:opacity-80"
+            >
+              Finish verification
+            </button>
+          </div>
+        )}
+
+        {/* Wishlist items */}
+        <div>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400 mb-3 px-0.5">
+            {items.length} item{items.length !== 1 ? "s" : ""} on this wishlist
           </p>
-        </div>
-      )}
-
-      {/* Success banner */}
-      {successMsg && (
-        <div className="mx-5 mt-4 bg-green-50 border border-green-200 rounded-2xl px-4 py-3 text-center">
-          <p className="text-sm text-green-700 font-medium">{successMsg}</p>
-        </div>
-      )}
-
-      {/* Auth / KYC prompts */}
-      {!user && !isClosed && (
-        <div className="mx-5 mt-4 bg-purple-50 border border-purple-100 rounded-2xl px-4 py-3.5 text-center">
-          <p className="text-sm text-[#6B21A8] font-medium">Sign up to gift from this wishlist</p>
-          <button
-            onClick={onAuthPrompt}
-            className="mt-2 px-5 py-2 bg-[#6B21A8] text-white text-xs font-semibold rounded-xl"
-          >
-            Create a free MINT account
-          </button>
-        </div>
-      )}
-      {user && !isKycComplete && !isClosed && (
-        <div className="mx-5 mt-4 bg-amber-50 border border-amber-100 rounded-2xl px-4 py-3.5 text-center">
-          <p className="text-sm text-amber-700 font-medium">Complete your verification to gift</p>
-          <button
-            onClick={() => onAuthPrompt && onAuthPrompt("kyc")}
-            className="mt-2 px-5 py-2 bg-amber-600 text-white text-xs font-semibold rounded-xl"
-          >
-            Finish verification
-          </button>
-        </div>
-      )}
-
-      {/* Wishlist items */}
-      <div className="px-5 mt-5 space-y-3">
-        <p className="text-xs text-gray-500 font-medium">
-          {items.length} item{items.length !== 1 ? "s" : ""} on this wishlist
-        </p>
-        {items.map((item) => (
-          <GiftRegistryItemCard
-            key={item.id}
-            item={item}
-            onGift={handleGiftTap}
-            isOwner={false}
-            canGift={canGift && !isClosed}
-            onAuthPrompt={onAuthPrompt}
-            alreadyGifted={myGiftedItemIds.has(item.id)}
-          />
-        ))}
-      </div>
-
-      {/* Who's gifted section */}
-      {allContributions.length > 0 && (
-        <div className="px-5 mt-6">
-          <p className="text-xs text-gray-500 font-medium mb-3">
-            Who's gifted ({allContributions.length})
-          </p>
-          <div className="space-y-2">
-            {allContributions.map((c) => {
-              const displayName = c.gifter_name || c.gifter_email || "Anonymous";
-              const subLine = c.gifter_name && c.gifter_email && c.gifter_name !== c.gifter_email
-                ? c.gifter_email
-                : null;
-              const itemName = items.find(i => i.id === c.registry_item_id)?.name;
-              return (
-                <div key={c.id} className="bg-white rounded-2xl p-3.5 flex items-center gap-3 border border-gray-100">
-                  <div className="w-9 h-9 rounded-full bg-violet-100 flex items-center justify-center shrink-0">
-                    <span className="text-violet-700 font-bold text-xs">
-                      {c.gifter_name
-                        ? c.gifter_name.split(" ").map(p => p[0]).slice(0, 2).join("").toUpperCase()
-                        : c.gifter_email?.[0]?.toUpperCase() || "?"}
-                    </span>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-gray-800 truncate">{displayName}</p>
-                    {subLine && <p className="text-xs text-gray-400 truncate">{subLine}</p>}
-                    <p className="text-xs text-gray-400">
-                      {c.quantity} share{c.quantity !== 1 ? "s" : ""}
-                      {itemName ? ` of ${itemName}` : ""}
-                    </p>
-                  </div>
-                  <span className="text-lg">🎁</span>
-                </div>
-              );
-            })}
+          <div className="space-y-4">
+            {items.map((item) => (
+              <GiftRegistryItemCard
+                key={item.id}
+                item={item}
+                onGift={handleGiftTap}
+                isOwner={false}
+                canGift={canGift && !isClosed}
+                onAuthPrompt={onAuthPrompt}
+                alreadyGifted={myGiftedItemIds.has(item.id)}
+              />
+            ))}
           </div>
         </div>
-      )}
 
-      {/* Checkout sheet */}
+        {/* Who's gifted section */}
+        {allContributions.length > 0 && (
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400 mb-3 px-0.5">
+              Who's gifted ({allContributions.length})
+            </p>
+            <div className="space-y-2">
+              {allContributions.map((c) => {
+                const displayName = c.gifter_name || c.gifter_email || "Anonymous";
+                const subLine =
+                  c.gifter_name &&
+                  c.gifter_email &&
+                  c.gifter_name !== c.gifter_email
+                    ? c.gifter_email
+                    : null;
+                const itemName = items.find((i) => i.id === c.registry_item_id)?.name;
+                const initials = c.gifter_name
+                  ? c.gifter_name
+                      .split(" ")
+                      .map((p) => p[0])
+                      .slice(0, 2)
+                      .join("")
+                      .toUpperCase()
+                  : c.gifter_email?.[0]?.toUpperCase() || "?";
+                return (
+                  <div
+                    key={c.id}
+                    className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 flex items-center gap-3"
+                  >
+                    <div className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center shrink-0">
+                      <span className="text-slate-600 font-bold text-xs">{initials}</span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-slate-800 truncate">
+                        {displayName}
+                      </p>
+                      {subLine && (
+                        <p className="text-xs text-slate-400 truncate">{subLine}</p>
+                      )}
+                      <p className="text-xs text-slate-400">
+                        {c.quantity} share{c.quantity !== 1 ? "s" : ""}
+                        {itemName ? ` of ${itemName}` : ""}
+                      </p>
+                    </div>
+                    <Gift className="w-4 h-4 text-slate-300 shrink-0" />
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+
       {checkoutItem && (
         <GiftRegistryItemCheckoutSheet
           item={checkoutItem}

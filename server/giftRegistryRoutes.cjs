@@ -126,13 +126,15 @@ async function enrichItems(items, supabaseAdmin) {
   if (basketItems.length) {
     const strategyIds = basketItems.map(i => i.isin);
     const { data: strategies } = await supabaseAdmin
-      .from('strategies_c').select('id, name, holdings').in('id', strategyIds);
+      .from('strategies_c')
+      .select('id, name, short_name, holdings, tags, risk_level, r_ytd, ytd_as_of_date, objective, is_featured, min_investment')
+      .in('id', strategyIds);
     const allTickers = (strategies || []).flatMap(s =>
       (s.holdings || []).map(h => h.ticker || h.symbol || h).filter(Boolean)
     );
     const uniqueTickers = [...new Set(allTickers)];
     const { data: secs } = uniqueTickers.length
-      ? await supabaseAdmin.from('securities_c').select('symbol, name, logo_url').in('symbol', uniqueTickers)
+      ? await supabaseAdmin.from('securities_c').select('symbol, name, logo_url, last_price').in('symbol', uniqueTickers)
       : { data: [] };
     const secBySymbol = Object.fromEntries((secs || []).map(s => [s.symbol, s]));
     const stratMap = Object.fromEntries((strategies || []).map(s => [s.id, s]));
@@ -145,12 +147,31 @@ async function enrichItems(items, supabaseAdmin) {
         .map(h => { const t = h.ticker || h.symbol || String(h); return { symbol: t, name: secBySymbol[t]?.name || t, logo_url: secBySymbol[t]?.logo_url || null }; })
         .sort((a, b) => (b.logo_url ? 1 : 0) - (a.logo_url ? 1 : 0))
         .slice(0, 5);
+
+      // Recalculate live price from current holdings prices (same formula as item creation)
+      const livePriceCents = holdings.reduce((sum, h) => {
+        const ticker = h.ticker || h.symbol || String(h);
+        return sum + (secBySymbol[ticker]?.last_price || 0);
+      }, 0);
+      // Fall back to stored DB min_investment (in cents) if live calc has no data
+      const effectivePriceCents = livePriceCents > 0
+        ? livePriceCents
+        : (strategy.min_investment || item.price_snapshot_cents || 0);
+
       enrichedMap[item.id] = {
         ...item,
         name: strategy.name,
+        short_name: strategy.short_name,
         logo_url: null,
         holdings_snapshot: holdingsSnapshot,
         total_holdings: holdings.length,
+        price_snapshot_cents: effectivePriceCents,
+        tags: strategy.tags,
+        risk_level: strategy.risk_level,
+        r_ytd: strategy.r_ytd,
+        ytd_as_of_date: strategy.ytd_as_of_date,
+        objective: strategy.objective,
+        is_featured: strategy.is_featured,
       };
     });
   }
