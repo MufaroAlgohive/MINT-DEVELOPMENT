@@ -444,7 +444,7 @@ export default function GiftRegistrySharePopup({ token, title, registryId, onClo
 
           {/* Header row: title + close */}
           <div className="relative flex items-center justify-center px-5 pt-2 pb-3 flex-shrink-0">
-            <h3 className="text-[17px] font-bold text-slate-900">Beneficiary</h3>
+            <h3 className="text-[17px] font-bold text-slate-900">Send to someone</h3>
             <button
               onClick={onClose}
               className="absolute right-4 w-8 h-8 flex items-center justify-center rounded-full bg-slate-100 text-slate-500 active:opacity-70"
@@ -627,7 +627,7 @@ export default function GiftRegistrySharePopup({ token, title, registryId, onClo
                 disabled={!!sendingFor}
                 className="w-full py-3 rounded-xl bg-[#6B21A8] text-white text-sm font-bold active:opacity-70 disabled:opacity-50"
               >
-                {sendingFor ? "Sending…" : "Send wishlist notification"}
+                {sendingFor ? "Sharing…" : `Share with ${mintResult.first_name || "them"}`}
               </button>
             </div>
           )}
@@ -676,7 +676,7 @@ export default function GiftRegistrySharePopup({ token, title, registryId, onClo
                 disabled={!!sendingFor}
                 className="w-full py-3 rounded-xl bg-[#6B21A8] text-white text-sm font-bold active:opacity-70 disabled:opacity-50"
               >
-                {sendingFor ? "Sending…" : "Send wishlist notification"}
+                {sendingFor ? "Sharing…" : `Share with ${idResult.first_name || "them"}`}
               </button>
             </div>
           )}
@@ -755,7 +755,6 @@ export default function GiftRegistrySharePopup({ token, title, registryId, onClo
           <div className="flex-1 overflow-y-auto px-4 pb-3">
             {foundUser && !inviteSent && (
               <div className="bg-violet-50 border border-violet-200 rounded-2xl px-4 py-4 mb-3">
-                <p className="text-[12px] text-violet-500 font-semibold uppercase tracking-wider mb-1">MINT user found</p>
                 <p className="text-[14px] font-semibold text-slate-800">{foundUser.first_name} {foundUser.last_name}</p>
                 <p className="text-[12px] text-slate-400 mb-3">{foundUser.mint_number}</p>
                 <button
@@ -763,7 +762,7 @@ export default function GiftRegistrySharePopup({ token, title, registryId, onClo
                   disabled={!!sendingFor}
                   className="w-full py-3 rounded-xl bg-[#6B21A8] text-white text-sm font-bold active:opacity-70 disabled:opacity-50"
                 >
-                  {sendingFor ? "Sending…" : "Send wishlist notification"}
+                  {sendingFor ? "Sharing…" : `Share with ${foundUser.first_name || "them"}`}
                 </button>
               </div>
             )}

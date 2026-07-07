@@ -207,6 +207,18 @@ export const NotificationsProvider = ({ children }) => {
 
     if (!supabase) return;
 
+    // Re-fetch whenever the user signs in or switches accounts
+    const { data: { subscription: authSub } } = supabase.auth.onAuthStateChange(
+      (event) => {
+        if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED" || event === "USER_UPDATED") {
+          fetchNotifications();
+        }
+        if (event === "SIGNED_OUT") {
+          setState({ ...defaultState, loading: false });
+        }
+      }
+    );
+
     const handleInsert = (notification) => {
       if (globalNotificationsSub.seenIds.has(notification.id)) {
         return;
@@ -313,6 +325,7 @@ export const NotificationsProvider = ({ children }) => {
 
     return () => {
       globalNotificationsSub.listeners.delete(listener);
+      authSub?.unsubscribe();
     };
   }, [fetchNotifications]);
 
