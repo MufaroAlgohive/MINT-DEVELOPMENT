@@ -1,21 +1,35 @@
 import React, { useState } from "react";
-import { ArrowLeft, Gift, Plus, Trash2, Link2, Check } from "lucide-react";
+import { ArrowLeft, Gift, Plus, Trash2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useMyRegistries } from "../lib/useGiftRegistry.js";
-import { getRegistryProgress, REGISTRY_STATUS_META, OCCASION_LABELS, registryShareUrl } from "../lib/giftRegistryUtils.js";
+import { OCCASION_LABELS } from "../lib/giftRegistryUtils.js";
 import { supabaseReady } from "../lib/supabase.js";
 
-// ─── Registry (wishlist) card — pricing-card aesthetic ───────────────────────
+// ─── Occasion colour map — used for the left accent bar ──────────────────────
+const OCCASION_COLORS = {
+  BIRTHDAY:   { bg: "bg-pink-100",   text: "text-pink-600",   bar: "#f472b6" },
+  WEDDING:    { bg: "bg-rose-100",   text: "text-rose-600",   bar: "#fb7185" },
+  BABY:       { bg: "bg-sky-100",    text: "text-sky-600",    bar: "#38bdf8" },
+  GRADUATION: { bg: "bg-amber-100",  text: "text-amber-600",  bar: "#fbbf24" },
+  FESTIVE:    { bg: "bg-green-100",  text: "text-green-600",  bar: "#34d399" },
+  CUSTOM:     { bg: "bg-violet-100", text: "text-violet-600", bar: "#7c3aed" },
+};
+
+// ─── Registry (wishlist) card — Airbnb-style compact category card ─────────
 function RegistryCard({ registry, onTap, onDelete, deletingId }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [copied, setCopied] = useState(false);
   const items = (registry.items || []).filter(i => i.status !== "REMOVED");
-  const progress = getRegistryProgress(items);
   const occasionLabel = registry.occasion
     ? (OCCASION_LABELS[registry.occasion] ?? registry.occasion)
     : "Gift";
+  const occasionColor = OCCASION_COLORS[registry.occasion] || OCCASION_COLORS.CUSTOM;
   const isDeleting = deletingId === registry.id;
-  const hasShareLink = !!registry.share_token && ["ACTIVE", "PAUSED"].includes(registry.status);
+  const isDraft = registry.status === "DRAFT";
+
+  const subtitleParts = [];
+  if (occasionLabel) subtitleParts.push(occasionLabel);
+  subtitleParts.push(items.length === 0 ? "No items yet" : `${items.length} ${items.length === 1 ? "item" : "items"}`);
+  if (isDraft) subtitleParts.push("Draft");
 
   function handleDeleteTap(e) {
     e.stopPropagation();
@@ -27,104 +41,70 @@ function RegistryCard({ registry, onTap, onDelete, deletingId }) {
     }
   }
 
-  async function handleShareLink(e) {
-    e.stopPropagation();
-    if (hasShareLink) {
-      try {
-        await navigator.clipboard.writeText(registryShareUrl(registry.share_token));
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
-      } catch {
-        // fallback: open in new tab
-        window.open(registryShareUrl(registry.share_token), "_blank");
-      }
-    } else {
-      // DRAFT — navigate to detail to publish
-      onTap(registry);
-    }
-  }
-
-  const subtitleText = items.length === 0
-    ? `${occasionLabel} · no items yet`
-    : `${occasionLabel} · ${items.length} ${items.length === 1 ? "item" : "items"}`;
-
   return (
-    <motion.div
-      layout
-      className="relative flex flex-col bg-white rounded-3xl"
-      style={{ border: "1px solid #e8edf2" }}
-    >
-      {/* Delete button — top-right corner */}
-      <button
-        onClick={handleDeleteTap}
-        disabled={isDeleting}
-        className={[
-          "absolute top-3 right-3 z-20 flex h-6 w-6 items-center justify-center rounded-full transition-all active:scale-90 disabled:opacity-50",
-          confirmDelete ? "bg-red-500 shadow-md" : "bg-slate-100 hover:bg-slate-200",
-        ].join(" ")}
-      >
-        {isDeleting ? (
-          <div className="w-3 h-3 border-2 border-slate-300 border-t-slate-600 rounded-full animate-spin" />
-        ) : (
-          <Trash2 size={10} className={confirmDelete ? "text-white" : "text-slate-400"} />
-        )}
-      </button>
-
-      {/* Tappable body */}
+    <motion.div layout className="relative">
       <button
         onClick={() => !confirmDelete && onTap(registry)}
-        className="flex-1 text-left px-6 pt-8 pb-6 active:opacity-80 transition-opacity"
+        className="w-full text-left active:scale-[0.98] transition-transform"
       >
-        <div className="grid items-center justify-center w-full grid-cols-1 text-left">
-          {/* Title + subtitle */}
-          <div>
-            <h2 className="text-lg font-medium tracking-tighter text-gray-600 leading-snug line-clamp-2 pr-6">
-              {registry.title}
-            </h2>
-            <p className="mt-2 text-sm text-gray-500">{subtitleText}</p>
+        <div
+          className="flex items-center gap-0 bg-white rounded-2xl overflow-hidden"
+          style={{ border: "1px solid #e8edf2", boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}
+        >
+          {/* Left accent bar */}
+          <div
+            className="w-1 self-stretch shrink-0 rounded-l-2xl"
+            style={{ backgroundColor: occasionColor.bar }}
+          />
+
+          {/* Occasion chip */}
+          <div className={`shrink-0 mx-3 my-3.5 px-2.5 py-1 rounded-xl ${occasionColor.bg}`}>
+            <p className={`text-[10px] font-bold uppercase tracking-wider ${occasionColor.text}`}>
+              {occasionLabel}
+            </p>
           </div>
 
-          {/* Big number — funded % */}
-          <div className="mt-6">
-            <p>
-              <span className="text-5xl font-light tracking-tight text-black">
-                {progress.percent}
-              </span>
-              <span className="text-base font-medium text-gray-500">% funded</span>
+          {/* Title + item count */}
+          <div className="flex-1 min-w-0 py-3.5 pr-1">
+            <p className="text-sm font-semibold text-slate-800 truncate leading-snug">
+              {registry.title}
             </p>
+            <p className="text-[11px] text-slate-400 mt-0.5">
+              {items.length === 0 ? "No items yet" : `${items.length} ${items.length === 1 ? "item" : "items"}`}
+              {isDraft && <span className="ml-1.5 text-amber-500 font-medium">· Draft</span>}
+            </p>
+          </div>
+
+          {/* Delete button */}
+          <div className="shrink-0 pr-3">
+            <button
+              onClick={handleDeleteTap}
+              disabled={isDeleting}
+              className={[
+                "flex h-7 w-7 items-center justify-center rounded-full transition-all active:scale-90 disabled:opacity-50",
+                confirmDelete ? "bg-red-500 shadow" : "bg-slate-100 hover:bg-slate-200",
+              ].join(" ")}
+            >
+              {isDeleting ? (
+                <div className="w-3 h-3 border-2 border-slate-300 border-t-slate-600 rounded-full animate-spin" />
+              ) : (
+                <Trash2 size={11} className={confirmDelete ? "text-white" : "text-slate-400"} />
+              )}
+            </button>
           </div>
         </div>
       </button>
 
-      {/* Share Link button */}
-      <div className="px-6 pb-8">
-        <button
-          onClick={handleShareLink}
-          className="flex items-center justify-center gap-2 w-full px-6 py-2.5 text-center text-white duration-200 bg-black border-2 border-black rounded-full hover:bg-transparent hover:text-black focus:outline-none text-sm"
-        >
-          {copied ? (
-            <><Check size={14} /> Copied!</>
-          ) : hasShareLink ? (
-            <><Link2 size={14} /> Share Link</>
-          ) : (
-            "Publish to Share"
-          )}
-        </button>
-      </div>
-
-      {/* Confirm-delete overlay */}
+      {/* Confirm-delete tooltip */}
       <AnimatePresence>
         {confirmDelete && (
           <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="absolute inset-0 flex items-center justify-center rounded-3xl pointer-events-none"
-            style={{ background: "rgba(255,255,255,0.88)" }}
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -4 }}
+            className="absolute right-2 -top-8 z-30 rounded-lg bg-slate-800 px-2.5 py-1 text-[10px] font-semibold text-white shadow-lg pointer-events-none"
           >
-            <p className="text-[11px] font-bold text-slate-700 text-center leading-snug">
-              Tap 🗑️ again<br />to delete
-            </p>
+            Tap again to delete
           </motion.div>
         )}
       </AnimatePresence>

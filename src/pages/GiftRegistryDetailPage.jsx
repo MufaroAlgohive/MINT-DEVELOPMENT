@@ -66,7 +66,7 @@ function ItemSparkline({ seed }) {
 
 /* ─── Strategy-card-style item card — identical look to Mint Baskets card ─── */
 
-function WishlistItemCard({ item, onRemove }) {
+function WishlistItemCard({ item, onRemove, registryStatus, onPublish, publishLoading }) {
   const percent = getItemFillPercent(item);
   const filled = item.filled_quantity || 0;
   const target = item.target_quantity || 0;
@@ -74,16 +74,17 @@ function WishlistItemCard({ item, onRemove }) {
   const isFunded = filled >= target && target > 0;
   const isBasket = item.instrument_type === "BASKET";
   const reserved = item.reserved_quantity ?? 0;
+  const isDraft = registryStatus === "DRAFT";
 
   // For BASKET items: holdings_snapshot is [{logo_url, symbol, name}] from server enrichment
   const holdingsSnapshot = item.holdings_snapshot || [];
   const totalHoldings = item.total_holdings || holdingsSnapshot.length;
 
-  // Price label: min investment for baskets, price/share for equities
+  // Price label: for baskets, price_snapshot_cents is the SUM of holding prices (i.e. total basket cost),
+  // NOT a meaningful per-unit minimum — so we omit it for baskets and show the type label only.
+  // For equities: show price per share.
   const priceLabel = isBasket
-    ? priceCents > 0
-      ? `Min. ${centsToRand(priceCents)}`
-      : null
+    ? null
     : priceCents > 0
     ? `${centsToRand(priceCents)} / share`
     : null;
@@ -210,6 +211,21 @@ function WishlistItemCard({ item, onRemove }) {
           </>
         )}
       </div>
+
+      {/* Publish to Share — shown on item cards when the registry is still a DRAFT */}
+      {isDraft && onPublish && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onPublish(); }}
+          disabled={publishLoading}
+          className="mt-4 w-full flex items-center justify-center gap-2 rounded-xl bg-black py-2.5 text-sm font-semibold text-white active:opacity-80 disabled:opacity-50 transition-opacity"
+        >
+          {publishLoading ? (
+            <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin inline-block" />
+          ) : (
+            "Publish to Share"
+          )}
+        </button>
+      )}
     </div>
   );
 }
@@ -237,6 +253,7 @@ export default function GiftRegistryDetailPage({ registryId, onNavigate, onBack 
   const [showShare, setShowShare] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [actionError, setActionError] = useState(null);
+  const [publishLoading, setPublishLoading] = useState(false);
 
   useGiftRegistryRealtime(registryId, () => reload());
 
@@ -279,6 +296,27 @@ export default function GiftRegistryDetailPage({ registryId, onNavigate, onBack 
       setActionError(e.message);
     } finally {
       setActionLoading(false);
+    }
+  }
+
+  async function handlePublish() {
+    setPublishLoading(true);
+    setActionError(null);
+    try {
+      const session = await (await supabaseReady).auth.getSession();
+      const token = session?.data?.session?.access_token;
+      const res = await fetch(`/api/gift-registry/${registryId}/publish`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Could not publish wishlist");
+      reload();
+      setShowShare(true);
+    } catch (e) {
+      setActionError(e.message);
+    } finally {
+      setPublishLoading(false);
     }
   }
 
@@ -383,7 +421,14 @@ export default function GiftRegistryDetailPage({ registryId, onNavigate, onBack 
             <p className="text-xs text-gray-500 font-medium mb-3">Wishlist items</p>
             <div className="flex gap-4 overflow-x-auto snap-x snap-mandatory pb-2 -mx-5 px-5">
               {items.map((item) => (
-                <WishlistItemCard key={item.id} item={item} onRemove={removeItem} />
+                <WishlistItemCard
+                  key={item.id}
+                  item={item}
+                  onRemove={removeItem}
+                  registryStatus={registry?.status}
+                  onPublish={handlePublish}
+                  publishLoading={publishLoading}
+                />
               ))}
             </div>
           </div>
