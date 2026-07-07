@@ -28,7 +28,7 @@ export default async function handler(req, res) {
       return res.status(401).json({ error: "Unauthorized" });
     }
 
-    const { email, first_name, last_name } = req.body || {};
+    const { email, first_name, last_name, registry_url } = req.body || {};
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       return res.status(400).json({ error: "Valid email required" });
     }
@@ -80,11 +80,17 @@ export default async function handler(req, res) {
       <p style="color:#334155;font-size:15px;line-height:1.7;margin:0 0 16px;">${inviteeName}</p>
       <p style="color:#334155;font-size:15px;line-height:1.7;margin:0 0 16px;">
         <strong style="color:#3D1A6B;">${senderName}</strong> has invited you to join
-        <strong style="color:#3D1A6B;">MINT</strong> &mdash; South Africa&rsquo;s smart investing and wealth platform &mdash; and wants to add you as a <strong>beneficiary</strong>.
+        <strong style="color:#3D1A6B;">MINT</strong> &mdash; South Africa&rsquo;s smart investing and wealth platform &mdash; and wants to share a gift wishlist with you.
       </p>
       <p style="color:#334155;font-size:15px;line-height:1.7;margin:0 0 28px;">
-        Sign up to start building your financial future, receive gifts, and manage your wealth in one place.
+        Sign up to start building your financial future, give investment gifts, and manage your wealth in one place.
       </p>
+      ${registry_url ? `
+      <div style="background:#F5F0FF;border-radius:12px;padding:16px 20px;margin:0 0 20px;">
+        <p style="color:#3D1A6B;font-size:13px;font-weight:600;margin:0 0 8px;">🎁 Wishlist shared with you</p>
+        <p style="color:#64748B;font-size:13px;margin:0 0 12px;">View the wishlist to see what ${senderName} is wishing for.</p>
+        <a href="${escHtml(registry_url)}" style="display:inline-block;background:#3D1A6B;color:white;padding:10px 24px;border-radius:10px;text-decoration:none;font-size:13px;font-weight:700;">View Wishlist</a>
+      </div>` : ''}
       <div style="text-align:center;margin-bottom:28px;">
         <a href="${appUrl}" style="display:inline-block;background:linear-gradient(135deg,#3D1A6B,#5B2D8E);color:white;padding:14px 44px;border-radius:12px;text-decoration:none;font-family:'Barlow Condensed',Arial Narrow,Arial,sans-serif;font-weight:800;font-size:17px;letter-spacing:1px;text-transform:uppercase;">Join MINT</a>
       </div>

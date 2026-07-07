@@ -762,21 +762,41 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
       // Order is critical: if the contribution insert fails we can still roll back
       // the reservation to HELD. If we updated quantities first and the insert then
       // failed, filled/reserved counts would be mutated with no contribution record.
-      const { data: contribution, error: contribErr } = await supabaseAdmin
+      const { gifterMessage } = req.body;
+      const insertPayload = {
+        registry_item_id: reservedItemId,
+        gifter_user_id: user.id,
+        gifter_email: gifterEmail,
+        quantity: qty,
+        quoted_amount_cents: quotedAmountCents,
+        fee_cents: feeCents,
+        status: 'PAID',
+        reservation_id: reservationId,
+        idempotency_key: idempotencyKey,
+      };
+      if (gifterMessage) {
+        insertPayload.gifter_message = String(gifterMessage).slice(0, 120);
+      }
+
+      let { data: contribution, error: contribErr } = await supabaseAdmin
         .from('gift_contributions')
-        .insert({
-          registry_item_id: reservedItemId,
-          gifter_user_id: user.id,
-          gifter_email: gifterEmail,
-          quantity: qty,
-          quoted_amount_cents: quotedAmountCents,
-          fee_cents: feeCents,
-          status: 'PAID',
-          reservation_id: reservationId,
-          idempotency_key: idempotencyKey,
-        })
+        .insert(insertPayload)
         .select()
         .single();
+
+      // If gifter_message column does not yet exist (migration not applied), retry without it
+      if (contribErr && gifterMessage &&
+          (contribErr.code === '42703' || contribErr.message?.toLowerCase().includes('gifter_message'))) {
+        console.error('[gift-registry] contribute: gifter_message column missing — run migration: ALTER TABLE gift_contributions ADD COLUMN IF NOT EXISTS gifter_message text;');
+        const { gifter_message: _drop, ...payloadWithout } = insertPayload;
+        const retry = await supabaseAdmin
+          .from('gift_contributions')
+          .insert(payloadWithout)
+          .select()
+          .single();
+        contribution = retry.data;
+        contribErr = retry.error;
+      }
 
       if (contribErr) {
         // Roll back: restore reservation to HELD so the gifter can retry
@@ -787,18 +807,6 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
           .eq('id', reservationId)
           .eq('gifter_user_id', user.id);
         throw contribErr;
-      }
-
-      // Best-effort: persist gifter message on contribution record (column added via migration)
-      const { gifterMessage } = req.body;
-      if (gifterMessage && contribution?.id) {
-        supabaseAdmin
-          .from('gift_contributions')
-          .update({ gifter_message: String(gifterMessage).slice(0, 120) })
-          .eq('id', contribution.id)
-          .then(({ error: msgErr }) => {
-            if (msgErr) console.warn('[gift-registry] contribute: gifter_message not stored (run migration to add column):', msgErr.code);
-          });
       }
 
       // Step 3: Update item quantities now that the contribution record is safely committed.

@@ -73,8 +73,12 @@ CREATE TABLE IF NOT EXISTS gift_contributions (
   payment_ref           text,
   order_ref             text,
   idempotency_key       text UNIQUE NOT NULL,
+  gifter_message        text,
   created_at            timestamptz DEFAULT now()
 );
+
+-- v2 migration: add gifter_message for existing deployments (idempotent)
+ALTER TABLE gift_contributions ADD COLUMN IF NOT EXISTS gifter_message text;
 
 CREATE INDEX IF NOT EXISTS idx_gift_contrib_item   ON gift_contributions(registry_item_id);
 CREATE INDEX IF NOT EXISTS idx_gift_contrib_gifter ON gift_contributions(gifter_user_id);
