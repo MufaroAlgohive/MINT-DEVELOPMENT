@@ -276,42 +276,73 @@ function registerGiftRegistryRoutes(app, supabaseAdmin, pgPool) {
       const registries = data || [];
 
       // Enrich all items across all registries with logo_url in one query
-      const allIsins = [...new Set(registries.flatMap(r => (r.items || []).map(i => i.isin)))];
+      // Separate real ISINs (SHARE/ETF) from strategy UUIDs (BASKET)
+      const allItems = registries.flatMap(r => r.items || []);
+      const shareIsins = [...new Set(allItems.filter(i => i.instrument_type !== 'BASKET').map(i => i.isin))];
+      const basketStrategyIds = [...new Set(allItems.filter(i => i.instrument_type === 'BASKET').map(i => i.isin))];
+
       let secMap = {};
-      if (allIsins.length) {
+      if (shareIsins.length) {
         const { data: securities } = await supabaseAdmin
-          .from('securities_c')
-          .select('isin, name, logo_url')
-          .in('isin', allIsins);
+          .from('securities_c').select('isin, name, logo_url').in('isin', shareIsins);
         secMap = Object.fromEntries((securities || []).map(s => [s.isin, s]));
       }
 
-      // preview logos stored as per-registry top-level keys in user_metadata (gift_rp_<id>)
-      // user already has user_metadata from auth.getUser() call inside getUser()
+      // Enrich strategy baskets from strategies_c
+      let strategyMap = {};
+      if (basketStrategyIds.length) {
+        const { data: strategies } = await supabaseAdmin
+          .from('strategies_c').select('id, name, holdings').in('id', basketStrategyIds);
+        // For each strategy, also fetch holding logos
+        const allTickers = (strategies || []).flatMap(s => (s.holdings || []).map(h => h.ticker || h.symbol || h).filter(Boolean));
+        const uniqueTickers = [...new Set(allTickers)];
+        let secBySymbol = {};
+        if (uniqueTickers.length) {
+          const { data: secs } = await supabaseAdmin.from('securities_c').select('symbol, name, logo_url').in('symbol', uniqueTickers);
+          secBySymbol = Object.fromEntries((secs || []).map(s => [s.symbol, s]));
+        }
+        strategyMap = Object.fromEntries((strategies || []).map(s => {
+          const holdingsSnap = (s.holdings || [])
+            .map(h => { const t = h.ticker || h.symbol || String(h); return { symbol: t, name: secBySymbol[t]?.name || t, logo_url: secBySymbol[t]?.logo_url || null }; })
+            .sort((a, b) => (b.logo_url ? 1 : 0) - (a.logo_url ? 1 : 0))
+            .slice(0, 5);
+          return [s.id, { name: s.name, holdingsSnap }];
+        }));
+      }
+
       const userMeta = user.user_metadata || {};
 
       const enriched = registries.map(r => {
-        // Prefer metadata-stored preview; fall back to deriving from items' logo_url
-        let previewLogos = userMeta[`gift_rp_${r.id}`] || null;
-        if (!previewLogos) {
-          const activeItems = (r.items || []).filter(i => i.status !== 'REMOVED');
-          if (activeItems.length) {
-            const derived = activeItems.map(i => ({
-              symbol: i.isin,
-              name: secMap[i.isin]?.name || i.isin,
-              logo_url: secMap[i.isin]?.logo_url || null,
-            })).sort((a, b) => (b.logo_url ? 1 : 0) - (a.logo_url ? 1 : 0)).slice(0, 6);
-            if (derived.some(d => d.logo_url)) previewLogos = derived;
-          }
+        const activeItems = (r.items || []).filter(i => i.status !== 'REMOVED');
+        // Build preview logos from active items (prefer holding logos for baskets)
+        let previewLogos = null;
+        if (activeItems.length) {
+          const derived = activeItems.flatMap(i => {
+            if (i.instrument_type === 'BASKET') {
+              return strategyMap[i.isin]?.holdingsSnap || [];
+            }
+            return [{ symbol: i.isin, name: secMap[i.isin]?.name || i.isin, logo_url: secMap[i.isin]?.logo_url || null }];
+          }).sort((a, b) => (b.logo_url ? 1 : 0) - (a.logo_url ? 1 : 0)).slice(0, 6);
+          if (derived.some(d => d.logo_url)) previewLogos = derived;
         }
         return {
           ...r,
           preview_logos: previewLogos,
-          items: (r.items || []).map(item => ({
-            ...item,
-            name: secMap[item.isin]?.name || item.isin,
-            logo_url: secMap[item.isin]?.logo_url || null,
-          })),
+          items: (r.items || []).map(item => {
+            if (item.instrument_type === 'BASKET') {
+              return {
+                ...item,
+                name: strategyMap[item.isin]?.name || item.isin,
+                logo_url: null,
+                holdings_snapshot: strategyMap[item.isin]?.holdingsSnap || [],
+              };
+            }
+            return {
+              ...item,
+              name: secMap[item.isin]?.name || item.isin,
+              logo_url: secMap[item.isin]?.logo_url || null,
+            };
+          }),
         };
       });
 
@@ -667,13 +698,17 @@ function registerGiftRegistryRoutes(app, supabaseAdmin, pgPool) {
       if (!user) return res.status(401).json({ error: 'Unauthorized' });
 
       const { registryId, itemKey } = req.body;
+      console.log(`[gift-registry] by-key: user=${user.id} registryId=${registryId} itemKey=${itemKey}`);
       if (!registryId || !itemKey) return res.status(400).json({ error: 'Missing registryId or itemKey' });
 
       // Verify ownership
-      const { data: reg } = await supabaseAdmin
+      const { data: reg, error: regErr } = await supabaseAdmin
         .from('gift_events').select('id, status')
         .eq('id', registryId).eq('creator_user_id', user.id).single();
-      if (!reg) return res.status(404).json({ error: 'Registry not found' });
+      if (!reg) {
+        console.log(`[gift-registry] by-key: registry not found — regErr=${regErr?.message}`);
+        return res.status(404).json({ error: 'Registry not found' });
+      }
       if (!['DRAFT', 'ACTIVE', 'PAUSED'].includes(reg.status))
         return res.status(400).json({ error: 'Cannot add items to a closed registry' });
 
@@ -691,9 +726,9 @@ function registerGiftRegistryRoutes(app, supabaseAdmin, pgPool) {
         const holdings = Array.isArray(strategy.holdings) ? strategy.holdings : [];
         if (!holdings.length) return res.status(400).json({ error: 'Strategy has no holdings' });
 
-        // Check if this strategy basket is already in the registry
+        // Check if this strategy basket is already in the registry (exclude REMOVED rows so re-add works)
         const { data: existing } = await supabaseAdmin
-          .from('gift_registry_items').select('id').eq('gift_event_id', registryId).eq('isin', strategyId).maybeSingle();
+          .from('gift_registry_items').select('id').eq('gift_event_id', registryId).eq('isin', strategyId).neq('status', 'REMOVED').maybeSingle();
         if (existing) return res.json({ success: true, item: existing, message: 'Already in registry' });
 
         // Calculate min investment = sum of all holdings' current prices
@@ -724,7 +759,7 @@ function registerGiftRegistryRoutes(app, supabaseAdmin, pgPool) {
       } else {
         // ── Plain ISIN / symbol ──
         const { data: existing } = await supabaseAdmin
-          .from('gift_registry_items').select('id').eq('gift_event_id', registryId).eq('isin', itemKey).maybeSingle();
+          .from('gift_registry_items').select('id').eq('gift_event_id', registryId).eq('isin', itemKey).neq('status', 'REMOVED').maybeSingle();
         if (existing) return res.json({ success: true, item: existing, message: 'Already in registry' });
 
         const priceCents = await getLatestPriceCents(itemKey, supabaseAdmin);
@@ -798,16 +833,22 @@ function registerGiftRegistryRoutes(app, supabaseAdmin, pgPool) {
       const user = await getUser(req, supabaseAdmin);
       if (!user) return res.status(401).json({ error: 'Unauthorized' });
 
-      // Verify ownership via join
-      const { data: item } = await supabaseAdmin
+      // Fetch the item first
+      const { data: item, error: fetchErr } = await supabaseAdmin
         .from('gift_registry_items')
-        .select('id, gift_event_id, gift_events!inner(creator_user_id)')
+        .select('id, gift_event_id')
         .eq('id', req.params.itemId)
         .single();
+      if (fetchErr || !item) return res.status(404).json({ error: 'Item not found' });
 
-      if (!item || item.gift_events?.creator_user_id !== user.id) {
-        return res.status(404).json({ error: 'Item not found' });
-      }
+      // Verify ownership by checking the parent registry separately (avoids FK join dependency)
+      const { data: reg } = await supabaseAdmin
+        .from('gift_events')
+        .select('id')
+        .eq('id', item.gift_event_id)
+        .eq('creator_user_id', user.id)
+        .single();
+      if (!reg) return res.status(403).json({ error: 'Not authorised' });
 
       const { error } = await supabaseAdmin
         .from('gift_registry_items')
@@ -817,6 +858,7 @@ function registerGiftRegistryRoutes(app, supabaseAdmin, pgPool) {
       if (error) throw error;
       return res.json({ success: true });
     } catch (e) {
+      console.error('[gift-registry] delete item error:', e.message);
       return res.status(500).json({ error: e.message });
     }
   });
