@@ -635,22 +635,24 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
       // Get live price (Decision 8)
       const livePriceCents = await getLatestPriceCents(item.isin, supabaseAdmin);
 
-      // Atomic conditional UPDATE — optimistic locking via lte() on reserved_quantity.
-      // Only proceeds if reserved_quantity has not grown beyond the allowed threshold,
-      // preventing two gifters from simultaneously claiming the same last share.
+      // Atomic conditional UPDATE — optimistic locking via two guards:
+      //   1. eq('filled_quantity', item.filled_quantity) — fails if a concurrent fill happened
+      //   2. lte('reserved_quantity', maxAllowedReserved)  — fails if a concurrent reservation happened
+      // Together these replicate the original SQL: (filled + reserved + qty) <= target atomically.
       const maxAllowedReserved = item.target_quantity - item.filled_quantity - quantity;
       const { data: updatedItem, error: updateErr } = await supabaseAdmin
         .from('gift_registry_items')
         .update({ reserved_quantity: item.reserved_quantity + quantity, updated_at: new Date().toISOString() })
         .eq('id', itemId)
         .eq('gift_event_id', registryId)
-        .lte('reserved_quantity', maxAllowedReserved)
+        .eq('filled_quantity', item.filled_quantity)   // guard: no concurrent fill
+        .lte('reserved_quantity', maxAllowedReserved)  // guard: no concurrent over-reservation
         .in('status', ['OPEN', 'PARTIALLY_FILLED'])
         .select()
         .single();
 
       if (updateErr || !updatedItem) {
-        console.warn(`[gift-registry] reserve: optimistic lock failed itemId=${itemId} — sold out or concurrent reservation`);
+        console.warn(`[gift-registry] reserve: optimistic lock failed itemId=${itemId} — sold out or concurrent reservation/fill`);
         return res.status(409).json({ error: 'No longer available', code: 'SOLD_OUT', remaining: 0 });
       }
 
@@ -736,7 +738,9 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
 
       const quotedAmountCents = livePriceCents * reservation.quantity + feeCents;
 
-      // Step 1: Mark reservation CONSUMED — conditional on: HELD + not expired
+      // Step 1: Mark reservation CONSUMED — conditional on: HELD + not expired.
+      // This is the idempotency gate: a second attempt on the same reservation will
+      // find status != HELD and return 410 before anything else changes.
       const { data: consumed, error: consumeErr } = await supabaseAdmin
         .from('gift_reservations')
         .update({ status: 'CONSUMED' })
@@ -754,26 +758,10 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
       const qty = consumed.quantity;
       const reservedItemId = consumed.registry_item_id;
 
-      // Step 2: Update item quantities
-      const { data: currentItem } = await supabaseAdmin
-        .from('gift_registry_items')
-        .select('filled_quantity, reserved_quantity, target_quantity')
-        .eq('id', reservedItemId)
-        .single();
-
-      if (currentItem) {
-        const newFilled = (currentItem.filled_quantity || 0) + qty;
-        const newReserved = Math.max(0, (currentItem.reserved_quantity || 0) - qty);
-        const newStatus = newFilled >= currentItem.target_quantity ? 'FILLED'
-          : newFilled > 0 ? 'PARTIALLY_FILLED'
-          : 'OPEN';
-        await supabaseAdmin
-          .from('gift_registry_items')
-          .update({ filled_quantity: newFilled, reserved_quantity: newReserved, status: newStatus, updated_at: new Date().toISOString() })
-          .eq('id', reservedItemId);
-      }
-
-      // Step 3: Insert contribution
+      // Step 2: Insert contribution BEFORE updating quantities.
+      // Order is critical: if the contribution insert fails we can still roll back
+      // the reservation to HELD. If we updated quantities first and the insert then
+      // failed, filled/reserved counts would be mutated with no contribution record.
       const { data: contribution, error: contribErr } = await supabaseAdmin
         .from('gift_contributions')
         .insert({
@@ -790,7 +778,40 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
         .select()
         .single();
 
-      if (contribErr) throw contribErr;
+      if (contribErr) {
+        // Roll back: restore reservation to HELD so the gifter can retry
+        console.error(`[gift-registry] contribute: contribution insert failed — rolling back reservation ${reservationId}: ${contribErr.message}`);
+        await supabaseAdmin
+          .from('gift_reservations')
+          .update({ status: 'HELD' })
+          .eq('id', reservationId)
+          .eq('gifter_user_id', user.id);
+        throw contribErr;
+      }
+
+      // Step 3: Update item quantities now that the contribution record is safely committed.
+      // If this update fails the contribution still exists (idempotency key prevents duplicate),
+      // and the sweeper will eventually correct reserved_quantity via the CONSUMED reservation.
+      const { data: currentItem } = await supabaseAdmin
+        .from('gift_registry_items')
+        .select('filled_quantity, reserved_quantity, target_quantity')
+        .eq('id', reservedItemId)
+        .single();
+
+      if (currentItem) {
+        const newFilled = (currentItem.filled_quantity || 0) + qty;
+        const newReserved = Math.max(0, (currentItem.reserved_quantity || 0) - qty);
+        const newStatus = newFilled >= currentItem.target_quantity ? 'FILLED'
+          : newFilled > 0 ? 'PARTIALLY_FILLED'
+          : 'OPEN';
+        const { error: qtyErr } = await supabaseAdmin
+          .from('gift_registry_items')
+          .update({ filled_quantity: newFilled, reserved_quantity: newReserved, status: newStatus, updated_at: new Date().toISOString() })
+          .eq('id', reservedItemId);
+        if (qtyErr) {
+          console.error(`[gift-registry] contribute: item quantity update failed for itemId=${reservedItemId}: ${qtyErr.message} — contribution ${contribution.id} was recorded, quantities may be stale`);
+        }
+      }
 
       // Check if all items are FILLED — mark registry COMPLETED
       const { data: allItems } = await supabaseAdmin
