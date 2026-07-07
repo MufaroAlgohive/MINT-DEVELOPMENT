@@ -63,7 +63,7 @@ function ItemSparkline({ seed }) {
   );
 }
 
-/* ─── Strategy-card-style item card ─── */
+/* ─── Strategy-card-style item card — identical look to Mint Baskets card ─── */
 
 function WishlistItemCard({ item }) {
   const percent = getItemFillPercent(item);
@@ -76,32 +76,36 @@ function WishlistItemCard({ item }) {
 
   return (
     <div
-      className={`relative rounded-2xl border bg-white p-4 shadow-sm transition-all ${
-        isFunded ? "border-emerald-100 opacity-70" : "border-slate-100 hover:border-slate-200 hover:shadow-md"
+      className={`relative flex-shrink-0 w-80 rounded-2xl border border-slate-100 bg-white p-4 shadow-sm transition-all snap-center hover:shadow-md hover:border-slate-200 ${
+        isFunded ? "opacity-70" : ""
       }`}
     >
-      {/* Top row: name block + sparkline */}
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex-1 min-w-0 space-y-1">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-900 truncate">
-            {item.name || item.isin}
-          </p>
-          <p className="text-xs text-slate-500 line-clamp-1">
-            {isBasket ? "Investment Basket" : "Equity"}
-            {item.isin ? ` · ${item.isin}` : ""}
-          </p>
-          {priceCents > 0 && (
-            <p className="text-[11px] text-slate-400">
-              {centsToRand(priceCents)} / share
+      {/* Top row: name block + sparkline — identical to strategy card */}
+      <div className="flex items-start gap-3">
+        <div className="flex-1 flex items-start justify-between gap-4">
+          <div className="text-left space-y-1">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-900">
+              {item.name || item.isin}
             </p>
-          )}
-        </div>
-        <div className="flex-shrink-0 rounded-xl bg-slate-50 px-2 py-1">
-          <ItemSparkline seed={item.isin || item.name || "item"} />
+            <div>
+              <p className="text-xs text-slate-600 line-clamp-1">
+                {isBasket ? "Investment Basket" : "Equity"}
+                {item.isin ? ` · ${item.isin}` : ""}
+              </p>
+              {priceCents > 0 && (
+                <p className="text-[11px] text-slate-400">
+                  {centsToRand(priceCents)} / share
+                </p>
+              )}
+            </div>
+          </div>
+          <div className="flex items-center rounded-xl bg-slate-50 px-2">
+            <ItemSparkline seed={item.isin || item.name || "item"} />
+          </div>
         </div>
       </div>
 
-      {/* Tags row — mirrors the strategy-card tags strip */}
+      {/* Tags row — identical pill style */}
       <div className="mt-3 flex flex-wrap gap-2">
         <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600">
           {isBasket ? "Basket" : "Equity"}
@@ -122,23 +126,25 @@ function WishlistItemCard({ item }) {
         )}
       </div>
 
-      {/* Gift-progress row — mirrors the YTD return row in Mint Basket cards */}
+      {/* Gift-progress row — identical layout to YTD return row */}
       <div className="mt-3 flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2">
         <span className="text-xs font-semibold text-slate-600">Gift progress</span>
-        <span
-          className={`text-xs font-bold ${
-            percent === 100 ? "text-emerald-600" : "text-[#6B21A8]"
-          }`}
-        >
-          {percent}%
-        </span>
+        <div className="flex flex-col items-end gap-1">
+          <span
+            className={`text-xs font-bold ${
+              percent === 100 ? "text-emerald-600" : "text-[#6B21A8]"
+            }`}
+          >
+            {percent}%
+          </span>
+        </div>
       </div>
 
-      {/* Holdings-snapshot strip — logo + inline progress bar */}
+      {/* Holdings-snapshot strip — identical logo circles + label */}
       <div className="mt-3 flex items-center gap-3">
-        <div className="flex-shrink-0">
+        <div className="flex -space-x-2">
           {item.logo_url ? (
-            <div className="flex h-7 w-7 overflow-hidden rounded-full border-2 border-white shadow-sm">
+            <div className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border border-white bg-white shadow-sm">
               <img
                 src={item.logo_url}
                 alt={item.name}
@@ -146,23 +152,12 @@ function WishlistItemCard({ item }) {
               />
             </div>
           ) : (
-            <div className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-violet-100 text-[8px] font-bold text-violet-700 shadow-sm">
+            <div className="flex h-7 w-7 items-center justify-center rounded-full border border-white bg-violet-100 text-[8px] font-bold text-violet-700 shadow-sm">
               {(item.name || item.isin || "?")[0]}
             </div>
           )}
         </div>
-        <div className="flex-1 min-w-0">
-          <GiftRegistryProgressBar
-            percent={percent}
-            filledQty={filled}
-            targetQty={target}
-            height="h-1.5"
-            showLabel={false}
-          />
-        </div>
-        <span className="text-[10px] font-medium text-slate-400 flex-shrink-0">
-          Holdings snapshot
-        </span>
+        <span className="text-xs font-semibold text-slate-500">Holdings snapshot</span>
       </div>
     </div>
   );
@@ -313,11 +308,11 @@ export default function GiftRegistryDetailPage({ registryId, onNavigate, onBack 
           </div>
         )}
 
-        {/* Wishlist items — redesigned as strategy cards */}
+        {/* Wishlist items — identical card layout to Mint Baskets horizontal strip */}
         {items.length > 0 && (
           <div>
             <p className="text-xs text-gray-500 font-medium mb-3">Wishlist items</p>
-            <div className="space-y-3">
+            <div className="flex gap-4 overflow-x-auto snap-x snap-mandatory pb-2 -mx-5 px-5">
               {items.map((item) => (
                 <WishlistItemCard key={item.id} item={item} />
               ))}
