@@ -680,7 +680,9 @@ function registerGiftRegistryRoutes(app, supabaseAdmin, pgPool) {
       const isStrategy = itemKey.startsWith('gift:') || itemKey.startsWith('strategy:');
 
       if (isStrategy) {
-        // ── Strategy basket: store as a single BASKET row (not expanded) ──
+        // ── Strategy basket: stored as one BASKET row (isin = strategy UUID).
+        //    Do NOT expand into individual SHARE rows — the GET enrichment
+        //    joins strategies_c to build holdings_snapshot at read time. ──
         const strategyId = itemKey.replace(/^(gift:|strategy:)/, '');
         const { data: strategy, error: stratErr } = await supabaseAdmin
           .from('strategies_c').select('id, name, holdings').eq('id', strategyId).single();
