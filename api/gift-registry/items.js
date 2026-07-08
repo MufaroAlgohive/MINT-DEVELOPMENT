@@ -28,7 +28,10 @@ export default async function handler(req, res) {
       const { data: reg } = await supabaseAdmin
         .from('gift_events').select('id,status').eq('id', registryId).eq('creator_user_id', user.id).single();
       if (!reg) return res.status(404).json({ error: 'Registry not found' });
-      if (!['DRAFT','ACTIVE','PAUSED'].includes(reg.status)) return res.status(400).json({ error: 'Cannot add items to a closed registry' });
+      if (['CANCELLED','EXPIRED'].includes(reg.status)) return res.status(400).json({ error: 'Cannot add items to a closed registry' });
+      if (reg.status === 'COMPLETED') {
+        await supabaseAdmin.from('gift_events').update({ status: 'ACTIVE', updated_at: new Date().toISOString() }).eq('id', registryId);
+      }
 
       const priceCents = await getLatestPriceCents(isin);
       const minTranche = priceCents > 0 ? Math.max(1, Math.ceil(1000 / priceCents)) : 1;

@@ -49,7 +49,7 @@ export default function WishlistPickerSheet({ itemKey, onClose, onSaved, onCreat
                   id: r.id,
                   name: r.title,
                   status: r.status,
-                  isClosed: !['DRAFT', 'ACTIVE', 'PAUSED'].includes(r.status),
+                  isClosed: ['CANCELLED', 'EXPIRED'].includes(r.status),
                   preview_logos: Array.isArray(r.preview_logos) ? r.preview_logos : null,
                   items: (r.items || []).filter((i) => i.isin && i.status !== 'REMOVED').map((i) => ({
                     isin: i.isin,

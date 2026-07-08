@@ -547,8 +547,15 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
         console.warn(`[gift-registry] by-key: registry not found — regErr=${regErr?.message}`);
         return res.status(404).json({ error: 'Registry not found' });
       }
-      if (!['DRAFT', 'ACTIVE', 'PAUSED'].includes(reg.status))
+      // COMPLETED just means every item currently listed has been fully gifted —
+      // the owner can still add new items, which reopens the registry to ACTIVE
+      // so others can gift the new item too. Only CANCELLED/EXPIRED are terminal.
+      if (['CANCELLED', 'EXPIRED'].includes(reg.status))
         return res.status(400).json({ error: 'Cannot add items to a closed registry' });
+      if (reg.status === 'COMPLETED') {
+        await supabaseAdmin.from('gift_events').update({ status: 'ACTIVE', updated_at: new Date().toISOString() }).eq('id', registryId);
+        console.log(`[gift-registry] by-key: reopened COMPLETED registry ${registryId} to ACTIVE`);
+      }
 
       const isStrategy = itemKey.startsWith('gift:') || itemKey.startsWith('strategy:');
       console.log(`[gift-registry] by-key: classification=${isStrategy ? 'BASKET/STRATEGY' : 'SHARE/ISIN'}`);
@@ -658,8 +665,11 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
         .single();
 
       if (!reg) return res.status(404).json({ error: 'Registry not found' });
-      if (!['DRAFT', 'ACTIVE', 'PAUSED'].includes(reg.status)) {
+      if (['CANCELLED', 'EXPIRED'].includes(reg.status)) {
         return res.status(400).json({ error: 'Cannot add items to a closed registry' });
+      }
+      if (reg.status === 'COMPLETED') {
+        await supabaseAdmin.from('gift_events').update({ status: 'ACTIVE', updated_at: new Date().toISOString() }).eq('id', registryId);
       }
 
       const priceCents = await getLatestPriceCents(isin, supabaseAdmin);
