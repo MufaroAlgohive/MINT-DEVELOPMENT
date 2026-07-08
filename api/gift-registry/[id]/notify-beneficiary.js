@@ -64,11 +64,11 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Cannot notify yourself' });
     }
 
-    // Check existing notification state + view state (mirrors Express state machine)
+    // Check existing notification state + view state
     const [notifResult, viewResult] = await Promise.all([
       supabaseAdmin
         .from('notifications')
-        .select('id, created_at')
+        .select('id, created_at, read_at')
         .eq('user_id', recipientProfile.id)
         .eq('type', 'system')
         .filter('payload->>registry_id', 'eq', id)
@@ -91,18 +91,20 @@ export default async function handler(req, res) {
 
     const existingNotif = notifResult.data;
     const hasViewed = !!viewResult.data;
-    console.log('[notify-beneficiary] dedupe check — existingNotif:', !!existingNotif, '| hasViewed:', hasViewed);
+    const wasRead = !!existingNotif?.read_at;
+    console.log('[notify-beneficiary] dedupe check — existingNotif:', !!existingNotif, '| wasRead:', wasRead, '| hasViewed:', hasViewed);
 
     let notifState = 'none';
-    if (existingNotif) {
+    if (existingNotif && !wasRead) {
+      // Only apply dedup if the recipient hasn't read the previous notification yet
       const diffH = (Date.now() - new Date(existingNotif.created_at).getTime()) / 3_600_000;
       if (diffH < 48) notifState = 'sent';
       else if (!hasViewed) notifState = 'nudge';
-      else notifState = 'none';
     }
+    // If the previous notification was already read, allow a fresh send (notifState stays 'none')
 
     if (notifState === 'sent') {
-      console.log('[notify-beneficiary] ℹ️ already sent within 48h — blocking duplicate');
+      console.log('[notify-beneficiary] ℹ️ previous notification unread and within 48h — blocking duplicate');
       return res.status(200).json({ ok: true, sent: false, reason: 'already_sent', state: 'sent' });
     }
     if (notifState === 'nudge' && !isNudge) {
