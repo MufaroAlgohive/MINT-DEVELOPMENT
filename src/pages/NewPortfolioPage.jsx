@@ -94,9 +94,12 @@ const getReturnColor = (value) => {
 };
 
 
-const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies, onBack, deepLink, onDeepLinkConsumed, onOpenStockDetail, onWithdraw }) => {
+const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies, onBack, deepLink, onDeepLinkConsumed, onOpenStockDetail, onWithdraw, isActive = false }) => {
   const [balanceVisible, setBalanceVisible] = useState(true);
   const [showTour, setShowTour] = useState(false);
+  const [isDocumentVisible, setIsDocumentVisible] = useState(
+    typeof document === "undefined" ? true : document.visibilityState === "visible"
+  );
   const [activeTab, setActiveTab] = useState("holdings");
   const [timeFilter, setTimeFilter] = useState("ytd");
   const [failedLogos, setFailedLogos] = useState({});
@@ -115,6 +118,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
   const [modalTimeFilter, setModalTimeFilter] = useState("W");
   const expandedRowRef = useRef(null);
   const tabJustChangedTimer = useRef(null);
+  const tourStartTimerRef = useRef(null);
   const [tabRipple, setTabRipple] = useState(null);
   const [tabDirection, setTabDirection] = useState(0);
   const [calendarYear, setCalendarYear] = useState(new Date().getFullYear());
@@ -536,18 +540,53 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
 
   const holdings = allStrategyHoldings;
 
-  // First-visit walkthrough: auto-open once holdings have loaded (so the
-  // Withdraw card the tour points at actually exists), and only if the user
-  // can withdraw. Remembered per device so it shows just once.
   useEffect(() => {
-    if (showTour) return;
+    const handleVisibilityChange = () => {
+      setIsDocumentVisible(document.visibilityState === "visible");
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+  }, []);
+
+  const clearTourStartTimer = useCallback(() => {
+    if (tourStartTimerRef.current) {
+      clearTimeout(tourStartTimerRef.current);
+      tourStartTimerRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    if (isActive && isDocumentVisible) return;
+    clearTourStartTimer();
+    setShowTour(false);
+  }, [clearTourStartTimer, isActive, isDocumentVisible]);
+
+  // First-visit walkthrough: only schedule it while the portfolio tab is
+  // actually visible, and cancel immediately when the user navigates away.
+  useEffect(() => {
+    clearTourStartTimer();
+    if (!isActive || !isDocumentVisible || showTour) return;
     if (holdingsLoading || !onWithdraw || allStrategyHoldings.length === 0) return;
     let seen = false;
     try { seen = localStorage.getItem(PF_TOUR_SEEN_KEY) === "1"; } catch {}
     if (seen) return;
-    const t = setTimeout(() => setShowTour(true), 650); // let the page settle first
-    return () => clearTimeout(t);
-  }, [holdingsLoading, allStrategyHoldings.length, onWithdraw, showTour]);
+    tourStartTimerRef.current = setTimeout(() => {
+      if (isActive && document.visibilityState === "visible") {
+        setShowTour(true);
+      }
+      tourStartTimerRef.current = null;
+    }, 180);
+    return clearTourStartTimer;
+  }, [
+    allStrategyHoldings.length,
+    clearTourStartTimer,
+    holdingsLoading,
+    isActive,
+    isDocumentVisible,
+    onWithdraw,
+    showTour,
+  ]);
 
   const closeTour = useCallback(() => {
     setShowTour(false);
@@ -3260,8 +3299,10 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
         })()}
       </AnimatePresence>
 
-      {/* First-timer walkthrough — spotlights the total value, then Withdraw. */}
-      <SpotlightTour open={showTour} steps={PF_TOUR_STEPS} onClose={closeTour} />
+      {/* First-timer walkthrough. Render is HARD-gated on this tab being the
+          active, visible one — the tour portals to <body> at a high z-index, so
+          without this it would appear over other tabs / the swipe-back preview. */}
+      <SpotlightTour open={showTour && isActive && isDocumentVisible} steps={PF_TOUR_STEPS} onClose={closeTour} />
 
     </div>
   );
