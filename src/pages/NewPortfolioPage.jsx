@@ -562,8 +562,10 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
     setShowTour(false);
   }, [clearTourStartTimer, isActive, isDocumentVisible]);
 
-  // First-visit walkthrough: only schedule it while the portfolio tab is
-  // actually visible, and cancel immediately when the user navigates away.
+  // First-visit walkthrough: auto-plays EXACTLY ONCE ever. It's marked "seen"
+  // the instant it opens (not on finish) — so if the user switches tabs mid-tour
+  // it still never auto-plays again; after that the ? button is the only way to
+  // replay it. Only scheduled while the portfolio tab is actually visible.
   useEffect(() => {
     clearTourStartTimer();
     if (!isActive || !isDocumentVisible || showTour) return;
@@ -573,6 +575,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
     if (seen) return;
     tourStartTimerRef.current = setTimeout(() => {
       if (isActive && document.visibilityState === "visible") {
+        try { localStorage.setItem(PF_TOUR_SEEN_KEY, "1"); } catch {} // consume the one auto-play now
         setShowTour(true);
       }
       tourStartTimerRef.current = null;
