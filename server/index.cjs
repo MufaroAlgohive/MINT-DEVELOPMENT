@@ -418,10 +418,16 @@ app.use(cors({
 }));
 
 // ── Rate limiting ──────────────────────────────────────────────────────────
-// General: 300 req / 15 min per IP
+// General: 1200 req / 15 min per IP.
+// The app polls several endpoints on short intervals (user/strategies every
+// 15s, held-securities refresh, notifications, balance card, etc.), so a
+// single active session can legitimately generate several hundred requests
+// within 15 minutes. 300 was too low and caused real user actions (e.g.
+// creating a new wishlist) to be blocked by background polling traffic.
+// Expensive/sensitive actions remain protected by the tighter limiters below.
 const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 300,
+  max: 1200,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: "Too many requests — please try again later." },
