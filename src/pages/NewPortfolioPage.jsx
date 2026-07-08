@@ -3,11 +3,16 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Bell, Eye, EyeOff, ChevronDown, ChevronRight, ChevronLeft, ArrowLeft, TrendingUp, TrendingDown, Plus, ArrowUpRight, HelpCircle } from "lucide-react";
 import SpotlightTour from "../components/SpotlightTour";
 
-// First-timer walkthrough for the Portfolio page — focused on how to withdraw.
+// First-timer walkthrough for the Portfolio page. Steps whose section isn't on
+// the page (e.g. no goals yet) are skipped automatically by SpotlightTour.
 const PF_TOUR_SEEN_KEY = "mint_pf_tour_seen_v1";
 const PF_TOUR_STEPS = [
-  { selector: '[data-coach-pf-value]', title: "Your total value", body: "This is everything you hold with MINT — your invested money plus its growth. Tap the eye to hide it." },
-  { selector: '[data-coach-pf-withdraw]', title: "Cash out anytime", body: "Tap Withdraw to sell a holding or a whole basket. The proceeds are credited to your wallet, ready to move to your bank." },
+  { selector: '[data-coach-pf-summary]', title: "Total Portfolio Value", body: "Everything your money is worth right now, plus how many assets you hold across baskets, stocks and cash. It updates live with the market." },
+  { selector: '[data-coach-pf-pie]', title: "Your money at a glance", body: "Each slice of this chart is one of your assets — the bigger the slice, the more of your portfolio it makes up. Tap a slice to highlight it." },
+  { selector: '[data-coach-pf-assets]', title: "Your Assets", body: "Every basket and stock you own, with its live value, total return, and share of your portfolio. Cash is here too — your execution reserve and rebalance leftovers, shown as Buffer & residual." },
+  { selector: '[data-coach-pf-other]', title: "Other Stocks", body: "Stocks on MINT that you don't own yet. Tap any of them to see its live price and chart — a quick way to scout your next investment." },
+  { selector: '[data-coach-pf-goals]', title: "Your Goals", body: "Your savings goals live here — each shows its target date, how much you've put in, and how far you still have to go. Investing toward a goal fills the bar." },
+  { selector: '[data-coach-pf-withdraw]', title: "Cash out anytime", body: "When you want your money back, tap Withdraw to sell a holding or a whole basket. The proceeds are credited straight to your wallet." },
 ];
 import { Area, ComposedChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip, PieChart, Pie, Cell, ReferenceLine } from 'recharts';
 import { useInvestments } from "../lib/useFinancialData";
@@ -1167,7 +1172,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
           </header>
 
           {/* Account balance */}
-          <section className="relative" data-coach-pf-value="true">
+          <section className="relative">
             <div className="absolute -inset-8 bg-gradient-radial from-[#7c3aed]/20 via-transparent to-transparent rounded-full blur-2xl -z-10" />
             {(() => {
               const totalPnl = displayAccountValue - displayTotalCostBasis;
@@ -2337,7 +2342,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                     style={{ background: 'rgba(255,255,255,0.7)', fontFamily: "'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif" }}
                   >
                     <div className="flex items-center justify-between">
-                      <div className="flex flex-col gap-3">
+                      <div className="flex flex-col gap-3" data-coach-pf-summary="true">
                         <div>
                           <p className="text-xs text-slate-500 mb-0.5">Total Portfolio Value</p>
                           <p className="text-2xl font-bold text-slate-900">{formatCurrency(totalValue)}</p>
@@ -2352,7 +2357,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                       </div>
 
                       {/* Right: Pie Chart */}
-                      <div className="relative h-44 w-44 -mr-4 md:mr-0" style={{ pointerEvents: isLoadingData ? 'none' : 'auto', opacity: isLoadingData ? 0.5 : 1, transition: 'opacity 0.3s ease' }}>
+                      <div data-coach-pf-pie="true" className="relative h-44 w-44 -mr-4 md:mr-0" style={{ pointerEvents: isLoadingData ? 'none' : 'auto', opacity: isLoadingData ? 0.5 : 1, transition: 'opacity 0.3s ease' }}>
                         <ResponsiveContainer width="100%" height="100%">
                           <PieChart>
                             <defs>
@@ -2441,6 +2446,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                     return (
                       <>
                         <section
+                          data-coach-pf-assets="true"
                           className="rounded-3xl bg-white/70 backdrop-blur-xl p-5 shadow-sm border border-slate-100/50"
                           style={{ fontFamily: "'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif" }}
                         >
@@ -2715,7 +2721,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                           const otherPagedStocks = holdingsOtherStocks.slice(otherStocksPage * STOCKS_PER_PAGE, (otherStocksPage + 1) * STOCKS_PER_PAGE);
                           if (holdingsOtherStocks.length === 0) return null;
                           return (
-                            <section className="rounded-3xl bg-white/70 backdrop-blur-xl p-5 shadow-sm border border-slate-100/50 mt-4">
+                            <section data-coach-pf-other="true" className="rounded-3xl bg-white/70 backdrop-blur-xl p-5 shadow-sm border border-slate-100/50 mt-4">
                               <div className="flex items-center justify-between mb-4">
                                 <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-900">Other Stocks</p>
                                 {otherTotalPages > 1 && (
@@ -2782,7 +2788,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                         })()}
 
                         {investmentGoals && investmentGoals.length > 0 && (
-                          <section className="rounded-3xl bg-white/70 backdrop-blur-xl p-5 shadow-sm border border-slate-100/50 mt-4">
+                          <section data-coach-pf-goals="true" className="rounded-3xl bg-white/70 backdrop-blur-xl p-5 shadow-sm border border-slate-100/50 mt-4">
                             <div className="flex items-center justify-between mb-4">
                               <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-900">Your Goals</p>
                               <span className="text-xs font-semibold text-violet-600 bg-violet-50 rounded-full px-2 py-0.5">{investmentGoals.length}</span>
