@@ -30,7 +30,7 @@ export default async function handler(req, res) {
     // Verify registry belongs to this user
     const { data: registry, error: regError } = await supabaseAdmin
       .from('gift_events')
-      .select('id, title, share_token, creator_user_id')
+      .select('id, title, share_token, creator_user_id, occasion, items:gift_registry_items(id)')
       .eq('id', id)
       .eq('creator_user_id', user.id)
       .single();
@@ -58,6 +58,58 @@ export default async function handler(req, res) {
     }
     console.log('[notify-beneficiary] recipient profile found:', recipientProfile.first_name, recipientProfile.last_name, '| id:', recipientProfile.id);
 
+    // Block self-notify
+    if (recipientProfile.id === user.id) {
+      console.warn('[notify-beneficiary] ❌ self-notify blocked');
+      return res.status(400).json({ error: 'Cannot notify yourself' });
+    }
+
+    // Check existing notification state + view state (mirrors Express state machine)
+    const [notifResult, viewResult] = await Promise.all([
+      supabaseAdmin
+        .from('notifications')
+        .select('id, created_at')
+        .eq('user_id', recipientProfile.id)
+        .eq('type', 'system')
+        .filter('payload->>registry_id', 'eq', id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      supabaseAdmin
+        .from('gift_registry_views')
+        .select('id')
+        .eq('registry_id', id)
+        .eq('viewer_user_id', recipientProfile.id)
+        .maybeSingle(),
+    ]);
+
+    if (notifResult.error) {
+      console.error('[notify-beneficiary] ❌ dedupe query failed:', notifResult.error.message);
+      // Fail safe: block the send rather than risk spamming
+      return res.status(500).json({ error: 'Could not check notification state' });
+    }
+
+    const existingNotif = notifResult.data;
+    const hasViewed = !!viewResult.data;
+    console.log('[notify-beneficiary] dedupe check — existingNotif:', !!existingNotif, '| hasViewed:', hasViewed);
+
+    let notifState = 'none';
+    if (existingNotif) {
+      const diffH = (Date.now() - new Date(existingNotif.created_at).getTime()) / 3_600_000;
+      if (diffH < 48) notifState = 'sent';
+      else if (!hasViewed) notifState = 'nudge';
+      else notifState = 'none';
+    }
+
+    if (notifState === 'sent') {
+      console.log('[notify-beneficiary] ℹ️ already sent within 48h — blocking duplicate');
+      return res.status(200).json({ ok: true, sent: false, reason: 'already_sent', state: 'sent' });
+    }
+    if (notifState === 'nudge' && !isNudge) {
+      console.log('[notify-beneficiary] ℹ️ eligible for nudge but isNudge not set — caller should re-send with isNudge:true');
+      return res.status(200).json({ ok: true, sent: false, reason: 'eligible_nudge', state: 'nudge' });
+    }
+
     // Look up sender's name
     const { data: senderProfile } = await supabaseAdmin
       .from('profiles')
@@ -75,6 +127,44 @@ export default async function handler(req, res) {
     const shareUrl = registry.share_token
       ? `${appUrl}/gift/registry/${registry.share_token}`
       : appUrl;
+
+    // ── Insert in-app notification ──────────────────────────────────────────
+    const OCCASION_EMOJI = { BIRTHDAY: '🎂', WEDDING: '💍', BABY: '👶', GRADUATION: '🎓', FESTIVE: '🎄', CUSTOM: '🎉' };
+    const emoji = OCCASION_EMOJI[registry.occasion] || '🎁';
+
+    const notifTitle = isNudge
+      ? `${senderRaw} is nudging you ${emoji}`
+      : `${senderRaw} shared a wishlist with you ${emoji}`;
+    const notifBody = isNudge
+      ? `Don't forget — ${senderRaw} is hoping for your gift on "${registry.title}". It only takes a moment!`
+      : `${senderRaw} has shared their wishlist with you. Browse "${registry.title}" and find something meaningful to gift.`;
+
+    const { data: insertData, error: insertErr } = await supabaseAdmin
+      .from('notifications')
+      .insert({
+        user_id: recipientProfile.id,
+        title: notifTitle,
+        body: notifBody,
+        type: 'system',
+        payload: {
+          action: 'OPEN_GIFT_REGISTRY',
+          registry_id: id,
+          share_token: registry.share_token,
+          deep_link: `/gift/${registry.share_token}`,
+          sent_by: user.id,
+          is_nudge: !!isNudge,
+          registry_title: registry.title,
+          item_count: Array.isArray(registry.items) ? registry.items.length : 0,
+          occasion: registry.occasion,
+        },
+      })
+      .select('id');
+
+    if (insertErr) {
+      console.error('[notify-beneficiary] ❌ notification insert failed:', insertErr.message, insertErr.code);
+      return res.status(500).json({ error: 'Could not create notification', detail: insertErr.message });
+    }
+    console.log('[notify-beneficiary] ✅ notification inserted — id:', insertData?.[0]?.id, '| recipient:', recipientProfile.id);
 
     const subjectLine = isNudge
       ? `${senderRaw} is nudging you about their wishlist 🎁`
