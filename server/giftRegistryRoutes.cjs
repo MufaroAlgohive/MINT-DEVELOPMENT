@@ -1110,21 +1110,46 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
         const gifterName = [gifterProfile?.first_name, gifterProfile?.last_name].filter(Boolean).join(' ') || gifterEmail.split('@')[0] || 'Someone';
         const gifterMintNumber = gifterProfile?.mint_number || null;
 
-        // ── 1. Insert pending holdings for the recipient so the purple pending card appears ──
+        // ── 1. Insert pending holdings + transaction for the recipient ──
+        // Without a transaction named "Strategy Investment: <name>", the strategy
+        // never appears in /api/user/strategies, so the pending card cannot show.
         if (ownerUserId && isBasket && itemIsin) {
           try {
-            const { data: strategy } = await supabaseAdmin.from('strategies_c').select('id, holdings').eq('id', itemIsin).maybeSingle();
+            const { data: strategy } = await supabaseAdmin.from('strategies_c').select('id, name, holdings').eq('id', itemIsin).maybeSingle();
             const stratHoldings = strategy?.holdings || [];
+            const strategyName = strategy?.name || itemName;
             const symbols = stratHoldings.map(h => h.symbol).filter(Boolean);
-            let holdingsInserted = 0;
 
             if (symbols.length > 0) {
               const { data: securities } = await supabaseAdmin.from('securities_c').select('id, symbol, last_price').in('symbol', symbols);
               const secMap = {};
               for (const s of securities || []) secMap[s.symbol] = s;
 
+              // Create a transaction for the owner — this is what /api/user/strategies
+              // uses to detect the strategy purchase and surface it as a pending card.
+              const now = new Date().toISOString();
+              const investAmountCents = reservation.price_lock_cents * qty;
+              let ownerTxId = null;
+              try {
+                const { data: txRow } = await supabaseAdmin.from('transactions').insert({
+                  user_id: ownerUserId,
+                  direction: 'debit',
+                  name: `Strategy Investment: ${strategyName}`,
+                  description: 'Investment received as wishlist gift',
+                  amount: investAmountCents,
+                  store_reference: `REGISTRY-CONTRIB-${contribution.id}`,
+                  currency: 'ZAR',
+                  status: 'posted',
+                  transaction_date: now,
+                  created_at: now,
+                }).select('id').single();
+                ownerTxId = txRow?.id || null;
+              } catch (txErr) {
+                console.warn('[gift-registry] contribute: owner transaction insert:', txErr.message);
+              }
+
               // Calculate scale: invested amount (base price before markup) vs basket cost
-              const investRands = (reservation.price_lock_cents * qty) / 100;
+              const investRands = investAmountCents / 100;
               let totalCostRands = 0;
               for (const h of stratHoldings) {
                 const sec = secMap[h.symbol];
@@ -1132,6 +1157,7 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
               }
               const scale = totalCostRands > 0 ? investRands / totalCostRands : 1;
 
+              let holdingsInserted = 0;
               for (const h of stratHoldings) {
                 const sec = secMap[h.symbol];
                 if (!sec?.last_price || !sec?.id) continue;
@@ -1147,27 +1173,23 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
                     unrealized_pnl: 0,
                     as_of_date: null,
                     Status: 'active',
+                    transaction_id: ownerTxId || null,
                   });
                   holdingsInserted++;
                 } catch (he) { console.warn('[gift-registry] contribute: pending holding insert:', he.message); }
               }
-            }
+              console.log(`[gift-registry] contribute: ${holdingsInserted} holding(s) + tx ${ownerTxId} created for owner ${ownerUserId} (strategy: ${strategyName})`);
 
-            // Fallback: insert one placeholder row so the pending card still appears
-            if (holdingsInserted === 0) {
-              const { data: fallbackSec } = await supabaseAdmin.from('securities_c').select('id').limit(1).maybeSingle();
-              if (fallbackSec?.id) {
-                await supabaseAdmin.from('stock_holdings_c').insert({
-                  user_id: ownerUserId,
-                  security_id: fallbackSec.id,
-                  strategy_id: itemIsin,
-                  quantity: 1,
-                  avg_fill: null,
-                  market_value: 0,
-                  unrealized_pnl: 0,
-                  as_of_date: null,
-                  Status: 'active',
-                });
+              // Upsert user_strategies so the strategy is discoverable
+              if (holdingsInserted > 0) {
+                try {
+                  const { data: existingUS } = await supabaseAdmin.from('user_strategies').select('id, invested_amount').eq('user_id', ownerUserId).eq('strategy_id', itemIsin).maybeSingle();
+                  if (existingUS) {
+                    await supabaseAdmin.from('user_strategies').update({ invested_amount: (existingUS.invested_amount || 0) + investAmountCents, updated_at: now }).eq('id', existingUS.id);
+                  } else {
+                    await supabaseAdmin.from('user_strategies').insert({ user_id: ownerUserId, strategy_id: itemIsin, invested_amount: investAmountCents, status: 'active', created_at: now, updated_at: now });
+                  }
+                } catch (usErr) { console.warn('[gift-registry] contribute: user_strategies upsert:', usErr.message); }
               }
             }
           } catch (holdingErr) {
