@@ -39,19 +39,46 @@ export default async function handler(req, res) {
     if (error || !registry) return res.status(404).json({ error: 'Registry not found' });
 
     if (registry.items?.length) {
-      const isins = registry.items.map(i => i.isin);
-      const { data: securities } = await supabaseAdmin
-        .from('securities_c').select('isin, name, logo_url, last_price').in('isin', isins);
-      const secMap = Object.fromEntries((securities || []).map(s => [s.isin, s]));
-      registry.items = registry.items
-        .filter(i => i.status !== 'REMOVED')
+      const activeItems = registry.items.filter(i => i.status !== 'REMOVED');
+      const shareItems = activeItems.filter(i => i.instrument_type !== 'BASKET');
+      const basketItems = activeItems.filter(i => i.instrument_type === 'BASKET');
+
+      // Look up SHARE items in securities_c
+      let secMap = {};
+      if (shareItems.length) {
+        const { data: securities } = await supabaseAdmin
+          .from('securities_c').select('isin, name, logo_url, last_price').in('isin', shareItems.map(i => i.isin));
+        secMap = Object.fromEntries((securities || []).map(s => [s.isin, s]));
+      }
+
+      // Look up BASKET items in strategies_c (isin stores the strategy UUID)
+      let stratMap = {};
+      if (basketItems.length) {
+        const { data: strategies } = await supabaseAdmin
+          .from('strategies_c').select('id, name, short_name').in('id', basketItems.map(i => i.isin));
+        stratMap = Object.fromEntries((strategies || []).map(s => [s.id, s]));
+      }
+
+      registry.items = activeItems
         .sort((a, b) => a.display_order - b.display_order)
-        .map(item => ({
-          ...item,
-          name: secMap[item.isin]?.name || item.isin,
-          logo_url: secMap[item.isin]?.logo_url || null,
-          price_snapshot_cents: item.price_snapshot_cents || secMap[item.isin]?.last_price || 0,
-        }));
+        .map(item => {
+          if (item.instrument_type === 'BASKET') {
+            const strat = stratMap[item.isin];
+            return {
+              ...item,
+              name: strat?.short_name || strat?.name || item.isin,
+              short_name: strat?.short_name || null,
+              logo_url: null,
+              price_snapshot_cents: item.price_snapshot_cents || 0,
+            };
+          }
+          return {
+            ...item,
+            name: secMap[item.isin]?.name || item.isin,
+            logo_url: secMap[item.isin]?.logo_url || null,
+            price_snapshot_cents: item.price_snapshot_cents || secMap[item.isin]?.last_price || 0,
+          };
+        });
 
       // Fetch contributions for all items (publicly visible — show display name only, no PII)
       const itemIds = registry.items.map(i => i.id);

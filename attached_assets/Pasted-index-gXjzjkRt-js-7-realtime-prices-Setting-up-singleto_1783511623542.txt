@@ -1,0 +1,264 @@
+index-gXjzjkRt.js:7 [realtime-prices] Setting up singleton subscription
+index-gXjzjkRt.js:2 [Notifications] fetchNotifications: userId= 3401d428-4ed7-4ba1-ae64-4bd16d2485a4
+index-gXjzjkRt.js:2 Setting up SINGLETON notifications subscription
+index-gXjzjkRt.js:2 [Notifications] authStateChange event= INITIAL_SESSION userId= 3401d428-4ed7-4ba1-ae64-4bd16d2485a4
+mfxnghmuccevsxwcetej.supabase.co/rest/v1/app_settings?select=is_enabled&limit=1:1  Failed to load resource: the server responded with a status of 406 ()
+index-gXjzjkRt.js:7 Setting up SINGLETON real-time subscription: required-actions-singleton
+index-gXjzjkRt.js:2 [Notifications] fetchNotifications: count= 3 error= none
+index-gXjzjkRt.js:7 KYC status check: stored="verified" current="verified"
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:7 [useOnboardingStatus] Total Onboarding Status: COMPLETE ✅ Object
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:7 [realtime-prices] Subscription status: SUBSCRIBED
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:2 Notifications singleton status: SUBSCRIBED
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:7 Singleton subscription status: SUBSCRIBED
+index-gXjzjkRt.js:7 [useOnboardingStatus] Total Onboarding Status: COMPLETE ✅ Object
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:7 [useFinancialData] Updated balance from DB: 46858.37
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:2 🔍 Fetching latest intraday data from stock_intraday_c...
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:7 [SwipeableBalanceCard] Loaded holdings: Object
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:2 ✅ Fetched 239 securities with intraday metrics
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:2 [Notifications] authStateChange event= SIGNED_IN userId= 3401d428-4ed7-4ba1-ae64-4bd16d2485a4
+index-gXjzjkRt.js:2 [Notifications] fetchNotifications: userId= 3401d428-4ed7-4ba1-ae64-4bd16d2485a4
+index-gXjzjkRt.js:2 [Notifications] fetchNotifications: count= 3 error= none
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:7 [useOnboardingStatus] Total Onboarding Status: COMPLETE ✅ Object
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:7 Polling Sumsub status...
+index-gXjzjkRt.js:7 KYC status check: stored="verified" current="verified"
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:7 Polling Sumsub status...
+index-gXjzjkRt.js:7 KYC status check: stored="verified" current="verified"
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:7 Polling Sumsub status...
+index-gXjzjkRt.js:7 KYC status check: stored="verified" current="verified"
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:7 Polling Sumsub status...
+index-gXjzjkRt.js:7 KYC status check: stored="verified" current="verified"
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:7 Polling Sumsub status...
+index-gXjzjkRt.js:7 KYC status check: stored="verified" current="verified"
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:7 Polling Sumsub status...
+index-gXjzjkRt.js:7 KYC status check: stored="verified" current="verified"
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:7 Polling Sumsub status...
+index-gXjzjkRt.js:7 KYC status check: stored="verified" current="verified"
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:7 Polling Sumsub status...
+index-gXjzjkRt.js:7 KYC status check: stored="verified" current="verified"
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:7 Polling Sumsub status...
+index-gXjzjkRt.js:7 KYC status check: stored="verified" current="verified"
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:2 [Notifications] authStateChange event= SIGNED_IN userId= 3401d428-4ed7-4ba1-ae64-4bd16d2485a4
+index-gXjzjkRt.js:2 [Notifications] fetchNotifications: userId= 3401d428-4ed7-4ba1-ae64-4bd16d2485a4
+index-gXjzjkRt.js:2 [Notifications] fetchNotifications: count= 3 error= none
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:7 [useOnboardingStatus] Total Onboarding Status: COMPLETE ✅ Object
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:7 [useFinancialData] Updated balance from DB: 46858.37
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:7 [SwipeableBalanceCard] Loaded holdings: Object
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:7 Polling Sumsub status...
+index-gXjzjkRt.js:7 KYC status check: stored="verified" current="verified"
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:7 Polling Sumsub status...
+index-gXjzjkRt.js:7 KYC status check: stored="verified" current="verified"
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:7 Polling Sumsub status...
+index-gXjzjkRt.js:7 KYC status check: stored="verified" current="verified"
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:2 [Notifications] authStateChange event= SIGNED_IN userId= 3401d428-4ed7-4ba1-ae64-4bd16d2485a4
+index-gXjzjkRt.js:2 [Notifications] fetchNotifications: userId= 3401d428-4ed7-4ba1-ae64-4bd16d2485a4
+index-gXjzjkRt.js:7 Polling Sumsub status...
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:7 KYC status check: stored="verified" current="verified"
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:2 [Notifications] fetchNotifications: count= 3 error= none
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:7 [useOnboardingStatus] Total Onboarding Status: COMPLETE ✅ Object
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+MarketsPage-TCyYFp3J.js:13 [Chart] TimeFrame: YTD, Base: 100.31, End: 102.38, Return: 2.06%
+index-gXjzjkRt.js:2 🔍 Fetching latest intraday data from stock_intraday_c...
+index-gXjzjkRt.js:7 🔍 Fetching strategies with metrics from Supabase...
+index-gXjzjkRt.js:7 🔍 Fetching public strategies from Supabase...
+MarketsPage-TCyYFp3J.js:13 🔍 Fetching news articles from News_articles table...
+index-gXjzjkRt.js:7 Polling Sumsub status...
+index-gXjzjkRt.js:7 ✅ Fetched 7 public strategies with dynamic metrics
+index-gXjzjkRt.js:2 The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+console.warn @ index-gXjzjkRt.js:2
+index-gXjzjkRt.js:2 The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+console.warn @ index-gXjzjkRt.js:2
+index-gXjzjkRt.js:2 The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+console.warn @ index-gXjzjkRt.js:2
+index-gXjzjkRt.js:2 The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+console.warn @ index-gXjzjkRt.js:2
+index-gXjzjkRt.js:2 The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+console.warn @ index-gXjzjkRt.js:2
+index-gXjzjkRt.js:2 The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+console.warn @ index-gXjzjkRt.js:2
+index-gXjzjkRt.js:2 The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+console.warn @ index-gXjzjkRt.js:2
+MarketsPage-TCyYFp3J.js:13 ✅ News articles fetched successfully!
+MarketsPage-TCyYFp3J.js:13 📊 Total count in DB: 5939
+MarketsPage-TCyYFp3J.js:13 📰 Articles returned: 50
+MarketsPage-TCyYFp3J.js:13 Sample article: Object
+index-gXjzjkRt.js:7 ✅ Fetched 9 strategies with metrics
+index-gXjzjkRt.js:7 KYC status check: stored="verified" current="verified"
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:7 [useFinancialData] Updated balance from DB: 46858.37
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-gXjzjkRt.js:2 ✅ Fetched 239 securities with intraday metrics
+index-gXjzjkRt.js:7 [realtime-prices] Tearing down subscription
+index-gXjzjkRt.js:7 [realtime-prices] Subscription status: CLOSED
+index-gXjzjkRt.js:2 The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+console.warn @ index-gXjzjkRt.js:2
+index-gXjzjkRt.js:2 The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+console.warn @ index-gXjzjkRt.js:2
+/api/gift-registry/59d760b1-8293-44cd-9756-aabb9f381fea/view-count:1  Failed to load resource: the server responded with a status of 404 ()
+index-gXjzjkRt.js:2 [Notifications] authStateChange event= SIGNED_IN userId= 3401d428-4ed7-4ba1-ae64-4bd16d2485a4
+index-gXjzjkRt.js:2 [Notifications] fetchNotifications: userId= 3401d428-4ed7-4ba1-ae64-4bd16d2485a4
+index-gXjzjkRt.js:2 [Notifications] fetchNotifications: count= 3 error= none
+index-gXjzjkRt.js:7 [useOnboardingStatus] Total Onboarding Status: COMPLETE ✅ {success: true, onboarding: {…}, onboarding_id: '865eb670-45b2-4baf-b3b6-69a57941de3b', is_fully_onboarded: true, flags: {…}}
+index-gXjzjkRt.js:2 [Notifications] authStateChange event= SIGNED_IN userId= 3401d428-4ed7-4ba1-ae64-4bd16d2485a4
+index-gXjzjkRt.js:2 [Notifications] fetchNotifications: userId= 3401d428-4ed7-4ba1-ae64-4bd16d2485a4
+index-gXjzjkRt.js:7 [useOnboardingStatus] Total Onboarding Status: COMPLETE ✅ {success: true, onboarding: {…}, onboarding_id: '865eb670-45b2-4baf-b3b6-69a57941de3b', is_fully_onboarded: true, flags: {…}}
+index-gXjzjkRt.js:2 [Notifications] fetchNotifications: count= 3 error= none
+GiftRegistrySharePopup-qx8tqZ4r.js:1  POST https://mint-development-git-giftregister-tsie-masilos-projects.vercel.app/api/gift-registry/59d760b1-8293-44cd-9756-aabb9f381fea/notify-beneficiary 404 (Not Found)
+V @ GiftRegistrySharePopup-qx8tqZ4r.js:1
+await in V
+onClick @ GiftRegistrySharePopup-qx8tqZ4r.js:1
+Ok @ vendor-recharts-BfjPiJtV.js:5
+Ak @ vendor-recharts-BfjPiJtV.js:5
+_k @ vendor-recharts-BfjPiJtV.js:5
+bg @ vendor-recharts-BfjPiJtV.js:5
+xg @ vendor-recharts-BfjPiJtV.js:5
+(anonymous) @ vendor-recharts-BfjPiJtV.js:5
+Dd @ vendor-recharts-BfjPiJtV.js:8
+_y @ vendor-recharts-BfjPiJtV.js:5
+Df @ vendor-recharts-BfjPiJtV.js:5
+mf @ vendor-recharts-BfjPiJtV.js:5
+Uk @ vendor-recharts-BfjPiJtV.js:5
+index-gXjzjkRt.js:2 [Notifications] authStateChange event= SIGNED_IN userId= 3401d428-4ed7-4ba1-ae64-4bd16d2485a4
+index-gXjzjkRt.js:2 [Notifications] fetchNotifications: userId= 3401d428-4ed7-4ba1-ae64-4bd16d2485a4
+index-gXjzjkRt.js:2 [Notifications] fetchNotifications: count= 3 error= none
+index-gXjzjkRt.js:7 [useOnboardingStatus] Total Onboarding Status: COMPLETE ✅ {success: true, onboarding: {…}, onboarding_id: '865eb670-45b2-4baf-b3b6-69a57941de3b', is_fully_onboarded: true, flags: {…}}
+GiftRegistrySharePopup-qx8tqZ4r.js:1  POST https://mint-development-git-giftregister-tsie-masilos-projects.vercel.app/api/gift-registry/59d760b1-8293-44cd-9756-aabb9f381fea/notify-beneficiary 404 (Not Found)
+V @ GiftRegistrySharePopup-qx8tqZ4r.js:1
+await in V
+onClick @ GiftRegistrySharePopup-qx8tqZ4r.js:1
+Ok @ vendor-recharts-BfjPiJtV.js:5
+Ak @ vendor-recharts-BfjPiJtV.js:5
+_k @ vendor-recharts-BfjPiJtV.js:5
+bg @ vendor-recharts-BfjPiJtV.js:5
+xg @ vendor-recharts-BfjPiJtV.js:5
+(anonymous) @ vendor-recharts-BfjPiJtV.js:5
+Dd @ vendor-recharts-BfjPiJtV.js:8
+_y @ vendor-recharts-BfjPiJtV.js:5
+Df @ vendor-recharts-BfjPiJtV.js:5
+mf @ vendor-recharts-BfjPiJtV.js:5
+Uk @ vendor-recharts-BfjPiJtV.js:5
