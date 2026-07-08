@@ -48,7 +48,11 @@ export default async function handler(req, res) {
       .ilike('email', normalizedEmail)
       .limit(1);
 
-    console.log('[notify-beneficiary] profile lookup for', normalizedEmail, '→', profiles?.length ?? 0, 'row(s)', profError ? `| DB error: ${profError.message}` : '');
+    if (profError) {
+      console.error('[notify-beneficiary] ❌ profile lookup DB error:', profError.message, profError.code);
+      return res.status(500).json({ error: 'Could not look up recipient profile' });
+    }
+    console.log('[notify-beneficiary] profile lookup for', normalizedEmail, '→', profiles?.length ?? 0, 'row(s)');
     const recipientProfile = profiles?.[0];
 
     if (!recipientProfile) {
@@ -89,8 +93,11 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: 'Could not check notification state' });
     }
 
+    if (viewResult.error) {
+      console.warn('[notify-beneficiary] ⚠️ view-state lookup failed (non-fatal):', viewResult.error.message);
+    }
     const existingNotif = notifResult.data;
-    const hasViewed = !!viewResult.data;
+    const hasViewed = viewResult.error ? false : !!viewResult.data;
     const wasRead = !!existingNotif?.read_at;
     console.log('[notify-beneficiary] dedupe check — existingNotif:', !!existingNotif, '| wasRead:', wasRead, '| hasViewed:', hasViewed);
 
