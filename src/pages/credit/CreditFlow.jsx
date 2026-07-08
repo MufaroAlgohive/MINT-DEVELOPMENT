@@ -191,6 +191,8 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
   const [statementUploading, setStatementUploading] = useState(false);
   const [statementDetecting, setStatementDetecting] = useState(false);
   const [statementError, setStatementError] = useState("");
+  const [statementPath, setStatementPath] = useState("");   // uploaded PDF path, for retry
+  const [statementRetryable, setStatementRetryable] = useState(false); // AI busy → show Try again
   // Gemini's salary-detection draft — the user confirms/edits before it becomes monthlyIncome.
   const [incomeDetection, setIncomeDetection] = useState(null);
   const [showFlagged, setShowFlagged] = useState(false); // expand the flagged-transactions list
@@ -732,6 +734,40 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
     }
   }, [saveCreditFlag]);
 
+  // Run (or re-run) AI detection on an already-uploaded statement. Extracted so
+  // the "Try again" button can retry without re-uploading. Sets statementRetryable
+  // when the reader is just busy (Gemini 503), so the UI can offer a retry.
+  const runIncomeDetection = useCallback(async (path) => {
+    if (!path) return;
+    setStatementError("");
+    setStatementRetryable(false);
+    setStatementDetecting(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      const res = await fetch("/api/credit/detect-income", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ path, months: statementMonths }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) {
+        if (data.retryable) setStatementRetryable(true);
+        throw new Error(data.error || "Could not analyse statement");
+      }
+      setIncomeDetection(data.result);
+      if (data.result?.is_salary_detected && data.result.estimated_monthly_income > 0) {
+        setMonthlyIncome(Math.round(Number(data.result.estimated_monthly_income)));
+      }
+      await saveCreditFlag({ credit_income_ai_result: data.result, credit_income_ai_at: new Date().toISOString() });
+    } catch (err) {
+      console.warn("[CreditFlow] income detection failed:", err?.message || err);
+      setStatementError(err?.message || "Couldn't detect your salary automatically — please confirm it manually below.");
+    } finally {
+      setStatementDetecting(false);
+    }
+  }, [saveCreditFlag, statementMonths]);
+
   // Bank-statement upload for the income step (AI path): upload PDF to the
   // private income-statements bucket, then ask Gemini to detect the salary.
   const handleStatementUpload = useCallback(async (e) => {
@@ -757,6 +793,7 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
       const { error: upErr } = await supabase.storage.from(info.bucket).uploadToSignedUrl(info.path, info.token, file, { contentType: "application/pdf", upsert: true });
       if (upErr) throw upErr;
       setStatementName(file.name);
+      setStatementPath(info.path);
       await saveCreditFlag({ credit_bank_statement_path: info.path, credit_bank_statement_months: statementMonths });
     } catch (err) {
       console.warn("[CreditFlow] statement upload failed:", err?.message || err);
@@ -766,29 +803,8 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
     }
     setStatementUploading(false);
 
-    setStatementDetecting(true);
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token;
-      const res = await fetch("/api/credit/detect-income", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ path: info.path, months: statementMonths }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data.success) throw new Error(data.error || "Could not analyse statement");
-      setIncomeDetection(data.result);
-      if (data.result?.is_salary_detected && data.result.estimated_monthly_income > 0) {
-        setMonthlyIncome(Math.round(Number(data.result.estimated_monthly_income)));
-      }
-      await saveCreditFlag({ credit_income_ai_result: data.result, credit_income_ai_at: new Date().toISOString() });
-    } catch (err) {
-      console.warn("[CreditFlow] income detection failed:", err?.message || err);
-      setStatementError(err?.message || "Couldn't detect your salary automatically — please confirm it manually below.");
-    } finally {
-      setStatementDetecting(false);
-    }
-  }, [saveCreditFlag, statementMonths]);
+    await runIncomeDetection(info.path);
+  }, [saveCreditFlag, statementMonths, runIncomeDetection]);
 
   // Save monthly income (last onboarding step) and move on to My applications.
   const saveIncome = useCallback(async () => {
@@ -1315,7 +1331,18 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
                       </div>
                     )}
                     {statementError && !statementDetecting && (
-                      <p className="mt-3 text-[11px] font-medium text-rose-500">{statementError}</p>
+                      <div className="mt-3 flex items-center justify-between gap-3">
+                        <p className="text-[11px] font-medium text-rose-500">{statementError}</p>
+                        {statementPath && (
+                          <button
+                            type="button"
+                            onClick={() => runIncomeDetection(statementPath)}
+                            className="flex-shrink-0 rounded-full bg-violet-600 px-3 py-1.5 text-[11px] font-semibold text-white active:scale-95"
+                          >
+                            Try again
+                          </button>
+                        )}
+                      </div>
                     )}
                     {!statementName && (
                       <p className="mt-3 text-[11px] text-slate-400">We'll automatically detect your salary and pay date. You can confirm before continuing.</p>

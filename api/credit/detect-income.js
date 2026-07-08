@@ -146,6 +146,36 @@ const SCHEMA = {
 // GEMINI_API_KEY must be set on Vercel (preview + prod) — no hardcoded fallback.
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
+// Gemini occasionally returns 503 UNAVAILABLE / 429 / overloaded under load.
+// These are transient, so retry a few times with exponential backoff + jitter
+// before surfacing the error. Non-transient errors (bad request, auth) throw
+// immediately so we don't waste time retrying a genuine failure.
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+function isTransientGeminiError(err) {
+  const status = err?.status ?? err?.code ?? err?.response?.status;
+  if ([429, 500, 502, 503, 504].includes(Number(status))) return true;
+  const msg = String(err?.message || err || "").toLowerCase();
+  return /unavailable|overloaded|high demand|try again|temporarily|rate limit|resource has been exhausted|deadline exceeded|internal error/.test(msg);
+}
+
+async function generateWithRetry(ai, request, { attempts = 4, baseDelayMs = 900 } = {}) {
+  let lastErr;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await ai.models.generateContent(request);
+    } catch (err) {
+      lastErr = err;
+      if (i === attempts - 1 || !isTransientGeminiError(err)) throw err;
+      // Exponential backoff with jitter: ~0.9s, 1.8s, 3.6s (+/- up to 400ms).
+      const delay = baseDelayMs * Math.pow(2, i) + Math.floor(Math.random() * 400);
+      console.warn(`[detect-income] Gemini transient error (attempt ${i + 1}/${attempts}), retrying in ${delay}ms:`, err?.message || err);
+      await sleep(delay);
+    }
+  }
+  throw lastErr;
+}
+
 function buildPrompt(months) {
   return (
     `SECURITY — READ FIRST:\n` +
@@ -385,24 +415,39 @@ export default async function handler(req, res) {
     const base64 = buffer.toString("base64");
 
     const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: [
-        {
-          role: "user",
-          parts: [
-            { inlineData: { mimeType: "application/pdf", data: base64 } },
-            { text: buildPrompt(months) },
-          ],
+    let response;
+    try {
+      response = await generateWithRetry(ai, {
+        model: "gemini-2.5-flash",
+        contents: [
+          {
+            role: "user",
+            parts: [
+              { inlineData: { mimeType: "application/pdf", data: base64 } },
+              { text: buildPrompt(months) },
+            ],
+          },
+        ],
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: SCHEMA,
+          // Deterministic decoding — same statement should yield the same read.
+          temperature: 0,
         },
-      ],
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: SCHEMA,
-        // Deterministic decoding — same statement should yield the same read.
-        temperature: 0,
-      },
-    });
+      });
+    } catch (genErr) {
+      // Still failing after retries. If it's the "overloaded" class, tell the
+      // client it's transient so it can offer a Try again (retryable: true).
+      if (isTransientGeminiError(genErr)) {
+        console.warn("[detect-income] Gemini still unavailable after retries:", genErr?.message || genErr);
+        return res.status(503).json({
+          success: false,
+          retryable: true,
+          error: "Our statement reader is busy right now. Please tap Try again in a moment.",
+        });
+      }
+      throw genErr;
+    }
 
     const raw = response.text;
     let result;
