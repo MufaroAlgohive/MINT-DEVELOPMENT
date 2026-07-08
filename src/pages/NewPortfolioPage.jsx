@@ -1,6 +1,14 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Bell, Eye, EyeOff, ChevronDown, ChevronRight, ChevronLeft, ArrowLeft, TrendingUp, TrendingDown, Plus, ArrowUpRight } from "lucide-react";
+import { Bell, Eye, EyeOff, ChevronDown, ChevronRight, ChevronLeft, ArrowLeft, TrendingUp, TrendingDown, Plus, ArrowUpRight, HelpCircle } from "lucide-react";
+import SpotlightTour from "../components/SpotlightTour";
+
+// First-timer walkthrough for the Portfolio page — focused on how to withdraw.
+const PF_TOUR_SEEN_KEY = "mint_pf_tour_seen_v1";
+const PF_TOUR_STEPS = [
+  { selector: '[data-coach-pf-value]', title: "Your total value", body: "This is everything you hold with MINT — your invested money plus its growth. Tap the eye to hide it." },
+  { selector: '[data-coach-pf-withdraw]', title: "Cash out anytime", body: "Tap Withdraw to sell a holding or a whole basket. The proceeds are credited to your wallet, ready to move to your bank." },
+];
 import { Area, ComposedChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip, PieChart, Pie, Cell, ReferenceLine } from 'recharts';
 import { useInvestments } from "../lib/useFinancialData";
 import { useRealtimePrices } from "../lib/useRealtimePrices";
@@ -83,6 +91,7 @@ const getReturnColor = (value) => {
 
 const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies, onBack, deepLink, onDeepLinkConsumed, onOpenStockDetail, onWithdraw }) => {
   const [balanceVisible, setBalanceVisible] = useState(true);
+  const [showTour, setShowTour] = useState(false);
   const [activeTab, setActiveTab] = useState("holdings");
   const [timeFilter, setTimeFilter] = useState("ytd");
   const [failedLogos, setFailedLogos] = useState({});
@@ -521,6 +530,24 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
   }, [rawHoldings, strategies, stocksList, liveQuotes]);
 
   const holdings = allStrategyHoldings;
+
+  // First-visit walkthrough: auto-open once holdings have loaded (so the
+  // Withdraw card the tour points at actually exists), and only if the user
+  // can withdraw. Remembered per device so it shows just once.
+  useEffect(() => {
+    if (showTour) return;
+    if (holdingsLoading || !onWithdraw || allStrategyHoldings.length === 0) return;
+    let seen = false;
+    try { seen = localStorage.getItem(PF_TOUR_SEEN_KEY) === "1"; } catch {}
+    if (seen) return;
+    const t = setTimeout(() => setShowTour(true), 650); // let the page settle first
+    return () => clearTimeout(t);
+  }, [holdingsLoading, allStrategyHoldings.length, onWithdraw, showTour]);
+
+  const closeTour = useCallback(() => {
+    setShowTour(false);
+    try { localStorage.setItem(PF_TOUR_SEEN_KEY, "1"); } catch {}
+  }, []);
 
   // ── direct strategy holdings ──────────────────────────────────────────────
   useEffect(() => {
@@ -1122,16 +1149,25 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
               />
               <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white mt-1">{fullName}</p>
             </div>
-            <button
-              className="flex h-10 w-10 items-center justify-center rounded-full border border-white/20 backdrop-blur-sm transition hover:bg-white/10"
-              onClick={onOpenNotifications}
-            >
-              <Bell className="h-5 w-5 text-white/90" />
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                aria-label="How this page works"
+                className="flex h-10 w-10 items-center justify-center rounded-full border border-white/20 backdrop-blur-sm transition hover:bg-white/10"
+                onClick={() => setShowTour(true)}
+              >
+                <HelpCircle className="h-5 w-5 text-white/90" />
+              </button>
+              <button
+                className="flex h-10 w-10 items-center justify-center rounded-full border border-white/20 backdrop-blur-sm transition hover:bg-white/10"
+                onClick={onOpenNotifications}
+              >
+                <Bell className="h-5 w-5 text-white/90" />
+              </button>
+            </div>
           </header>
 
           {/* Account balance */}
-          <section className="relative">
+          <section className="relative" data-coach-pf-value="true">
             <div className="absolute -inset-8 bg-gradient-radial from-[#7c3aed]/20 via-transparent to-transparent rounded-full blur-2xl -z-10" />
             {(() => {
               const totalPnl = displayAccountValue - displayTotalCostBasis;
@@ -2814,7 +2850,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
             {/* Withdraw — sell-flow entry point (relocated here from the balance card) */}
             {!holdingsLoading && allStrategyHoldings.length > 0 && onWithdraw && (
               <div className="relative mx-auto w-full max-w-sm px-4 pb-10 md:max-w-md md:px-8">
-                <div className="rounded-3xl border border-violet-100 bg-gradient-to-br from-white to-violet-50/40 p-5 shadow-sm">
+                <div data-coach-pf-withdraw="true" className="rounded-3xl border border-violet-100 bg-gradient-to-br from-white to-violet-50/40 p-5 shadow-sm">
                   <div className="flex items-center gap-3">
                     <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-2xl bg-violet-100 text-violet-600">
                       <ArrowUpRight size={20} />
@@ -3217,6 +3253,9 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
           );
         })()}
       </AnimatePresence>
+
+      {/* First-timer walkthrough — spotlights the total value, then Withdraw. */}
+      <SpotlightTour open={showTour} steps={PF_TOUR_STEPS} onClose={closeTour} />
 
     </div>
   );
