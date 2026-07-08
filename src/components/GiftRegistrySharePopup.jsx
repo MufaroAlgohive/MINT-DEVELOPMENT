@@ -24,6 +24,14 @@ function avatarAccent(name) {
   return AVATAR_ACCENTS[(name?.charCodeAt(0) || 0) % AVATAR_ACCENTS.length];
 }
 
+// ── Privacy helper: mask an email address for display (e.g. jo***@gmail.com)
+function maskEmail(email) {
+  if (!email || typeof email !== "string" || !email.includes("@")) return email || "";
+  const [local, domain] = email.split("@");
+  const visible = local.slice(0, Math.min(2, local.length));
+  return `${visible}${"*".repeat(Math.max(local.length - visible.length, 3))}@${domain}`;
+}
+
 // ── Beneficiary localStorage helpers ─────────────────────────────────────────
 function sentStorageKey(registryId) { return `wishlist_notif_${registryId}`; }
 function getSentMap(registryId) {
@@ -92,7 +100,7 @@ function NewRecipientPanel({ onBack, onSelect }) {
       iconBg: "#ede9fe",
       iconColor: "#7c3aed",
       title: "MINT Number",
-      subtitle: "Find a user by their MINT number",
+      subtitle: "Share with a user via their MINT number",
     },
     {
       id: "id",
@@ -104,7 +112,7 @@ function NewRecipientPanel({ onBack, onSelect }) {
       iconBg: "#ede9fe",
       iconColor: "#7c3aed",
       title: "ID Number",
-      subtitle: "Find a user by their SA ID number",
+      subtitle: "Share with a user via their SA ID number",
     },
     {
       id: "details",
@@ -116,7 +124,7 @@ function NewRecipientPanel({ onBack, onSelect }) {
       iconBg: "#ede9fe",
       iconColor: "#7c3aed",
       title: "Enter details",
-      subtitle: "Manually enter name, email and a message",
+      subtitle: "Manually enter their name and email",
     },
     {
       id: "email",
@@ -127,8 +135,8 @@ function NewRecipientPanel({ onBack, onSelect }) {
       ),
       iconBg: "#d1fae5",
       iconColor: "#059669",
-      title: "Invite by Email",
-      subtitle: "Find or invite someone using their email",
+      title: "Share by Email",
+      subtitle: "Share with someone using their email address",
     },
   ];
 
@@ -668,7 +676,7 @@ export default function GiftRegistrySharePopup({ token, title, registryId, onClo
           {idResult && (
             <div className="mx-4 mb-4 bg-violet-50 border border-violet-200 rounded-2xl px-4 py-4">
               <p className="text-[13px] font-semibold text-slate-800 mb-0.5">
-                {idResult.first_name} {idResult.last_name}
+                {maskEmail(idResult.email)}
               </p>
               {idResult.mint_number && <p className="text-[11px] text-slate-400 mb-3">{idResult.mint_number}</p>}
               <button
@@ -676,7 +684,7 @@ export default function GiftRegistrySharePopup({ token, title, registryId, onClo
                 disabled={!!sendingFor}
                 className="w-full py-3 rounded-xl bg-[#6B21A8] text-white text-sm font-bold active:opacity-70 disabled:opacity-50"
               >
-                {sendingFor ? "Sharing…" : `Share with ${idResult.first_name || "them"}`}
+                {sendingFor ? "Sharing…" : "Share wishlist"}
               </button>
             </div>
           )}
@@ -738,7 +746,7 @@ export default function GiftRegistrySharePopup({ token, title, registryId, onClo
               <button onClick={resetAndBack} className="w-8 h-8 flex items-center justify-center rounded-full text-slate-500 active:opacity-60">
                 <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
               </button>
-              <h3 className="text-[17px] font-bold text-slate-900">Invite by Email</h3>
+              <h3 className="text-[17px] font-bold text-slate-900">Share by Email</h3>
             </div>
             <input
               type="email"
