@@ -2181,26 +2181,31 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                   2) else a sensible default (Equities first, ETFs last);
                   3) else natural order. CRM-numbered categories always sort ahead of
                   un-numbered ones, so the CRM control wins whenever it's used. */}
-              {[...new Set(filteredStrategies.map(s => s.sector || 'General'))]
-                .sort((a, b) => {
-                  const DEFAULTS = { 'Equities': 0, 'Fixed Income': 1, 'General': 2, 'ETFs': 3 };
-                  const rank = (s) => {
-                    const crm = Number(categoryOrder[s]);
-                    if (Number.isFinite(crm)) return crm;               // CRM-set: use directly
-                    const d = DEFAULTS[s];                              // else fallback default,
-                    return (d != null ? d : 50) + 1000;                // pushed after CRM-numbered
-                  };
-                  return rank(a) - rank(b);
-                })
+              {[
+                ...(strategyWatchlist.length > 0 ? ['__WATCHLIST__'] : []),
+                ...[...new Set(filteredStrategies.map(s => s.sector || 'General'))]
+                  .sort((a, b) => {
+                    const DEFAULTS = { 'Equities': 0, 'Fixed Income': 1, 'General': 2, 'ETFs': 3 };
+                    const rank = (s) => {
+                      const crm = Number(categoryOrder[s]);
+                      if (Number.isFinite(crm)) return crm;               // CRM-set: use directly
+                      const d = DEFAULTS[s];                              // else fallback default,
+                      return (d != null ? d : 50) + 1000;                // pushed after CRM-numbered
+                    };
+                    return rank(a) - rank(b);
+                  }),
+              ]
                 .map((sector) => {
-                const sectorStrategies = filteredStrategies.filter(s => (s.sector || 'General') === sector);
+                const sectorStrategies = sector === '__WATCHLIST__'
+                  ? filteredStrategies.filter(s => strategyWatchlist.includes(s.id))
+                  : filteredStrategies.filter(s => (s.sector || 'General') === sector);
                 
                 if (sectorStrategies.length === 0) return null;
               
               return (
                 <section key={sector}>
                   <div className="mb-4 flex items-center justify-between">
-                    <h2 className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">{sector === 'General' ? (childFilter ? 'Child Friendly' : 'Strategies') : sector}</h2>
+                    <h2 className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">{sector === '__WATCHLIST__' ? 'Watchlist' : (sector === 'General' ? (childFilter ? 'Child Friendly' : 'Strategies') : sector)}</h2>
                     {/* Show how many baskets are in this category instead of a chevron. */}
                     <span className="text-[11px] font-semibold tabular-nums text-slate-400">({sectorStrategies.length})</span>
                   </div>
