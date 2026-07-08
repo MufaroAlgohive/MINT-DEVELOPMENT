@@ -79,6 +79,7 @@ export default function GiftRegistryPublicPage({
   const items = registry?.items || [];
   const allContributions = registry?.all_contributions || [];
   const canGift = !!user && isKycComplete;
+  const isOwner = !!(user?.id && registry?.creator_user_id && user.id === registry.creator_user_id);
 
   function handleGiftTap(item) {
     setCheckoutItem(item);
@@ -203,52 +204,55 @@ export default function GiftRegistryPublicPage({
 
       <div className="px-5 pt-5 space-y-3">
 
-        {/* Registry identity card */}
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
-          <div className="flex items-start gap-3">
-            <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center text-2xl shrink-0">
-              {occasionEmoji}
+        {/* Registry identity card — owner only; non-owners already see who/what
+            it's for in the "shared_wishlist" / "gift_received" banner above. */}
+        {isOwner && (
+          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
+            <div className="flex items-start gap-3">
+              <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center text-2xl shrink-0">
+                {occasionEmoji}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400 mb-0.5">
+                  {occasionLabel}
+                </p>
+                <h1 className="text-lg font-bold text-slate-900 leading-tight">
+                  {registry.title}
+                </h1>
+                <p className="text-sm text-slate-500 mt-0.5">
+                  For {registry.beneficiary_display_name}
+                </p>
+              </div>
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400 mb-0.5">
-                {occasionLabel}
+
+            {registry.message && (
+              <p className="mt-4 text-sm text-slate-600 italic bg-slate-50 rounded-xl px-4 py-3 leading-relaxed border-l-2 border-slate-200">
+                "{registry.message}"
               </p>
-              <h1 className="text-lg font-bold text-slate-900 leading-tight">
-                {registry.title}
-              </h1>
-              <p className="text-sm text-slate-500 mt-0.5">
-                For {registry.beneficiary_display_name}
-              </p>
+            )}
+
+            <div className="mt-4 flex flex-wrap gap-3">
+              {eventDate && (
+                <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                  <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                  {eventDate}
+                </div>
+              )}
+              {expiryDate && !isClosed && (
+                <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                  <Clock className="w-3.5 h-3.5 text-slate-400" />
+                  Closes {expiryDate}
+                </div>
+              )}
+              {allContributions.length > 0 && (
+                <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                  <Users className="w-3.5 h-3.5 text-slate-400" />
+                  {allContributions.length} gifter{allContributions.length !== 1 ? "s" : ""}
+                </div>
+              )}
             </div>
           </div>
-
-          {registry.message && (
-            <p className="mt-4 text-sm text-slate-600 italic bg-slate-50 rounded-xl px-4 py-3 leading-relaxed border-l-2 border-slate-200">
-              "{registry.message}"
-            </p>
-          )}
-
-          <div className="mt-4 flex flex-wrap gap-3">
-            {eventDate && (
-              <div className="flex items-center gap-1.5 text-xs text-slate-500">
-                <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                {eventDate}
-              </div>
-            )}
-            {expiryDate && !isClosed && (
-              <div className="flex items-center gap-1.5 text-xs text-slate-500">
-                <Clock className="w-3.5 h-3.5 text-slate-400" />
-                Closes {expiryDate}
-              </div>
-            )}
-            {allContributions.length > 0 && (
-              <div className="flex items-center gap-1.5 text-xs text-slate-500">
-                <Users className="w-3.5 h-3.5 text-slate-400" />
-                {allContributions.length} gifter{allContributions.length !== 1 ? "s" : ""}
-              </div>
-            )}
-          </div>
-        </div>
+        )}
 
         {/* Status banners */}
         {isClosed && (
@@ -298,28 +302,32 @@ export default function GiftRegistryPublicPage({
           </div>
         )}
 
-        {/* Tabs */}
-        <div className="flex gap-1 bg-slate-100 rounded-xl p-1">
-          {[
-            { key: "items", label: `Items (${items.length})` },
-            { key: "history", label: `Gift history${allContributions.length > 0 ? ` (${allContributions.length})` : ""}` },
-          ].map((tab) => (
-            <button
-              key={tab.key}
-              onClick={() => setActiveTab(tab.key)}
-              className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all ${
-                activeTab === tab.key
-                  ? "bg-white text-violet-700 shadow-sm"
-                  : "text-slate-500"
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
+        {/* Tabs — owner only. Non-owners (people browsing someone else's shared
+            wishlist) only ever get the Items view; gift history is private to
+            the wishlist owner. */}
+        {isOwner && (
+          <div className="flex gap-1 bg-slate-100 rounded-xl p-1">
+            {[
+              { key: "items", label: `Items (${items.length})` },
+              { key: "history", label: `Gift history${allContributions.length > 0 ? ` (${allContributions.length})` : ""}` },
+            ].map((tab) => (
+              <button
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key)}
+                className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all ${
+                  activeTab === tab.key
+                    ? "bg-white text-violet-700 shadow-sm"
+                    : "text-slate-500"
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        )}
 
-        {/* ── Items tab ── */}
-        {activeTab === "items" && (
+        {/* ── Items view ── */}
+        {(!isOwner || activeTab === "items") && (
           <div className="space-y-4">
             {items.map((item) => (
               <GiftRegistryItemCard
@@ -337,8 +345,8 @@ export default function GiftRegistryPublicPage({
           </div>
         )}
 
-        {/* ── Gift history tab ── */}
-        {activeTab === "history" && (
+        {/* ── Gift history tab (owner only) ── */}
+        {isOwner && activeTab === "history" && (
           <div>
             {allContributions.length === 0 ? (
               <div className="bg-white rounded-2xl border border-slate-100 shadow-sm px-5 py-10 text-center">

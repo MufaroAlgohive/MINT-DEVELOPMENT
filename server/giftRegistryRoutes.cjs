@@ -445,7 +445,7 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
         .from('gift_events')
         .select(`
           id, title, occasion, custom_occasion, beneficiary_display_name,
-          event_date, expiry_at, message, status, share_token,
+          event_date, expiry_at, message, status, share_token, creator_user_id,
           items:gift_registry_items(
             id, isin, instrument_type, target_quantity, filled_quantity,
             reserved_quantity, min_tranche_quantity, price_snapshot_cents,
