@@ -194,6 +194,17 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
   // Gemini's salary-detection draft — the user confirms/edits before it becomes monthlyIncome.
   const [incomeDetection, setIncomeDetection] = useState(null);
   const [showFlagged, setShowFlagged] = useState(false); // expand the flagged-transactions list
+  const [checkStep, setCheckStep] = useState(0);         // progressive reveal of the checks (0→4)
+
+  // Reveal the statement checks one-by-one once a result is in — each row spins
+  // until "found", then ticks green. Purely presentational (the result arrives
+  // all at once); it makes the wait feel like live verification, not a hang.
+  useEffect(() => {
+    if (!incomeDetection) { setCheckStep(0); return; }
+    setCheckStep(0);
+    const timers = [1, 2, 3, 4].map((i) => setTimeout(() => setCheckStep(i), i * 750));
+    return () => timers.forEach(clearTimeout);
+  }, [incomeDetection]);
   const [incomeSaving, setIncomeSaving] = useState(false);
   // Address (Experian requires street + suburb + postal). Prompted if missing/rejected.
   const [addrPrompt, setAddrPrompt] = useState(false);
@@ -1240,10 +1251,8 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
               <style>{`
                 @keyframes cfFadeUp { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
                 .cf-fade { opacity: 0; animation: cfFadeUp .55s cubic-bezier(.22,1,.36,1) forwards; }
-                /* Each statement check "ticks in": row slides, icon springs. */
-                @keyframes cfCheckRow { from { opacity: 0; transform: translateX(-8px); } to { opacity: 1; transform: translateX(0); } }
+                /* A found check "ticks in": the icon springs from a spinner. */
                 @keyframes cfTickPop { 0% { opacity: 0; transform: scale(0.2); } 60% { opacity: 1; transform: scale(1.25); } 100% { opacity: 1; transform: scale(1); } }
-                .cf-check-row { opacity: 0; animation: cfCheckRow .4s cubic-bezier(.22,1,.36,1) forwards; }
                 .cf-tick { transform-origin: center; animation: cfTickPop .45s cubic-bezier(.34,1.56,.64,1) both; }
               `}</style>
 
@@ -1322,20 +1331,14 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
                     const lastTxn = det?.salary_transactions?.[det.salary_transactions.length - 1];
                     return (
                       <>
-                      <div className="cf-fade mt-4 rounded-[28px] border border-slate-100 bg-white p-6 shadow-xl">
-                        <p className="text-sm font-semibold text-slate-900">{found ? "Detected salary" : "Couldn't confidently detect a salary"}</p>
-                        {det && (
-                          <p className={`mt-0.5 text-xs font-medium ${confColor}`}>{confLabel} — {det.confidence_reason}</p>
-                        )}
-                        <div className="relative mt-3 flex items-end gap-1">
-                          <span className="mb-1.5 text-xl font-light text-slate-400">R</span>
-                          {found ? (
-                            // AI-detected salary is authoritative — read-only, not user-editable.
-                            <div className="w-full text-[36px] font-light leading-none text-slate-900">
-                              {monthlyIncome.toLocaleString("en-ZA")}
-                            </div>
-                          ) : (
-                            // Only when detection fails do we let the user type a figure in.
+                      {/* Only shown when the AI couldn't detect a salary — a manual
+                          fallback. When detection succeeds, the amount lives in the
+                          checks card below (Pay amount row), so no duplicate card. */}
+                      {!found && (
+                        <div className="cf-fade mt-4 rounded-[28px] border border-slate-100 bg-white p-6 shadow-xl">
+                          <p className="text-sm font-semibold text-slate-900">Couldn't confidently detect a salary</p>
+                          <div className="relative mt-3 flex items-end gap-1">
+                            <span className="mb-1.5 text-xl font-light text-slate-400">R</span>
                             <input
                               type="text" inputMode="numeric"
                               value={monthlyIncome ? monthlyIncome.toLocaleString("en-ZA") : ""}
@@ -1343,17 +1346,10 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
                               placeholder="0"
                               className="w-full bg-transparent text-[36px] font-light leading-none text-slate-900 placeholder-slate-300 outline-none"
                             />
-                          )}
+                          </div>
+                          <p className="mt-2 text-[11px] text-slate-400">We couldn't detect a salary automatically — enter your monthly income to continue.</p>
                         </div>
-                        {found && lastTxn?.salary_date && (
-                          <p className="mt-1 text-[11px] text-slate-400">Last deposit detected on {lastTxn.salary_date}{lastTxn.employer_name ? ` from ${lastTxn.employer_name}` : ""}.</p>
-                        )}
-                        <p className="mt-2 text-[11px] text-slate-400">
-                          {found
-                            ? "This figure is taken from your bank statement and can't be edited. Upload a different statement if it's not right."
-                            : "We couldn't detect a salary automatically — enter your monthly income to continue."}
-                        </p>
-                      </div>
+                      )}
 
                       {/* Statement checks — what the AI verified, as tickable rows.
                           Flaggable transactions expand via "See more". */}
@@ -1361,44 +1357,52 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
                         <div className="cf-fade mt-4 rounded-[28px] border border-slate-100 bg-white p-6 shadow-xl">
                           <p className="text-sm font-semibold text-slate-900">Statement checks</p>
                           <div className="mt-3 space-y-3">
-                            <div className="cf-check-row flex items-center gap-3" style={{ animationDelay: ".05s" }}>
-                              <CheckCircle2 className={`cf-tick h-5 w-5 flex-shrink-0 ${found ? "text-emerald-500" : "text-slate-300"}`} style={{ animationDelay: ".15s" }} />
+                            <div className="flex items-center gap-3">
+                              {checkStep >= 1
+                                ? <CheckCircle2 className={`cf-tick h-5 w-5 flex-shrink-0 ${found ? "text-emerald-500" : "text-slate-300"}`} />
+                                : <Loader2 className="h-5 w-5 flex-shrink-0 animate-spin text-slate-300" />}
                               <div className="flex-1">
                                 <p className="text-xs font-semibold text-slate-800">Pay amount</p>
-                                <p className="text-[11px] text-slate-400">{found ? `R${monthlyIncome.toLocaleString("en-ZA")} per month` : "Not detected"}</p>
+                                <p className="text-[11px] text-slate-400">{checkStep < 1 ? "Checking…" : found ? `R${monthlyIncome.toLocaleString("en-ZA")} per month` : "Not detected"}</p>
                               </div>
                             </div>
-                            <div className="cf-check-row flex items-center gap-3" style={{ animationDelay: ".2s" }}>
-                              <CheckCircle2 className={`cf-tick h-5 w-5 flex-shrink-0 ${det.pay_day_of_month ? "text-emerald-500" : "text-slate-300"}`} style={{ animationDelay: ".3s" }} />
+                            <div className="flex items-center gap-3">
+                              {checkStep >= 2
+                                ? <CheckCircle2 className={`cf-tick h-5 w-5 flex-shrink-0 ${det.pay_day_of_month ? "text-emerald-500" : "text-slate-300"}`} />
+                                : <Loader2 className="h-5 w-5 flex-shrink-0 animate-spin text-slate-300" />}
                               <div className="flex-1">
                                 <p className="text-xs font-semibold text-slate-800">Pay date</p>
-                                <p className="text-[11px] text-slate-400">{det.pay_day_of_month ? `Around the ${ordinal(det.pay_day_of_month)} of each month` : "Not detected"}</p>
+                                <p className="text-[11px] text-slate-400">{checkStep < 2 ? "Checking…" : det.pay_day_of_month ? `Around the ${ordinal(det.pay_day_of_month)} of each month` : "Not detected"}</p>
                               </div>
                             </div>
-                            <div className="cf-check-row flex items-center gap-3" style={{ animationDelay: ".35s" }}>
-                              <CheckCircle2 className={`cf-tick h-5 w-5 flex-shrink-0 ${det.bank_name ? "text-emerald-500" : "text-slate-300"}`} style={{ animationDelay: ".45s" }} />
+                            <div className="flex items-center gap-3">
+                              {checkStep >= 3
+                                ? <CheckCircle2 className={`cf-tick h-5 w-5 flex-shrink-0 ${det.bank_name ? "text-emerald-500" : "text-slate-300"}`} />
+                                : <Loader2 className="h-5 w-5 flex-shrink-0 animate-spin text-slate-300" />}
                               <div className="flex-1">
                                 <p className="text-xs font-semibold text-slate-800">Bank</p>
-                                <p className="text-[11px] text-slate-400">{det.bank_name || "Not identified"}</p>
+                                <p className="text-[11px] text-slate-400">{checkStep < 3 ? "Checking…" : det.bank_name || "Not identified"}</p>
                               </div>
                             </div>
-                            <div className="cf-check-row flex items-start gap-3" style={{ animationDelay: ".5s" }}>
-                              {(det.flagged_summary?.count || 0) > 0 ? (
-                                <span className="cf-tick flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-amber-100 text-[11px] font-bold text-amber-600" style={{ animationDelay: ".6s" }}>!</span>
-                              ) : (
-                                <CheckCircle2 className="cf-tick h-5 w-5 flex-shrink-0 text-emerald-500" style={{ animationDelay: ".6s" }} />
-                              )}
+                            <div className="flex items-start gap-3">
+                              {checkStep < 4
+                                ? <Loader2 className="h-5 w-5 flex-shrink-0 animate-spin text-slate-300" />
+                                : (det.flagged_summary?.count || 0) > 0
+                                  ? <span className="cf-tick flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-amber-100 text-[11px] font-bold text-amber-600">!</span>
+                                  : <CheckCircle2 className="cf-tick h-5 w-5 flex-shrink-0 text-emerald-500" />}
                               <div className="flex-1">
                                 <div className="flex items-center justify-between gap-2">
                                   <div>
                                     <p className="text-xs font-semibold text-slate-800">Flaggable transactions</p>
                                     <p className="text-[11px] text-slate-400">
-                                      {(det.flagged_summary?.count || 0) > 0
-                                        ? `${det.flagged_summary.count} found — R${Number(det.flagged_summary.total || 0).toLocaleString("en-ZA")} total`
-                                        : "None found"}
+                                      {checkStep < 4
+                                        ? "Checking…"
+                                        : (det.flagged_summary?.count || 0) > 0
+                                          ? `${det.flagged_summary.count} found — R${Number(det.flagged_summary.total || 0).toLocaleString("en-ZA")} total`
+                                          : "None found"}
                                     </p>
                                   </div>
-                                  {(det.flagged_summary?.count || 0) > 0 && (
+                                  {checkStep >= 4 && (det.flagged_summary?.count || 0) > 0 && (
                                     <button type="button" onClick={() => setShowFlagged((v) => !v)} className="flex-shrink-0 text-[11px] font-semibold text-violet-600">
                                       {showFlagged ? "Hide" : "See more"}
                                     </button>
