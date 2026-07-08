@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Heart, Plus, Check, ArrowRight } from "lucide-react";
+import { X, Heart, Plus, Check, ArrowRight, Lock } from "lucide-react";
 import WishlistPreviewGrid from "./WishlistPreviewGrid.jsx";
 
 const CARD_GRADIENTS = [
@@ -20,6 +20,7 @@ export default function WishlistPickerSheet({ itemKey, onClose, onSaved, onCreat
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(null);
   const [savedId, setSavedId] = useState(null);
+  const [errorMsg, setErrorMsg] = useState(null);
 
   // Step-1 form state (shown when no wishlists exist)
   const [name, setName] = useState(`My Wishlist ${year}`);
@@ -47,6 +48,8 @@ export default function WishlistPickerSheet({ itemKey, onClose, onSaved, onCreat
                 const registryLists = registries.map((r) => ({
                   id: r.id,
                   name: r.title,
+                  status: r.status,
+                  isClosed: !['DRAFT', 'ACTIVE', 'PAUSED'].includes(r.status),
                   preview_logos: Array.isArray(r.preview_logos) ? r.preview_logos : null,
                   items: (r.items || []).filter((i) => i.isin && i.status !== 'REMOVED').map((i) => ({
                     isin: i.isin,
@@ -81,6 +84,12 @@ export default function WishlistPickerSheet({ itemKey, onClose, onSaved, onCreat
 
   async function handlePick(list) {
     if (saving) return;
+    if (list.isClosed) {
+      setErrorMsg(`"${list.name}" is closed and can't accept new items. Try another wishlist or create a new one.`);
+      setTimeout(() => setErrorMsg(null), 3200);
+      return;
+    }
+    setErrorMsg(null);
     setSaving(list.id);
     try {
       // list.id is a real registry UUID — write the item to gift_registry_items
@@ -108,6 +117,10 @@ export default function WishlistPickerSheet({ itemKey, onClose, onSaved, onCreat
       }, 550);
     } catch (e) {
       console.error("[WishlistPicker] handlePick error:", e.message);
+      setErrorMsg(e.message === "Cannot add items to a closed registry"
+        ? `"${list.name}" is closed and can't accept new items. Try another wishlist or create a new one.`
+        : "Couldn't save to that wishlist. Please try again.");
+      setTimeout(() => setErrorMsg(null), 3200);
     } finally {
       setSaving(null);
     }
@@ -175,6 +188,20 @@ export default function WishlistPickerSheet({ itemKey, onClose, onSaved, onCreat
             <X size={15} />
           </button>
 
+          {/* Inline error toast — surfaces API failures instead of failing silently */}
+          <AnimatePresence>
+            {errorMsg && (
+              <motion.div
+                initial={{ opacity: 0, y: -8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                className="mx-5 mt-1 mb-2 flex-shrink-0 rounded-xl bg-red-50 border border-red-100 px-3.5 py-2.5"
+              >
+                <p className="text-[12.5px] font-medium text-red-700 leading-snug pr-4">{errorMsg}</p>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
           {loading ? (
             /* ── Loading: spinner while API fetch completes ── */
             <div className="flex items-center justify-center py-16">
@@ -199,13 +226,14 @@ export default function WishlistPickerSheet({ itemKey, onClose, onSaved, onCreat
                     return (
                       <motion.button
                         key={list.id}
-                        whileTap={{ scale: 0.95 }}
+                        whileTap={{ scale: list.isClosed ? 1 : 0.95 }}
                         onClick={() => handlePick(list)}
                         disabled={!!saving}
                         className="relative rounded-2xl p-4 text-left shadow-sm overflow-hidden"
                         style={{
                           minHeight: 110,
                           background: `linear-gradient(135deg, ${fromColor}, ${toColor})`,
+                          opacity: list.isClosed ? 0.55 : 1,
                         }}
                       >
                         {/* Asset mosaic preview — prefer strategy snapshot logos */}
@@ -216,6 +244,10 @@ export default function WishlistPickerSheet({ itemKey, onClose, onSaved, onCreat
                               : Array.isArray(list.items) ? list.items : []
                           }
                         />
+
+                        {list.isClosed && (
+                          <div className="absolute inset-0 z-10" style={{ background: "rgba(0,0,0,0.25)" }} />
+                        )}
 
                         <AnimatePresence>
                           {isSaved && (
@@ -235,7 +267,11 @@ export default function WishlistPickerSheet({ itemKey, onClose, onSaved, onCreat
                         {/* Text content — sits above the mosaic via z-index */}
                         <div className="relative z-10 flex flex-col h-full justify-between">
                           <div className="flex items-start justify-between mb-2">
-                            <Heart size={16} className="fill-white/70 text-white/70 drop-shadow" />
+                            {list.isClosed ? (
+                              <Lock size={14} className="text-white/80 drop-shadow" />
+                            ) : (
+                              <Heart size={16} className="fill-white/70 text-white/70 drop-shadow" />
+                            )}
                             {isSaving && !isSaved && (
                               <div className="h-4 w-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />
                             )}
@@ -243,7 +279,9 @@ export default function WishlistPickerSheet({ itemKey, onClose, onSaved, onCreat
                           <div>
                             <p className="text-[13px] font-bold text-white leading-tight line-clamp-2 pr-1 drop-shadow">{list.name}</p>
                             <p className="text-[11px] text-white/80 mt-0.5 drop-shadow">
-                              {list.items?.filter(i => i.status !== 'REMOVED')?.length || list.items?.length || 0} {((list.items?.filter(i => i.status !== 'REMOVED')?.length || list.items?.length || 0) === 1) ? "item" : "items"}
+                              {list.isClosed
+                                ? "Closed"
+                                : `${list.items?.filter(i => i.status !== 'REMOVED')?.length || list.items?.length || 0} ${((list.items?.filter(i => i.status !== 'REMOVED')?.length || list.items?.length || 0) === 1) ? "item" : "items"}`}
                             </p>
                           </div>
                         </div>
