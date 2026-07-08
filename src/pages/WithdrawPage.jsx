@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
-  ChevronLeft, TrendingUp, TrendingDown, PieChart, Wallet,
+  ChevronLeft, MoreHorizontal, TrendingUp, TrendingDown, PieChart, Wallet,
   ArrowUpRight, ShieldAlert, X, Check, Loader2,
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
@@ -449,6 +449,7 @@ void main(){ mainImage(fragColor, gl_FragCoord.xy); }`;
       <div style={{ position: "relative", zIndex: 2 }}>
         <div className="wd-topbar">
           <div className="wd-iconbtn" onClick={onBack}><ChevronLeft size={20} /></div>
+          <div className="wd-iconbtn"><MoreHorizontal size={20} /></div>
         </div>
 
         {/* Hero */}
