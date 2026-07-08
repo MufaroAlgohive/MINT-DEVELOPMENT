@@ -487,6 +487,27 @@ export default function GiftRegistrySharePopup({ token, title, registryId, onClo
             </button>
           </div>
 
+          {/* Enter details manually */}
+          <div className="px-4 pb-3 flex-shrink-0">
+            <button
+              onClick={() => setPanel("details")}
+              className="w-full flex items-center gap-3 bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 active:opacity-70 transition-opacity text-left"
+            >
+              <div className="w-9 h-9 rounded-xl bg-violet-100 flex items-center justify-center shrink-0 text-violet-600">
+                <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                </svg>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[13px] font-semibold text-slate-800">Enter details</p>
+                <p className="text-[11px] text-slate-400">Manually enter their name and email</p>
+              </div>
+              <svg width="7" height="12" viewBox="0 0 7 12" fill="none" className="shrink-0">
+                <path d="M1 1l5 5-5 5" stroke="#cbd5e1" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </button>
+          </div>
+
           {/* Contacts list */}
           <div className="flex-1 min-h-0 overflow-y-auto">
             {sendError && (
@@ -846,6 +867,23 @@ export default function GiftRegistrySharePopup({ token, title, registryId, onClo
               <p className="text-xs text-purple-400">Send a wishlist notification in-app</p>
             </div>
             <svg className="w-4 h-4 text-purple-300 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
+
+          {/* Enter details */}
+          <button onClick={() => setPanel("details")}
+            className="w-full flex items-center gap-4 bg-gray-50 border border-gray-200 rounded-2xl px-4 py-3.5 active:opacity-70 transition-opacity text-left">
+            <div className="w-10 h-10 rounded-xl bg-violet-100 flex items-center justify-center shrink-0 text-violet-600">
+              <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+              </svg>
+            </div>
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-gray-800">Enter details</p>
+              <p className="text-xs text-gray-400">Manually enter their name and email</p>
+            </div>
+            <svg className="w-4 h-4 text-gray-300 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
             </svg>
           </button>
