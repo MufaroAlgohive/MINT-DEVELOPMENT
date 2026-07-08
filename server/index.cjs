@@ -5877,6 +5877,155 @@ app.get("/api/user/lookup-by-id", async (req, res) => {
   }
 });
 
+app.get("/api/user/lookup-by-email", async (req, res) => {
+  try {
+    if (!supabaseAdmin) {
+      return res.status(500).json({ error: "Admin database client not configured" });
+    }
+    const { user, error: authError } = await authenticateUser(req);
+    if (authError || !user) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+    const email = (req.query.email || "").trim().toLowerCase();
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).json({ error: "Please enter a valid email address" });
+    }
+    if (email === (user.email || "").toLowerCase()) {
+      return res.status(400).json({ error: "You cannot add yourself as a beneficiary" });
+    }
+
+    const { data: profiles, error: profileError } = await supabaseAdmin
+      .from('profiles')
+      .select('id, first_name, last_name, mint_number, email')
+      .ilike('email', email)
+      .limit(1);
+
+    if (profileError) {
+      console.error('[email] lookup-by-email profile error:', profileError.message);
+      return res.status(500).json({ error: "Lookup failed" });
+    }
+
+    const profile = profiles?.[0] || null;
+    if (!profile) {
+      return res.json({ found: false });
+    }
+    if (profile.id === user.id) {
+      return res.status(400).json({ error: "You cannot add yourself as a beneficiary" });
+    }
+
+    const resolvedEmail = await resolveUserEmail(profile.id, profile.email);
+    return res.json({
+      found: true,
+      user: {
+        first_name: profile.first_name || "",
+        last_name: profile.last_name || "",
+        email: resolvedEmail || email,
+        mint_number: profile.mint_number || null,
+      },
+    });
+  } catch (e) {
+    console.error('[email] lookup-by-email error:', e.message);
+    return res.status(500).json({ error: e.message });
+  }
+});
+
+app.post("/api/user/invite-beneficiary", async (req, res) => {
+  try {
+    if (!supabaseAdmin) {
+      return res.status(500).json({ error: "Admin database client not configured" });
+    }
+    const { user, error: authError } = await authenticateUser(req);
+    if (authError || !user) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+    const { email, first_name, last_name } = req.body || {};
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).json({ error: "Valid email required" });
+    }
+    const normalizedEmail = email.trim().toLowerCase();
+
+    // Reject if this email already belongs to a Mint account
+    const { data: existing } = await supabaseAdmin
+      .from('profiles')
+      .select('id')
+      .ilike('email', normalizedEmail)
+      .limit(1);
+    if (existing?.length > 0) {
+      return res.status(409).json({ error: "This email already has a Mint account. Search by email to find them instead." });
+    }
+
+    const resend = getResendClient();
+    if (!resend) {
+      return res.json({ success: true, email_sent: false });
+    }
+
+    const { data: senderProfile } = await supabaseAdmin
+      .from('profiles')
+      .select('first_name, last_name')
+      .eq('id', user.id)
+      .maybeSingle();
+
+    // HTML-escape to prevent markup injection from profile name fields
+    function escHtml(str) {
+      return (str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+    const senderName = escHtml([senderProfile?.first_name, senderProfile?.last_name].filter(Boolean).join(' ') || 'Someone on Mint');
+    const inviteeName = first_name ? `Hi ${escHtml(first_name)},` : 'Hi there,';
+    const appUrl = process.env.APP_URL || 'https://app.mymint.co.za';
+
+    const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;600;700&family=Barlow+Condensed:wght@700;800&display=swap" rel="stylesheet">
+</head>
+<body style="margin:0;padding:0;background:#EEEAF5;font-family:'Barlow',Helvetica,Arial,sans-serif;">
+  <div style="max-width:520px;margin:0 auto;padding:40px 20px;">
+    <div style="background:#3D1A6B;border-radius:16px 16px 0 0;padding:20px 32px;text-align:center;">
+      <div style="font-family:'Barlow Condensed',Arial Narrow,Arial,sans-serif;font-size:36px;font-weight:800;color:white;letter-spacing:4px;text-transform:uppercase;">MINT</div>
+      <div style="color:rgba(255,255,255,0.55);font-size:11px;letter-spacing:2px;text-transform:uppercase;margin-top:3px;">Investment &amp; Wealth Platform</div>
+    </div>
+    <div style="height:3px;background:linear-gradient(90deg,#5B2D8E,#7B4DB0,#EDE8F8);"></div>
+    <div style="background:white;border-radius:0 0 16px 16px;padding:36px 32px;">
+      <p style="color:#334155;font-size:15px;line-height:1.7;margin:0 0 16px;">${inviteeName}</p>
+      <p style="color:#334155;font-size:15px;line-height:1.7;margin:0 0 16px;">
+        <strong style="color:#3D1A6B;">${senderName}</strong> has invited you to join
+        <strong style="color:#3D1A6B;">MINT</strong> &mdash; South Africa&rsquo;s smart investing and wealth platform &mdash; and wants to add you as a <strong>beneficiary</strong>.
+      </p>
+      <p style="color:#334155;font-size:15px;line-height:1.7;margin:0 0 28px;">
+        Sign up to start building your financial future, receive gifts, and manage your wealth in one place.
+      </p>
+      <div style="text-align:center;margin-bottom:28px;">
+        <a href="${appUrl}" style="display:inline-block;background:linear-gradient(135deg,#3D1A6B,#5B2D8E);color:white;padding:14px 44px;border-radius:12px;text-decoration:none;font-family:'Barlow Condensed',Arial Narrow,Arial,sans-serif;font-weight:800;font-size:17px;letter-spacing:1px;text-transform:uppercase;">Join MINT</a>
+      </div>
+      <p style="color:#94a3b8;font-size:11px;text-align:center;margin:0;">If you weren&rsquo;t expecting this invitation, you can safely ignore this email.</p>
+    </div>
+    <p style="color:#a0aec0;font-size:10px;text-align:center;margin-top:16px;">Mint Financial Services (Pty) Ltd &nbsp;&middot;&nbsp; FSP No. 55118</p>
+  </div>
+</body>
+</html>`;
+
+    let emailSent = false;
+    try {
+      await resend.emails.send({
+        from: 'Mint <noreply@mymint.co.za>',
+        to: [normalizedEmail],
+        subject: `${[senderProfile?.first_name, senderProfile?.last_name].filter(Boolean).join(' ') || 'Someone'} invited you to join Mint`,
+        html,
+      });
+      emailSent = true;
+    } catch (emailErr) {
+      console.error('[invite-beneficiary] email send failed:', emailErr.message);
+    }
+
+    return res.json({ success: true, email_sent: emailSent });
+  } catch (e) {
+    console.error('[invite-beneficiary] error:', e.message);
+    return res.status(500).json({ error: e.message });
+  }
+});
+
 app.get("/api/user/holdings", async (req, res) => {
   try {
     if (!supabase) {
@@ -10814,7 +10963,8 @@ app.post("/api/gift/create-v2", async (req, res) => {
   if (!amount || typeof amount !== "number" || amount <= 0) return res.status(400).json({ error: "amount must be a positive number in cents." });
   if (!["strategy", "stock"].includes(asset_type)) return res.status(400).json({ error: "asset_type must be 'strategy' or 'stock'." });
   if (!recipient_first_name?.trim()) return res.status(400).json({ error: "recipient_first_name is required." });
-  if (!recipient_last_name?.trim()) return res.status(400).json({ error: "recipient_last_name is required." });
+  // last name is optional — non-Mint invitees may only have a first name
+  const normalizedLastName = (recipient_last_name || "").trim();
 
   // Block self-gifting: compare recipient email against sender's auth email and profile email
   if (recipient_identifier?.trim()) {
@@ -10844,7 +10994,7 @@ app.post("/api/gift/create-v2", async (req, res) => {
 
   const messagePayload = JSON.stringify({
     fn: recipient_first_name.trim(),
-    ln: recipient_last_name.trim(),
+    ln: normalizedLastName,
     ...(message?.trim() ? { msg: message.trim() } : {}),
   });
 
@@ -10881,7 +11031,7 @@ app.post("/api/gift/create-v2", async (req, res) => {
     await db.from("transactions").insert({
       user_id: user.id, direction: "debit",
       name: `Investment Gift — ${asset_name} (held)`,
-      description: `Gift to ${recipient_first_name.trim()} ${recipient_last_name.trim()} — funds held until claimed`,
+      description: `Gift to ${recipient_first_name.trim()}${normalizedLastName ? ` ${normalizedLastName}` : ""} — funds held until claimed`,
       amount, store_reference: `GIFT2-HOLD-${gift.id}`, currency: "ZAR",
       status: "pending", transaction_date: now, created_at: now,
     });
@@ -10945,7 +11095,7 @@ app.post("/api/gift/create-v2", async (req, res) => {
 
   <!-- Body -->
   <div style="padding:32px 28px 24px">
-    <p style="font-size:15px;color:#475569;line-height:1.6;margin:0 0 24px">Hi ${senderProfile?.first_name || "there"}, your gift of <strong>R${amountRands.toFixed(2)}</strong> in <strong>${asset_name}</strong> to ${recipient_first_name} ${recipient_last_name} has been sent successfully.</p>
+    <p style="font-size:15px;color:#475569;line-height:1.6;margin:0 0 24px">Hi ${senderProfile?.first_name || "there"}, your gift of <strong>R${amountRands.toFixed(2)}</strong> in <strong>${asset_name}</strong> to ${recipient_first_name.trim()}${normalizedLastName ? ` ${normalizedLastName}` : ""} has been sent successfully.</p>
 
     <div style="background:linear-gradient(135deg,#f5f3ff,#ede9fe);border:1px solid #e2d9ff;border-radius:16px;padding:24px;margin-bottom:24px">
       <p style="font-size:12px;font-weight:700;color:#7c3aed;text-transform:uppercase;letter-spacing:1px;margin:0 0 12px">What happens next?</p>
