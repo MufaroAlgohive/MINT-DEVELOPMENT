@@ -1736,6 +1736,22 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
         .single();
 
       if (error || !data) return res.status(404).json({ error: 'Registry not found' });
+
+      // Clean up any notifications that still point at this now-deleted registry
+      // (e.g. "shared a wishlist with you" cards). Without this, a recipient who
+      // taps an old notification hits a dead share_token and sees
+      // "Wishlist not found" even though nothing is actually broken for them —
+      // the link is just stale. Best-effort: never fail the delete over this.
+      try {
+        await supabaseAdmin
+          .from('notifications')
+          .delete()
+          .filter('payload->>registry_id', 'eq', req.params.id)
+          .filter('payload->>action', 'eq', 'OPEN_GIFT_REGISTRY');
+      } catch (cleanupErr) {
+        console.warn('[gift-registry] delete: notification cleanup failed:', cleanupErr.message);
+      }
+
       return res.json({ success: true });
     } catch (e) {
       console.error('[gift-registry] delete error:', e.message);
