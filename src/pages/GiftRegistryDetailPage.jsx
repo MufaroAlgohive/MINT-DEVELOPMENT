@@ -1,4 +1,5 @@
 import React, { useState, useId, useMemo, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { AreaChart, Area, ResponsiveContainer } from "recharts";
 import { Heart } from "lucide-react";
 import { useRegistryDetail, useRegistryContributions } from "../lib/useGiftRegistry.js";
@@ -11,6 +12,7 @@ import {
   centsToRand,
 } from "../lib/giftRegistryUtils.js";
 import GiftRegistrySharePopup from "../components/GiftRegistrySharePopup.jsx";
+import WishlistToast from "../components/WishlistToast.jsx";
 
 /* ─── Sparkline helpers (deterministic, same approach as GiftStrategyPickerPage) ─── */
 
@@ -88,22 +90,32 @@ function WishlistItemCard({ item, onRemove, registryStatus, onPublish, publishLo
     : null;
 
   return (
-    <div
+    <motion.div
+      layout
+      initial={false}
+      exit={{ opacity: 0, scale: 0.82, x: -24, transition: { duration: 0.28, ease: "easeIn" } }}
       className={`relative flex-shrink-0 w-80 rounded-2xl border border-slate-100 bg-white p-4 shadow-sm transition-all snap-center hover:shadow-md hover:border-slate-200 ${
         isFunded ? "opacity-70" : ""
       }`}
     >
-      {/* Heart icon — bottom-right, removes item from wishlist */}
+      {/* Heart icon — bottom-right, unlikes/removes item from wishlist */}
       {onRemove && (
         <div className="absolute bottom-3 right-3 z-10">
-          <button
+          <motion.button
             type="button"
-            onClick={(e) => { e.preventDefault(); e.stopPropagation(); onRemove(item.id); }}
-            className="flex h-9 w-9 items-center justify-center rounded-full bg-white/80 backdrop-blur-sm shadow-sm active:scale-90 transition-transform"
-            aria-label="Remove from wishlist"
+            whileTap={{ scale: 0.7 }}
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); onRemove(item.id, item.name || item.isin); }}
+            className="flex h-9 w-9 items-center justify-center rounded-full bg-white/80 backdrop-blur-sm shadow-sm"
+            aria-label="Unlike and remove from wishlist"
           >
-            <Heart className="h-5 w-5 fill-red-500 text-red-500" />
-          </button>
+            <motion.span
+              initial={{ scale: 1 }}
+              animate={{ scale: [1, 1.3, 1] }}
+              transition={{ duration: 0.35 }}
+            >
+              <Heart className="h-5 w-5 fill-red-500 text-red-500" />
+            </motion.span>
+          </motion.button>
         </div>
       )}
 
@@ -224,7 +236,7 @@ function WishlistItemCard({ item, onRemove, registryStatus, onPublish, publishLo
           )}
         </button>
       )}
-    </div>
+    </motion.div>
   );
 }
 
@@ -253,6 +265,9 @@ export default function GiftRegistryDetailPage({ registryId, onNavigate, onBack 
   const [publishedToken, setPublishedToken] = useState(null); // share_token from publish response, before reload settles
   const [viewCount, setViewCount] = useState(null);
   const [activeTab, setActiveTab] = useState("items"); // "items" | "history"
+  const [removingIds, setRemovingIds] = useState(new Set());
+  const [toastMsg, setToastMsg] = useState("");
+  const [toastVisible, setToastVisible] = useState(false);
 
   useGiftRegistryRealtime(registryId, () => reload());
 
@@ -287,7 +302,14 @@ export default function GiftRegistryDetailPage({ registryId, onNavigate, onBack 
 
   const OCCASION_EMOJI = { BIRTHDAY: "🎂", WEDDING: "💍", BABY: "👶", GRADUATION: "🎓", FESTIVE: "🎄", CUSTOM: "🎉" };
 
-  async function removeItem(itemId) {
+  async function removeItem(itemId, itemName) {
+    // Play the unlike/exit animation immediately, then delete once it has visually left.
+    setRemovingIds((prev) => new Set(prev).add(itemId));
+    setToastMsg(`Removed "${itemName || "item"}" from wishlist`);
+    setToastVisible(true);
+
+    await new Promise((r) => setTimeout(r, 300));
+
     try {
       const session = await (await supabaseReady).auth.getSession();
       const token = session?.data?.session?.access_token;
@@ -302,6 +324,14 @@ export default function GiftRegistryDetailPage({ registryId, onNavigate, onBack 
       reload();
     } catch (e) {
       console.error("[registry] remove item error:", e.message);
+      // Removal failed server-side — bring the card back and let the user know.
+      setRemovingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(itemId);
+        return next;
+      });
+      setToastMsg("Could not remove item — please try again");
+      setToastVisible(true);
     }
   }
 
@@ -422,16 +452,20 @@ export default function GiftRegistryDetailPage({ registryId, onNavigate, onBack 
             {items.length > 0 && (
               <div>
                 <div className="flex gap-4 overflow-x-auto snap-x snap-mandatory pb-2 -mx-5 px-5">
-                  {items.map((item) => (
-                    <WishlistItemCard
-                      key={item.id}
-                      item={item}
-                      onRemove={removeItem}
-                      registryStatus={registry?.status}
-                      onPublish={handlePublish}
-                      publishLoading={publishLoading}
-                    />
-                  ))}
+                  <AnimatePresence initial={false}>
+                    {items
+                      .filter((item) => !removingIds.has(item.id))
+                      .map((item) => (
+                        <WishlistItemCard
+                          key={item.id}
+                          item={item}
+                          onRemove={removeItem}
+                          registryStatus={registry?.status}
+                          onPublish={handlePublish}
+                          publishLoading={publishLoading}
+                        />
+                      ))}
+                  </AnimatePresence>
                 </div>
               </div>
             )}
@@ -528,6 +562,12 @@ export default function GiftRegistryDetailPage({ registryId, onNavigate, onBack 
           onNavigate={onNavigate}
         />
       )}
+
+      <WishlistToast
+        message={toastMsg}
+        visible={toastVisible}
+        onHide={() => setToastVisible(false)}
+      />
     </div>
   );
 }
