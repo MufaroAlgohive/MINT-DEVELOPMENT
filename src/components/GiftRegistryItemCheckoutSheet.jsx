@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ShieldCheck, ArrowRight, X } from "lucide-react";
 import { calcMinTrancheForAsset } from "../lib/giftRegistryUtils.js";
@@ -80,20 +80,20 @@ function KycRequiredModal({ onClose }) {
  * Bottom sheet checkout for a single registry item.
  * Fee breakdown and payment popup are identical to the Mint Baskets invest flow.
  *
- * Flow: quantity (full fee breakdown) → message → PaymentMethodModal (wallet / Ozow / EFT)
+ * Flow: reserve automatically on open → message → PaymentMethodModal (wallet / Ozow / EFT)
  */
 export default function GiftRegistryItemCheckoutSheet({ item, registryId, onSuccess, onClose }) {
   const minQty = item.min_tranche_quantity ?? calcMinTrancheForAsset(item.price_snapshot_cents);
-  const maxQty = (item.target_quantity ?? 0) - (item.filled_quantity ?? 0) - (item.reserved_quantity ?? 0);
 
-  const [step, setStep] = useState("quantity"); // "quantity" | "message"
-  const [quantity, setQuantity] = useState(minQty);
+  const [step, setStep] = useState("reserving"); // "reserving" | "message"
+  const [quantity] = useState(minQty);
   const [gifterMessage, setGifterMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [reserved, setReserved] = useState(null);
   const [showPayment, setShowPayment] = useState(false);
   const [showKycPrompt, setShowKycPrompt] = useState(false);
+  const reserveTriggered = useRef(false);
 
   const {
     ISIN_FEE_PER_ASSET,
@@ -121,10 +121,6 @@ export default function GiftRegistryItemCheckoutSheet({ item, registryId, onSucc
     return { baseAmount, bufferedBase, brokerAmount, isinTotal, walletTxFee, ozowTxFee, walletTotal, ozowTotal };
   }, [quantity, priceCents, numAssets, CASH_BUFFER_RATE, BROKER_FEE_RATE, ISIN_FEE_PER_ASSET, WALLET_TRANSACTION_FEE_RATE, OZOW_TRANSACTION_FEE_RATE]);
 
-  const fmt = (v) =>
-    `R${Number(v).toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-  const pct = (r) => `${(r * 100).toFixed(2).replace(/\.?0+$/, "")}%`;
-
   async function handleReserve() {
     setLoading(true);
     setError(null);
@@ -138,7 +134,7 @@ export default function GiftRegistryItemCheckoutSheet({ item, registryId, onSucc
       });
       const json = await res.json();
       if (!res.ok) {
-        if (json.code === "SOLD_OUT") setError(`Only ${json.remaining ?? 0} shares left — try a smaller quantity.`);
+        if (json.code === "SOLD_OUT") setError("This item is no longer available to gift.");
         else if (json.code === "KYC_INCOMPLETE") { setShowKycPrompt(true); return; }
         else setError(json.error || "Could not reserve. Please try again.");
         return;
@@ -151,6 +147,17 @@ export default function GiftRegistryItemCheckoutSheet({ item, registryId, onSucc
       setLoading(false);
     }
   }
+
+  // Reserve the item automatically as soon as the sheet opens — the quantity/fee
+  // breakdown + "Confirm gift" step was redundant with PaymentMethodModal's own
+  // confirm screen, so gifting now goes straight from opening the sheet into
+  // writing a message, then choosing/confirming a payment method.
+  useEffect(() => {
+    if (reserveTriggered.current) return;
+    reserveTriggered.current = true;
+    handleReserve();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function handleWalletPayment(totalAmount) {
     setLoading(true);
@@ -220,10 +227,10 @@ export default function GiftRegistryItemCheckoutSheet({ item, registryId, onSucc
           <div className="w-full max-w-md bg-white rounded-t-3xl px-6 pt-6 pb-10 shadow-2xl">
             <div className="w-10 h-1 bg-gray-200 rounded-full mx-auto mb-5" />
 
-            {/* ── Step 1: Quantity + full fee breakdown ── */}
-            {step === "quantity" && (
+            {/* ── Step 1: Reserving the item (auto-runs on open, no extra confirm tap) ── */}
+            {step === "reserving" && (
               <>
-                <div className="flex items-center gap-3 mb-5">
+                <div className="flex items-center gap-3 mb-6">
                   {item.logo_url ? (
                     <img src={item.logo_url} className="w-10 h-10 rounded-xl border border-gray-100" alt={item.name} />
                   ) : (
@@ -236,43 +243,15 @@ export default function GiftRegistryItemCheckoutSheet({ item, registryId, onSucc
                   </div>
                 </div>
 
-                {/* Full fee breakdown — identical to PaymentMethodModal wallet confirm layout */}
-                <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4 space-y-2 mb-4">
-                  <div className="flex justify-between text-xs">
-                    <span className="text-slate-500">Investment (incl. 8% reserve)</span>
-                    <span className="font-semibold text-slate-900">{fmt(fees.bufferedBase)}</span>
-                  </div>
-                  <div className="flex justify-between text-xs">
-                    <span className="text-slate-500">Brokerage fee ({pct(BROKER_FEE_RATE)})</span>
-                    <span className="font-semibold text-slate-900">{fmt(fees.brokerAmount)}</span>
-                  </div>
-                  {fees.isinTotal > 0 && (
-                    <div className="flex justify-between text-xs">
-                      <span className="text-slate-500">Custody fee</span>
-                      <span className="font-semibold text-slate-900">{fmt(fees.isinTotal)}</span>
-                    </div>
+                <div className="py-6 text-center">
+                  {loading && !error && (
+                    <>
+                      <div className="w-8 h-8 border-2 border-[#6B21A8] border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+                      <p className="text-sm text-gray-400">Reserving your gift…</p>
+                    </>
                   )}
-                  <div className="flex justify-between text-xs">
-                    <span className="text-slate-500">
-                      Transaction fee ({pct(WALLET_TRANSACTION_FEE_RATE)}) — Wallet
-                    </span>
-                    <span className="font-semibold text-slate-900">{fmt(fees.walletTxFee)}</span>
-                  </div>
-                  <div className="flex justify-between text-xs">
-                    <span className="text-slate-400">AUM fee ({pct(AUM_FEE_RATE)} p.a.)</span>
-                    <span className="font-medium text-slate-400">monthly from cash</span>
-                  </div>
-                  <div className="border-t border-slate-200 mt-2 pt-2 flex justify-between text-sm">
-                    <span className="font-bold text-slate-700">Approx. total</span>
-                    <span className="font-bold text-violet-700">{fmt(fees.walletTotal)}</span>
-                  </div>
+                  {error && <p className="text-sm text-red-600 mb-4">{error}</p>}
                 </div>
-
-                <p className="text-[10px] text-gray-400 mb-4 text-center">
-                  Price is approximate. Order executes at market price — same as normal investing.
-                </p>
-
-                {error && <p className="text-sm text-red-600 mb-3 text-center">{error}</p>}
 
                 <div className="flex gap-3">
                   <button
@@ -281,13 +260,15 @@ export default function GiftRegistryItemCheckoutSheet({ item, registryId, onSucc
                   >
                     Cancel
                   </button>
-                  <button
-                    onClick={handleReserve}
-                    disabled={loading || quantity < minQty || quantity > maxQty}
-                    className="flex-1 py-3 rounded-2xl bg-[#6B21A8] text-white text-sm font-semibold disabled:opacity-50"
-                  >
-                    {loading ? "Reserving…" : "Confirm gift"}
-                  </button>
+                  {error && (
+                    <button
+                      onClick={handleReserve}
+                      disabled={loading}
+                      className="flex-1 py-3 rounded-2xl bg-[#6B21A8] text-white text-sm font-semibold disabled:opacity-50"
+                    >
+                      Try again
+                    </button>
+                  )}
                 </div>
               </>
             )}
@@ -328,10 +309,10 @@ export default function GiftRegistryItemCheckoutSheet({ item, registryId, onSucc
 
                 <div className="flex gap-3">
                   <button
-                    onClick={() => setStep("quantity")}
+                    onClick={onClose}
                     className="flex-1 py-3 rounded-2xl border border-gray-200 text-sm text-gray-500 font-medium"
                   >
-                    Back
+                    Cancel
                   </button>
                   <button
                     onClick={() => setShowPayment(true)}
