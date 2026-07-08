@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ShieldCheck, ArrowRight, X } from "lucide-react";
-import { centsToRand, calcMinTrancheForAsset } from "../lib/giftRegistryUtils.js";
+import { calcMinTrancheForAsset } from "../lib/giftRegistryUtils.js";
 import { supabaseReady } from "../lib/supabase.js";
 import { useFees } from "../lib/useFees.js";
 import PaymentMethodModal from "./PaymentMethodModal.jsx";
@@ -121,9 +121,6 @@ export default function GiftRegistryItemCheckoutSheet({ item, registryId, onSucc
     return { baseAmount, bufferedBase, brokerAmount, isinTotal, walletTxFee, ozowTxFee, walletTotal, ozowTotal };
   }, [quantity, priceCents, numAssets, CASH_BUFFER_RATE, BROKER_FEE_RATE, ISIN_FEE_PER_ASSET, WALLET_TRANSACTION_FEE_RATE, OZOW_TRANSACTION_FEE_RATE]);
 
-  function increment() { setQuantity(q => Math.min(maxQty, q + 1)); }
-  function decrement() { setQuantity(q => Math.max(minQty, q - 1)); }
-
   const fmt = (v) =>
     `R${Number(v).toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   const pct = (r) => `${(r * 100).toFixed(2).replace(/\.?0+$/, "")}%`;
@@ -236,30 +233,7 @@ export default function GiftRegistryItemCheckoutSheet({ item, registryId, onSucc
                   )}
                   <div>
                     <p className="font-semibold text-gray-800">{item.name || item.isin}</p>
-                    <p className="text-xs text-gray-400">~{centsToRand(priceCents)} / share</p>
                   </div>
-                </div>
-
-                <p className="text-xs text-gray-500 mb-2 font-medium">Number of shares (whole units only)</p>
-                <div className="flex items-center justify-between bg-gray-50 rounded-2xl p-3 mb-4">
-                  <button
-                    onClick={decrement}
-                    disabled={quantity <= minQty}
-                    className="w-10 h-10 rounded-xl bg-white border border-gray-200 text-xl font-semibold text-gray-700 disabled:opacity-30"
-                  >
-                    −
-                  </button>
-                  <div className="text-center">
-                    <span className="text-2xl font-bold text-gray-800">{quantity}</span>
-                    <p className="text-[10px] text-gray-400">Min {minQty}</p>
-                  </div>
-                  <button
-                    onClick={increment}
-                    disabled={quantity >= maxQty}
-                    className="w-10 h-10 rounded-xl bg-[#6B21A8] text-white text-xl font-semibold disabled:opacity-30"
-                  >
-                    +
-                  </button>
                 </div>
 
                 {/* Full fee breakdown — identical to PaymentMethodModal wallet confirm layout */}
