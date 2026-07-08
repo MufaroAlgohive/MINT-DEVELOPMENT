@@ -10,3 +10,4 @@
 - [Gift registry DB split](gift-registry-db-split.md) — pgPool=local PostgreSQL (schema only, no data); all gift/securities data lives in Supabase via supabaseAdmin REST only.
 - [Yahoo bad-data incident Jun-2026](yahoo-bad-data-recovery.md) — EOD snapshot corruption playbook: identify, fix stock_returns_c, clean intraday, retrigger strategy returns; anomaly guard threshold is 20%.
 - [pgPool optional-connection-string danger](pgpool-fallback-danger.md) — an unreachable SUPABASE_DB_URL is worse than none: null pgPool degrades gracefully, a broken one times out and breaks unrelated features.
+- [Gift wishlist heart state must be DB-derived](gift-wishlist-heart-state.md) — stored "liked" prefs drift stale; intersect with live registry-item status on every read.

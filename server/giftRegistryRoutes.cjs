@@ -210,12 +210,56 @@ async function enrichItems(items, supabaseAdmin) {
 function registerGiftRegistryRoutes(app, supabaseAdmin) {
 
   // GET /api/gift-wishlist-prefs — load user's wishlisted keys + strategy watchlist
+  //
+  // wishlistedKeys drives the heart icon on strategy/security cards. It must reflect
+  // whether the item is ACTUALLY still present (OPEN/PARTIALLY_FILLED) in one of the
+  // user's active wishlists — not just "was ever liked". Otherwise a heart can keep
+  // showing after the underlying item was removed or fully gifted (stale-heart bug).
+  // We intersect the stored preference set with the DB-confirmed set on every load.
   app.get('/api/gift-wishlist-prefs', async (req, res) => {
     try {
       const user = await getUser(req, supabaseAdmin);
       if (!user) return res.status(401).json({ error: 'Unauthorized' });
       const prefs = user.user_metadata?.gift_wishlist_prefs || {};
-      return res.json({ wishlistedKeys: prefs.keys || [], watchlist: prefs.watchlist || [] });
+      const storedKeys = prefs.keys || [];
+
+      let confirmedKeys = storedKeys;
+      if (storedKeys.length) {
+        const { data: myRegistries } = await supabaseAdmin
+          .from('gift_events')
+          .select('id')
+          .eq('creator_user_id', user.id)
+          .not('status', 'in', '(CANCELLED,EXPIRED)');
+        const registryIds = (myRegistries || []).map(r => r.id);
+
+        const confirmedSet = new Set();
+        if (registryIds.length) {
+          const { data: items } = await supabaseAdmin
+            .from('gift_registry_items')
+            .select('isin, instrument_type')
+            .in('gift_event_id', registryIds)
+            .in('status', ['OPEN', 'PARTIALLY_FILLED']);
+          for (const it of items || []) {
+            if (it.instrument_type === 'BASKET') {
+              confirmedSet.add(`strategy:${it.isin}`);
+              confirmedSet.add(`gift:${it.isin}`);
+            } else {
+              confirmedSet.add(it.isin);
+            }
+          }
+        }
+        confirmedKeys = storedKeys.filter(k => confirmedSet.has(k));
+
+        // Prune the stale keys from storage too, so future GETs don't need to keep filtering.
+        if (confirmedKeys.length !== storedKeys.length) {
+          const prunedPrefs = { ...prefs, keys: confirmedKeys };
+          supabaseAdmin.auth.admin.updateUserById(user.id, {
+            user_metadata: { ...user.user_metadata, gift_wishlist_prefs: prunedPrefs },
+          }).catch(e => console.error('[gift-wishlist-prefs] prune error:', e.message));
+        }
+      }
+
+      return res.json({ wishlistedKeys: confirmedKeys, watchlist: prefs.watchlist || [] });
     } catch (e) {
       return res.status(500).json({ error: e.message });
     }
