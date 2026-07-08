@@ -70,9 +70,10 @@ export default async function handler(req, res) {
       });
       previewLogos.sort((a, b) => (b.logo_url ? 1 : 0) - (a.logo_url ? 1 : 0));
 
-      // Find already-added ISINs to avoid duplicates
+      // Find already-added ISINs to avoid duplicates. Only still-open rows
+      // (not REMOVED/FILLED) count — a fully gifted holding can be re-added as new.
       const { data: existing } = await supabaseAdmin
-        .from('gift_registry_items').select('isin').eq('gift_event_id', registryId);
+        .from('gift_registry_items').select('isin').eq('gift_event_id', registryId).not('status', 'in', '(REMOVED,FILLED)');
       const existingIsins = new Set((existing || []).map(r => r.isin));
 
       const toInsert = [];
@@ -107,9 +108,9 @@ export default async function handler(req, res) {
       return res.status(200).json({ success: true, items });
 
     } else {
-      // ── Plain ISIN / symbol ──
+      // ── Plain ISIN / symbol ── only dedupe against a still-open row.
       const { data: existing } = await supabaseAdmin
-        .from('gift_registry_items').select('id').eq('gift_event_id', registryId).eq('isin', itemKey).maybeSingle();
+        .from('gift_registry_items').select('id').eq('gift_event_id', registryId).eq('isin', itemKey).not('status', 'in', '(REMOVED,FILLED)').maybeSingle();
       if (existing) return res.status(200).json({ success: true, item: existing, message: 'Already in registry' });
 
       const priceCents = await getLatestPriceCents(itemKey);

@@ -577,9 +577,11 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
         const holdings = Array.isArray(strategy.holdings) ? strategy.holdings : [];
         if (!holdings.length) return res.status(400).json({ error: 'Strategy has no holdings' });
 
-        // Check if this strategy basket is already in the registry (exclude REMOVED so re-add works)
+        // Only dedupe against a still-open row (OPEN/PARTIALLY_FILLED). REMOVED or fully
+        // FILLED rows mean nothing is left to gift, so a fresh add creates a brand-new row —
+        // otherwise re-gifting an already-completed strategy silently no-ops.
         const { data: existing } = await supabaseAdmin
-          .from('gift_registry_items').select('id').eq('gift_event_id', registryId).eq('isin', strategyId).neq('status', 'REMOVED').maybeSingle();
+          .from('gift_registry_items').select('id').eq('gift_event_id', registryId).eq('isin', strategyId).not('status', 'in', '(REMOVED,FILLED)').maybeSingle();
         if (existing) {
           console.log(`[gift-registry] by-key: BASKET already in registry itemId=${existing.id}`);
           return res.json({ success: true, item: existing, message: 'Already in registry' });
@@ -616,9 +618,9 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
         return res.json({ success: true, item });
 
       } else {
-        // ── Plain ISIN / symbol ──
+        // ── Plain ISIN / symbol ── same dedupe rule: only block on a still-open row.
         const { data: existing } = await supabaseAdmin
-          .from('gift_registry_items').select('id').eq('gift_event_id', registryId).eq('isin', itemKey).neq('status', 'REMOVED').maybeSingle();
+          .from('gift_registry_items').select('id').eq('gift_event_id', registryId).eq('isin', itemKey).not('status', 'in', '(REMOVED,FILLED)').maybeSingle();
         if (existing) {
           console.log(`[gift-registry] by-key: SHARE already in registry itemId=${existing.id}`);
           return res.json({ success: true, item: existing, message: 'Already in registry' });
