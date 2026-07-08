@@ -186,6 +186,25 @@ export default function GiftRegistryCreateSheet({ open, onClose, onSaved, pendin
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Could not create wishlist");
 
+      // If the user got here by liking an item and choosing "create a new
+      // wishlist", carry that item over into the freshly created registry
+      // instead of leaving it empty and forcing them to re-like it.
+      if (pendingItemKey && json.registry?.id) {
+        try {
+          const addRes = await fetch("/api/gift-registry/items/by-key", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ registryId: json.registry.id, itemKey: pendingItemKey }),
+          });
+          if (!addRes.ok) {
+            const addJson = await addRes.json().catch(() => ({}));
+            console.error("[GiftRegistryCreateSheet] Failed to add pending item to new registry:", addJson.error);
+          }
+        } catch (addErr) {
+          console.error("[GiftRegistryCreateSheet] Failed to add pending item to new registry:", addErr.message);
+        }
+      }
+
       onClose?.();
       onSaved?.(json.registry, form.title.trim());
     } catch (e) {
