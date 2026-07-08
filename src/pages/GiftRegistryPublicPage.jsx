@@ -4,12 +4,10 @@ import { usePublicRegistry } from "../lib/useGiftRegistry.js";
 import { useGiftRegistryRealtime } from "../lib/useGiftRegistryRealtime.js";
 import {
   OCCASION_LABELS,
-  getRegistryProgress,
   centsToRand,
 } from "../lib/giftRegistryUtils.js";
 import GiftRegistryItemCard from "../components/GiftRegistryItemCard.jsx";
 import GiftRegistryItemCheckoutSheet from "../components/GiftRegistryItemCheckoutSheet.jsx";
-import GiftRegistryProgressBar from "../components/GiftRegistryProgressBar.jsx";
 import { supabaseReady } from "../lib/supabase.js";
 
 const OCCASION_EMOJI = {
@@ -80,7 +78,6 @@ export default function GiftRegistryPublicPage({
 
   const items = registry?.items || [];
   const allContributions = registry?.all_contributions || [];
-  const progress = getRegistryProgress(items);
   const canGift = !!user && isKycComplete;
 
   function handleGiftTap(item) {
@@ -253,24 +250,6 @@ export default function GiftRegistryPublicPage({
           </div>
         </div>
 
-        {/* Progress card */}
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm px-5 py-4">
-          <div className="flex justify-between items-baseline mb-2">
-            <p className="text-xs font-semibold text-slate-600">Funding progress</p>
-            <p className="text-xs font-bold text-slate-800">{progress.percent}%</p>
-          </div>
-          <GiftRegistryProgressBar
-            percent={progress.percent}
-            filledQty={progress.funded}
-            targetQty={progress.total}
-            showLabel={false}
-            height="h-2"
-          />
-          <p className="text-[11px] text-slate-400 mt-2">
-            {progress.funded} of {progress.total} share{progress.total !== 1 ? "s" : ""} funded
-          </p>
-        </div>
-
         {/* Status banners */}
         {isClosed && (
           <div className="bg-white rounded-2xl border border-slate-100 shadow-sm px-5 py-4 text-center">
@@ -351,6 +330,8 @@ export default function GiftRegistryPublicPage({
                 canGift={canGift && !isClosed}
                 onAuthPrompt={onAuthPrompt}
                 alreadyGifted={myGiftedItemIds.has(item.id)}
+                startDate={eventDate}
+                endDate={expiryDate}
               />
             ))}
           </div>

@@ -1,5 +1,5 @@
 import React from "react";
-import { Gift } from "lucide-react";
+import { Gift, Calendar } from "lucide-react";
 import GiftRegistryProgressBar from "./GiftRegistryProgressBar.jsx";
 import { getItemGiftState, getItemFillPercent } from "../lib/giftRegistryUtils.js";
 import { formatChangePct, getChangeColor } from "../lib/strategyData.js";
@@ -57,6 +57,8 @@ export default function GiftRegistryItemCard({
   canGift = false,
   onAuthPrompt,
   alreadyGifted = false,
+  startDate = null,
+  endDate = null,
 }) {
   const { state, available } = getItemGiftState(item);
   const percent = getItemFillPercent(item);
@@ -142,6 +144,18 @@ export default function GiftRegistryItemCard({
               </span>
             )}
           </div>
+
+          {/* Wishlist window — when this basket started and closes */}
+          {(startDate || endDate) && (
+            <div className="mt-3 flex items-center gap-1.5 text-[11px] text-slate-400">
+              <Calendar className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+              {startDate && endDate
+                ? `${startDate} – ${endDate}`
+                : startDate
+                ? `From ${startDate}`
+                : `Closes ${endDate}`}
+            </div>
+          )}
 
           {/* YTD return row */}
           <div className="mt-3 flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2">
