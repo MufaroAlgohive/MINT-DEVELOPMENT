@@ -29,7 +29,9 @@ export default async function handler(req, res) {
     }
 
     const { email, first_name, last_name, registry_url } = req.body || {};
+    console.log("[invite-beneficiary] ▶ called by:", user.id, "| to:", email, "| registry_url:", registry_url || "none");
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      console.warn("[invite-beneficiary] ❌ invalid email:", email);
       return res.status(400).json({ error: "Valid email required" });
     }
     const normalizedEmail = email.trim().toLowerCase();
@@ -41,13 +43,17 @@ export default async function handler(req, res) {
       .ilike("email", normalizedEmail)
       .limit(1);
     if (existing?.length > 0) {
+      console.warn("[invite-beneficiary] ❌ email already has Mint account:", normalizedEmail);
       return res.status(409).json({
         error: "This email already has a Mint account. Search by email to find them instead.",
       });
     }
+    console.log("[invite-beneficiary] email is not an existing account — proceeding with invite");
 
     const resendKey = process.env.RESEND_API_KEY;
+    console.log("[invite-beneficiary] RESEND_API_KEY:", resendKey ? "✅ set" : "❌ missing — email will be skipped");
     if (!resendKey) {
+      console.warn("[invite-beneficiary] ⚠️ no RESEND_API_KEY — returning success without sending");
       return res.json({ success: true, email_sent: false });
     }
 
@@ -101,23 +107,27 @@ export default async function handler(req, res) {
 </body>
 </html>`;
 
+    console.log("[invite-beneficiary] sender:", senderRaw, "| to:", normalizedEmail, "| subject:", `${senderRaw} invited you to join Mint`);
+
     let emailSent = false;
     try {
       const resend = new Resend(resendKey);
-      await resend.emails.send({
+      const sendResult = await resend.emails.send({
         from: "Mint <noreply@mymint.co.za>",
         to: [normalizedEmail],
         subject: `${senderRaw} invited you to join Mint`,
         html,
       });
       emailSent = true;
+      console.log("[invite-beneficiary] ✅ Resend response:", JSON.stringify(sendResult?.data || sendResult));
     } catch (emailErr) {
-      console.error("[invite-beneficiary] email send failed:", emailErr.message);
+      console.error("[invite-beneficiary] ❌ Resend send failed:", emailErr.message, emailErr.statusCode);
     }
 
+    console.log("[invite-beneficiary] done | email_sent:", emailSent);
     return res.json({ success: true, email_sent: emailSent });
   } catch (e) {
-    console.error("[invite-beneficiary] error:", e.message);
+    console.error("[invite-beneficiary] ❌ unexpected error:", e.message, e.stack);
     return res.status(500).json({ error: e.message });
   }
 }

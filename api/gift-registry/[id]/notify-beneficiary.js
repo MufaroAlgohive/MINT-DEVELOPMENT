@@ -15,37 +15,48 @@ export default async function handler(req, res) {
 
   try {
     const { user, error: authError } = await authenticateUser(req);
-    if (authError || !user) return res.status(401).json({ error: 'Unauthorized' });
+    if (authError || !user) {
+      console.warn('[notify-beneficiary] ❌ auth failed:', authError?.message);
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
 
     const { id } = req.query;
     const { email, firstName, isNudge } = req.body || {};
+    console.log('[notify-beneficiary] ▶ called by:', user.id, '| registry:', id, '| email:', email, '| isNudge:', isNudge);
 
     if (!email) return res.status(400).json({ error: 'email is required' });
     const normalizedEmail = email.trim().toLowerCase();
 
     // Verify registry belongs to this user
-    const { data: registry } = await supabaseAdmin
+    const { data: registry, error: regError } = await supabaseAdmin
       .from('gift_events')
       .select('id, title, share_token, creator_user_id')
       .eq('id', id)
       .eq('creator_user_id', user.id)
       .single();
 
-    if (!registry) return res.status(404).json({ error: 'Registry not found' });
+    if (!registry) {
+      console.warn('[notify-beneficiary] ❌ registry not found or not owned by caller | regError:', regError?.message);
+      return res.status(404).json({ error: 'Registry not found' });
+    }
+    console.log('[notify-beneficiary] registry verified:', registry.title, '| share_token:', registry.share_token ? '✅' : '❌ missing');
 
     // Check if the recipient has a Mint account
-    const { data: profiles } = await supabaseAdmin
+    const { data: profiles, error: profError } = await supabaseAdmin
       .from('profiles')
       .select('id, first_name, last_name, email')
       .ilike('email', normalizedEmail)
       .limit(1);
 
+    console.log('[notify-beneficiary] profile lookup for', normalizedEmail, '→', profiles?.length ?? 0, 'row(s)', profError ? `| DB error: ${profError.message}` : '');
     const recipientProfile = profiles?.[0];
 
     if (!recipientProfile) {
+      console.log('[notify-beneficiary] ℹ️ no Mint account found → returning has_account:false');
       // No account — caller will handle invite separately
       return res.status(200).json({ has_account: false });
     }
+    console.log('[notify-beneficiary] recipient profile found:', recipientProfile.first_name, recipientProfile.last_name, '| id:', recipientProfile.id);
 
     // Look up sender's name
     const { data: senderProfile } = await supabaseAdmin
@@ -108,27 +119,34 @@ export default async function handler(req, res) {
 </html>`;
 
     const resendKey = process.env.RESEND_API_KEY;
+    console.log('[notify-beneficiary] RESEND_API_KEY:', resendKey ? '✅ set' : '❌ missing — email will be skipped');
+    console.log('[notify-beneficiary] subject:', subjectLine);
+    console.log('[notify-beneficiary] to:', normalizedEmail);
+    console.log('[notify-beneficiary] share_url:', shareUrl);
+
     if (!resendKey) {
-      // No email service configured — still return success so the UI can track state
+      console.warn('[notify-beneficiary] ⚠️ no RESEND_API_KEY — returning ok:true without sending email');
       return res.status(200).json({ ok: true, sentAt: new Date().toISOString(), email_sent: false });
     }
 
     try {
       const resend = new Resend(resendKey);
-      await resend.emails.send({
+      const sendResult = await resend.emails.send({
         from: 'Mint <noreply@mymint.co.za>',
         to: [normalizedEmail],
         subject: subjectLine,
         html,
       });
+      console.log('[notify-beneficiary] ✅ Resend response:', JSON.stringify(sendResult?.data || sendResult));
     } catch (emailErr) {
-      console.error('[notify-beneficiary] email send failed:', emailErr.message);
+      console.error('[notify-beneficiary] ❌ Resend send failed:', emailErr.message, emailErr.statusCode);
       // Don't fail the whole request if email sending fails
     }
 
+    console.log('[notify-beneficiary] ✅ done — returning ok:true');
     return res.status(200).json({ ok: true, sentAt: new Date().toISOString() });
   } catch (e) {
-    console.error('[notify-beneficiary] error:', e.message);
+    console.error('[notify-beneficiary] ❌ unexpected error:', e.message, e.stack);
     return res.status(500).json({ error: e.message });
   }
 }

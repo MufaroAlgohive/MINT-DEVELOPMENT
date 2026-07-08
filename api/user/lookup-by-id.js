@@ -43,7 +43,9 @@ export default async function handler(req, res) {
     }
 
     const idNumber = (req.query.id_number || "").replace(/\D/g, "").trim();
+    console.log("[lookup-by-id] caller:", user.id, "| id_number length:", idNumber.length);
     if (!/^\d{13}$/.test(idNumber)) {
+      console.warn("[lookup-by-id] ❌ invalid id_number format:", idNumber.length, "digits");
       return res.status(400).json({ error: "Please enter a valid 13-digit SA ID number" });
     }
 
@@ -54,24 +56,29 @@ export default async function handler(req, res) {
       .limit(1);
 
     if (profileError) {
-      console.error("[lookup-by-id] profile error:", profileError.message);
+      console.error("[lookup-by-id] ❌ DB error:", profileError.message, profileError.code);
       return res.status(500).json({ error: "Lookup failed" });
     }
 
+    console.log("[lookup-by-id] profiles query returned", idProfiles?.length ?? 0, "row(s)");
     const profile = idProfiles?.[0] || null;
     if (!profile) {
+      console.log("[lookup-by-id] ℹ️ no profile found for id_number (note: profiles.id_number column must be populated for this to work)");
       return res.status(404).json({ error: "No user found with that ID number" });
     }
     if (profile.id === user.id) {
+      console.warn("[lookup-by-id] ❌ caller tried to gift to themselves");
       return res.status(400).json({ error: "You cannot gift to yourself" });
     }
 
+    console.log("[lookup-by-id] profile found — id:", profile.id, "| email in profiles:", profile.email ? "✅ set" : "❌ missing — will resolve from auth");
     const email = await resolveUserEmail(profile.id, profile.email);
     if (!email) {
-      console.error("[lookup-by-id] profile found but email unresolvable for", profile.id);
+      console.error("[lookup-by-id] ❌ email unresolvable for profile id:", profile.id);
       return res.status(503).json({ error: "Could not retrieve user details — please try again" });
     }
 
+    console.log("[lookup-by-id] ✅ returning user:", profile.first_name, profile.last_name, "| mint:", profile.mint_number || "none");
     return res.json({
       user: {
         first_name: profile.first_name || "",
@@ -81,7 +88,7 @@ export default async function handler(req, res) {
       },
     });
   } catch (e) {
-    console.error("[lookup-by-id] error:", e.message);
+    console.error("[lookup-by-id] ❌ unexpected error:", e.message, e.stack);
     return res.status(500).json({ error: e.message });
   }
 }

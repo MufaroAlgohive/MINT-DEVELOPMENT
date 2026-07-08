@@ -251,36 +251,53 @@ export default function GiftRegistrySharePopup({ token, title, registryId, onClo
     setSendingFor(b.email);
     setSendError(null);
     const emailKey = b.email.toLowerCase();
+    console.log("[share:notify] ▶ sendToMint called", { email: b.email, firstName: b.firstName, lastName: b.lastName, registryId });
     try {
       const tok = await getAuthToken();
+      console.log("[share:notify] auth token obtained:", tok ? "✅ present" : "❌ missing");
       const bState = getBeneficiaryState(b.email, registryId);
+      console.log("[share:notify] beneficiary state:", bState, "(isNudge:", bState === "nudge", ")");
 
+      console.log("[share:notify] → POST /api/gift-registry/" + registryId + "/notify-beneficiary");
       const res = await fetch(`/api/gift-registry/${registryId}/notify-beneficiary`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${tok}` },
         body: JSON.stringify({ email: b.email, firstName: b.firstName, isNudge: bState === "nudge" }),
       });
       const json = await res.json();
+      console.log("[share:notify] ← response", res.status, json);
 
       if (json.has_account === false) {
+        console.log("[share:notify] recipient has NO Mint account → falling back to invite-beneficiary");
         try {
-          await fetch("/api/user/invite-beneficiary", {
+          console.log("[share:notify] → POST /api/user/invite-beneficiary", { email: b.email, registry_url: url });
+          const invRes = await fetch("/api/user/invite-beneficiary", {
             method: "POST",
             headers: { "Content-Type": "application/json", Authorization: `Bearer ${tok}` },
             body: JSON.stringify({ email: b.email, first_name: b.firstName, last_name: b.lastName, registry_url: url }),
           });
-        } catch {}
+          const invJson = await invRes.json();
+          console.log("[share:notify] ← invite-beneficiary response", invRes.status, invJson);
+        } catch (invErr) {
+          console.error("[share:notify] invite-beneficiary fetch failed:", invErr);
+        }
         const map = getSentMap(registryId);
         map[emailKey] = { sentAt: new Date().toISOString(), state: "sent", invite: true };
         writeSentMap(registryId, map);
         await upsertBeneficiary(b);
         setSentTick(t => t + 1);
+        console.log("[share:notify] ✅ invite flow complete for", b.email);
         return;
       }
 
-      if (!res.ok) { setSendError(json.error || "Could not send notification"); return; }
+      if (!res.ok) {
+        console.error("[share:notify] ❌ notify-beneficiary failed:", res.status, json);
+        setSendError(json.error || "Could not send notification");
+        return;
+      }
 
       if (json.reason === "already_sent") {
+        console.log("[share:notify] already_sent — updating local state");
         const map = getSentMap(registryId);
         map[emailKey] = { ...map[emailKey], state: "sent" };
         writeSentMap(registryId, map);
@@ -288,6 +305,7 @@ export default function GiftRegistrySharePopup({ token, title, registryId, onClo
         return;
       }
       if (json.reason === "eligible_nudge") {
+        console.log("[share:notify] eligible_nudge — marking for nudge");
         const map = getSentMap(registryId);
         map[emailKey] = { ...map[emailKey], state: "nudge" };
         writeSentMap(registryId, map);
@@ -300,7 +318,9 @@ export default function GiftRegistrySharePopup({ token, title, registryId, onClo
       writeSentMap(registryId, map);
       await upsertBeneficiary(b);
       setSentTick(t => t + 1);
-    } catch {
+      console.log("[share:notify] ✅ notification sent successfully to", b.email, "sentAt:", json.sentAt);
+    } catch (err) {
+      console.error("[share:notify] ❌ unexpected error:", err);
       setSendError("Network error. Please try again.");
     } finally {
       setSendingFor(null);
@@ -310,17 +330,31 @@ export default function GiftRegistrySharePopup({ token, title, registryId, onClo
   // MINT number search
   const searchByMint = useCallback(async (val) => {
     if (!val || val.trim().length < 3) { setMintResult(null); setMintError(null); return; }
+    console.log("[share:mint] ▶ searching for MINT number:", val.trim());
     setMintSearching(true); setMintError(null); setMintResult(null);
     try {
       const tok = await getAuthToken();
+      console.log("[share:mint] auth token:", tok ? "✅ present" : "❌ missing");
+      console.log("[share:mint] → GET /api/user/lookup-by-mint?mint_number=", val.trim());
       const res = await fetch(`/api/user/lookup-by-mint?mint_number=${encodeURIComponent(val.trim())}`, {
         headers: tok ? { Authorization: `Bearer ${tok}` } : {},
       });
       const data = await res.json();
-      if (!res.ok || data.error) { setMintError(data.error || "User not found"); }
-      else if (data.user) { setMintResult(data.user); }
-      else { setMintError("No user found with that MINT number"); }
-    } catch { setMintError("Search failed. Please try again."); }
+      console.log("[share:mint] ← response", res.status, data);
+      if (!res.ok || data.error) {
+        console.warn("[share:mint] ❌ lookup failed:", res.status, data.error);
+        setMintError(data.error || "User not found");
+      } else if (data.user) {
+        console.log("[share:mint] ✅ user found:", data.user.first_name, data.user.last_name, "mint:", data.user.mint_number);
+        setMintResult(data.user);
+      } else {
+        console.warn("[share:mint] ❌ no user in response");
+        setMintError("No user found with that MINT number");
+      }
+    } catch (err) {
+      console.error("[share:mint] ❌ fetch error:", err);
+      setMintError("Search failed. Please try again.");
+    }
     finally { setMintSearching(false); }
   }, []);
 
@@ -333,17 +367,31 @@ export default function GiftRegistrySharePopup({ token, title, registryId, onClo
   // ID number search
   const searchById = useCallback(async (val) => {
     if (!val || val.length !== 13) { setIdResult(null); setIdError(null); return; }
+    console.log("[share:id] ▶ searching for SA ID number:", val);
     setIdSearching(true); setIdError(null); setIdResult(null);
     try {
       const tok = await getAuthToken();
+      console.log("[share:id] auth token:", tok ? "✅ present" : "❌ missing");
+      console.log("[share:id] → GET /api/user/lookup-by-id?id_number=", val);
       const res = await fetch(`/api/user/lookup-by-id?id_number=${encodeURIComponent(val.trim())}`, {
         headers: tok ? { Authorization: `Bearer ${tok}` } : {},
       });
       const data = await res.json();
-      if (!res.ok || data.error) { setIdError(data.error || "User not found"); }
-      else if (data.user) { setIdResult(data.user); }
-      else { setIdError("No user found with that ID number"); }
-    } catch { setIdError("Search failed. Please try again."); }
+      console.log("[share:id] ← response", res.status, data);
+      if (!res.ok || data.error) {
+        console.warn("[share:id] ❌ lookup failed:", res.status, data.error);
+        setIdError(data.error || "User not found");
+      } else if (data.user) {
+        console.log("[share:id] ✅ user found:", data.user.first_name, data.user.last_name);
+        setIdResult(data.user);
+      } else {
+        console.warn("[share:id] ❌ no user in response");
+        setIdError("No user found with that ID number");
+      }
+    } catch (err) {
+      console.error("[share:id] ❌ fetch error:", err);
+      setIdError("Search failed. Please try again.");
+    }
     finally { setIdSearching(false); }
   }, []);
 
@@ -357,19 +405,29 @@ export default function GiftRegistrySharePopup({ token, title, registryId, onClo
   // Email lookup
   const searchByEmail = useCallback(async (email) => {
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) { setEmailResult(null); setEmailError(null); return; }
+    console.log("[share:email] ▶ searching by email:", email.trim());
     const reqId = ++emailReqRef.current;
     setEmailSearching(true); setEmailError(null); setEmailResult(null);
     try {
       const tok = await getAuthToken();
+      console.log("[share:email] auth token:", tok ? "✅ present" : "❌ missing");
+      console.log("[share:email] → GET /api/user/lookup-by-email?email=", email.trim());
       const res = await fetch(`/api/user/lookup-by-email?email=${encodeURIComponent(email.trim())}`, {
         headers: tok ? { Authorization: `Bearer ${tok}` } : {},
       });
       if (reqId !== emailReqRef.current) return;
       const data = await res.json();
-      if (!res.ok) { setEmailError(data.error || "Lookup failed"); }
-      else { setEmailResult(data); }
-    } catch {
+      console.log("[share:email] ← response", res.status, data);
+      if (!res.ok) {
+        console.warn("[share:email] ❌ lookup failed:", res.status, data.error);
+        setEmailError(data.error || "Lookup failed");
+      } else {
+        console.log("[share:email]", data.found ? `✅ user found: ${data.user?.first_name} ${data.user?.last_name}` : "ℹ️ no Mint account — will offer invite");
+        setEmailResult(data);
+      }
+    } catch (err) {
       if (reqId !== emailReqRef.current) return;
+      console.error("[share:email] ❌ fetch error:", err);
       setEmailError("Search failed. Please try again.");
     } finally {
       if (reqId === emailReqRef.current) setEmailSearching(false);
@@ -389,38 +447,53 @@ export default function GiftRegistrySharePopup({ token, title, registryId, onClo
       email: user.email,
       mintNumber: user.mint_number || null,
     };
+    console.log("[share:send-via-found] ▶ sending to found user", { email: b.email, firstName: b.firstName, mintNumber: b.mintNumber, panel });
     await upsertBeneficiary(b);
     await sendToMint(b);
     setPanel("beneficiary");
   }
 
   async function handleInviteEmail() {
+    const normalizedEmail = emailInput.trim().toLowerCase();
+    console.log("[share:invite-email] ▶ invite flow started", { email: normalizedEmail, firstName: inviteFirst, lastName: inviteLast, registry_url: url });
     setInviteSending(true);
     try {
       const tok = await getAuthToken();
-      await fetch("/api/user/invite-beneficiary", {
+      console.log("[share:invite-email] auth token:", tok ? "✅ present" : "❌ missing");
+      console.log("[share:invite-email] → POST /api/user/invite-beneficiary");
+      const res = await fetch("/api/user/invite-beneficiary", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${tok}` },
         body: JSON.stringify({
-          email: emailInput.trim().toLowerCase(),
+          email: normalizedEmail,
           first_name: inviteFirst.trim() || undefined,
           last_name: inviteLast.trim() || undefined,
           registry_url: url,
         }),
       });
-      const b = { firstName: inviteFirst.trim() || emailInput.split("@")[0], lastName: inviteLast.trim(), email: emailInput.trim().toLowerCase() };
+      const json = await res.json();
+      console.log("[share:invite-email] ← response", res.status, json);
+      if (!res.ok) {
+        console.error("[share:invite-email] ❌ invite failed:", res.status, json);
+      } else {
+        console.log("[share:invite-email] ✅ invite sent, email_sent:", json.email_sent);
+      }
+      const b = { firstName: inviteFirst.trim() || normalizedEmail.split("@")[0], lastName: inviteLast.trim(), email: normalizedEmail };
       await upsertBeneficiary(b);
       const map = getSentMap(registryId);
-      map[emailInput.trim().toLowerCase()] = { sentAt: new Date().toISOString(), state: "sent", invite: true };
+      map[normalizedEmail] = { sentAt: new Date().toISOString(), state: "sent", invite: true };
       writeSentMap(registryId, map);
       setInviteSent(true);
-    } catch {}
+    } catch (err) {
+      console.error("[share:invite-email] ❌ unexpected error:", err);
+    }
     finally { setInviteSending(false); }
   }
 
   async function handleAddDetails() {
     if (!detFirst.trim() || !detEmail.trim()) return;
     const b = { firstName: detFirst.trim(), lastName: detLast.trim(), email: detEmail.trim(), mintNumber: null };
+    console.log("[share:enter-details] ▶ sending via manually-entered details", { email: b.email, firstName: b.firstName, lastName: b.lastName });
     await upsertBeneficiary(b);
     await sendToMint(b);
     setPanel("beneficiary");
