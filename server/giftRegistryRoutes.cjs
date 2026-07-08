@@ -223,40 +223,44 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
       const prefs = user.user_metadata?.gift_wishlist_prefs || {};
       const storedKeys = prefs.keys || [];
 
-      let confirmedKeys = storedKeys;
-      if (storedKeys.length) {
-        const { data: myRegistries } = await supabaseAdmin
-          .from('gift_events')
-          .select('id')
-          .eq('creator_user_id', user.id)
-          .not('status', 'in', '(CANCELLED,EXPIRED)');
-        const registryIds = (myRegistries || []).map(r => r.id);
+      // wishlistedKeys must reflect DB truth, not just what was previously written to
+      // storage — items can be added to a registry through flows that never touch
+      // storage (e.g. "like it, then create a new wishlist"). So we always compute
+      // the confirmed set directly from the DB rather than filtering storedKeys.
+      const { data: myRegistries } = await supabaseAdmin
+        .from('gift_events')
+        .select('id')
+        .eq('creator_user_id', user.id)
+        .not('status', 'in', '(CANCELLED,EXPIRED)');
+      const registryIds = (myRegistries || []).map(r => r.id);
 
-        const confirmedSet = new Set();
-        if (registryIds.length) {
-          const { data: items } = await supabaseAdmin
-            .from('gift_registry_items')
-            .select('isin, instrument_type')
-            .in('gift_event_id', registryIds)
-            .in('status', ['OPEN', 'PARTIALLY_FILLED']);
-          for (const it of items || []) {
-            if (it.instrument_type === 'BASKET') {
-              confirmedSet.add(`strategy:${it.isin}`);
-              confirmedSet.add(`gift:${it.isin}`);
-            } else {
-              confirmedSet.add(it.isin);
-            }
+      const confirmedSet = new Set();
+      if (registryIds.length) {
+        const { data: items } = await supabaseAdmin
+          .from('gift_registry_items')
+          .select('isin, instrument_type')
+          .in('gift_event_id', registryIds)
+          .in('status', ['OPEN', 'PARTIALLY_FILLED']);
+        for (const it of items || []) {
+          if (it.instrument_type === 'BASKET') {
+            confirmedSet.add(`strategy:${it.isin}`);
+            confirmedSet.add(`gift:${it.isin}`);
+          } else {
+            confirmedSet.add(it.isin);
           }
         }
-        confirmedKeys = storedKeys.filter(k => confirmedSet.has(k));
+      }
+      const confirmedKeys = Array.from(confirmedSet);
 
-        // Prune the stale keys from storage too, so future GETs don't need to keep filtering.
-        if (confirmedKeys.length !== storedKeys.length) {
-          const prunedPrefs = { ...prefs, keys: confirmedKeys };
-          supabaseAdmin.auth.admin.updateUserById(user.id, {
-            user_metadata: { ...user.user_metadata, gift_wishlist_prefs: prunedPrefs },
-          }).catch(e => console.error('[gift-wishlist-prefs] prune error:', e.message));
-        }
+      // Keep storage in sync with the DB-confirmed set so other consumers of the
+      // raw stored prefs (if any) don't drift from what the heart icons show.
+      const storedSorted = [...storedKeys].sort().join(',');
+      const confirmedSorted = [...confirmedKeys].sort().join(',');
+      if (storedSorted !== confirmedSorted) {
+        const prunedPrefs = { ...prefs, keys: confirmedKeys };
+        supabaseAdmin.auth.admin.updateUserById(user.id, {
+          user_metadata: { ...user.user_metadata, gift_wishlist_prefs: prunedPrefs },
+        }).catch(e => console.error('[gift-wishlist-prefs] sync error:', e.message));
       }
 
       return res.json({ wishlistedKeys: confirmedKeys, watchlist: prefs.watchlist || [] });
@@ -314,7 +318,8 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
           event_date: eventDate,
           expiry_at: expiryAt,
           message: message || null,
-          status: 'DRAFT',
+          status: 'ACTIVE',
+          share_token: crypto.randomBytes(24).toString('base64url'),
         })
         .select()
         .single();

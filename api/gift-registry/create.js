@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { supabaseAdmin, authenticateUser } from '../_lib/supabase.js';
 
 export default async function handler(req, res) {
@@ -25,7 +26,8 @@ export default async function handler(req, res) {
         event_date: eventDate,
         expiry_at: expiryAt,
         message: message || null,
-        status: 'DRAFT',
+        status: 'ACTIVE',
+        share_token: crypto.randomBytes(24).toString('base64url'),
       })
       .select()
       .single();

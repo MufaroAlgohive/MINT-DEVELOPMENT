@@ -66,7 +66,7 @@ function ItemSparkline({ seed }) {
 
 /* ─── Strategy-card-style item card — identical look to Mint Baskets card ─── */
 
-function WishlistItemCard({ item, onRemove, registryStatus, onPublish, publishLoading }) {
+function WishlistItemCard({ item, onRemove }) {
   const percent = getItemFillPercent(item);
   const filled = item.filled_quantity || 0;
   const target = item.target_quantity || 0;
@@ -74,7 +74,6 @@ function WishlistItemCard({ item, onRemove, registryStatus, onPublish, publishLo
   const isFunded = filled >= target && target > 0;
   const isBasket = item.instrument_type === "BASKET";
   const reserved = item.reserved_quantity ?? 0;
-  const isDraft = registryStatus === "DRAFT";
 
   // For BASKET items: holdings_snapshot is [{logo_url, symbol, name}] from server enrichment
   const holdingsSnapshot = item.holdings_snapshot || [];
@@ -222,20 +221,6 @@ function WishlistItemCard({ item, onRemove, registryStatus, onPublish, publishLo
         )}
       </div>
 
-      {/* Publish to Share — shown on item cards when the registry is still a DRAFT */}
-      {isDraft && onPublish && (
-        <button
-          onClick={(e) => { e.stopPropagation(); onPublish(); }}
-          disabled={publishLoading}
-          className="mt-4 w-full flex items-center justify-center gap-2 rounded-xl bg-black py-2.5 text-sm font-semibold text-white active:opacity-80 disabled:opacity-50 transition-opacity"
-        >
-          {publishLoading ? (
-            <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin inline-block" />
-          ) : (
-            "Publish to Share"
-          )}
-        </button>
-      )}
     </motion.div>
   );
 }
@@ -261,8 +246,6 @@ export default function GiftRegistryDetailPage({ registryId, onNavigate, onBack 
   const { registry, loading, reload } = useRegistryDetail(registryId);
   const { contributions } = useRegistryContributions(registryId);
   const [showShare, setShowShare] = useState(false);
-  const [publishLoading, setPublishLoading] = useState(false);
-  const [publishedToken, setPublishedToken] = useState(null); // share_token from publish response, before reload settles
   const [viewCount, setViewCount] = useState(null);
   const [activeTab, setActiveTab] = useState("items"); // "items" | "history"
   const [removingIds, setRemovingIds] = useState(new Set());
@@ -335,30 +318,6 @@ export default function GiftRegistryDetailPage({ registryId, onNavigate, onBack 
     }
   }
 
-  async function handlePublish() {
-    setPublishLoading(true);
-    try {
-      const session = await (await supabaseReady).auth.getSession();
-      const token = session?.data?.session?.access_token;
-      const res = await fetch(`/api/gift-registry/${registryId}/publish`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "Could not publish wishlist");
-      // Capture the share_token immediately from the API response so the
-      // popup can open before the reload() re-fetch settles.
-      const newToken = json.registry?.share_token;
-      if (newToken) setPublishedToken(newToken);
-      reload();
-      setShowShare(true);
-    } catch (e) {
-      console.error("[registry] publish error:", e.message);
-    } finally {
-      setPublishLoading(false);
-    }
-  }
-
   if (loading && !registry) {
     return (
       <div className="min-h-screen bg-[#f8f9fc] flex items-center justify-center">
@@ -388,7 +347,7 @@ export default function GiftRegistryDetailPage({ registryId, onNavigate, onBack 
               </span>
             </div>
           </div>
-          {registry?.share_token && ["ACTIVE", "PAUSED"].includes(registry?.status) && (
+          {registry?.share_token && !["CANCELLED", "EXPIRED"].includes(registry?.status) && (
             <button
               onClick={() => setShowShare(true)}
               className="p-2 rounded-xl bg-purple-50 text-[#6B21A8]"
@@ -460,9 +419,6 @@ export default function GiftRegistryDetailPage({ registryId, onNavigate, onBack 
                           key={item.id}
                           item={item}
                           onRemove={removeItem}
-                          registryStatus={registry?.status}
-                          onPublish={handlePublish}
-                          publishLoading={publishLoading}
                         />
                       ))}
                   </AnimatePresence>
@@ -470,8 +426,8 @@ export default function GiftRegistryDetailPage({ registryId, onNavigate, onBack 
               </div>
             )}
 
-            {/* Share CTA — shown when registry is published */}
-            {registry?.share_token && ["ACTIVE", "PAUSED"].includes(registry?.status) && (
+            {/* Share CTA — shown whenever the registry has a share token */}
+            {registry?.share_token && !["CANCELLED", "EXPIRED"].includes(registry?.status) && (
               <button
                 onClick={() => setShowShare(true)}
                 className="w-full flex items-center justify-between gap-3 rounded-2xl bg-[#6B21A8] px-5 py-4 text-white active:opacity-80 transition-opacity"
@@ -553,12 +509,12 @@ export default function GiftRegistryDetailPage({ registryId, onNavigate, onBack 
         )}
       </div>
 
-      {showShare && (publishedToken || registry?.share_token) && (
+      {showShare && registry?.share_token && (
         <GiftRegistrySharePopup
-          token={publishedToken || registry.share_token}
+          token={registry.share_token}
           title={registry?.title}
           registryId={registryId}
-          onClose={() => { setShowShare(false); setPublishedToken(null); }}
+          onClose={() => setShowShare(false)}
           onNavigate={onNavigate}
         />
       )}

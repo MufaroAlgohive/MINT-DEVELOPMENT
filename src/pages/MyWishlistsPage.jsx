@@ -24,12 +24,10 @@ function RegistryCard({ registry, onTap, onDelete, deletingId }) {
     : "Gift";
   const occasionColor = OCCASION_COLORS[registry.occasion] || OCCASION_COLORS.CUSTOM;
   const isDeleting = deletingId === registry.id;
-  const isDraft = registry.status === "DRAFT";
 
   const subtitleParts = [];
   if (occasionLabel) subtitleParts.push(occasionLabel);
   subtitleParts.push(items.length === 0 ? "No items yet" : `${items.length} ${items.length === 1 ? "item" : "items"}`);
-  if (isDraft) subtitleParts.push("Draft");
 
   function handleDeleteTap(e) {
     e.stopPropagation();
@@ -71,7 +69,6 @@ function RegistryCard({ registry, onTap, onDelete, deletingId }) {
             </p>
             <p className="text-[11px] text-slate-400 mt-0.5">
               {items.length === 0 ? "No items yet" : `${items.length} ${items.length === 1 ? "item" : "items"}`}
-              {isDraft && <span className="ml-1.5 text-amber-500 font-medium">· Draft</span>}
             </p>
           </div>
 
