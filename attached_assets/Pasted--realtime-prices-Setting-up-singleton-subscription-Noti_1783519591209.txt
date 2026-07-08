@@ -1,0 +1,855 @@
+ [realtime-prices] Setting up singleton subscription
+ [Notifications] fetchNotifications: userId= 3401d428-4ed7-4ba1-ae64-4bd16d2485a4
+ Setting up SINGLETON notifications subscription
+ [Notifications] authStateChange event= INITIAL_SESSION userId= 3401d428-4ed7-4ba1-ae64-4bd16d2485a4
+mfxnghmuccevsxwcetej.supabase.co/rest/v1/app_settings?select=is_enabled&limit=1:1  Failed to load resource: the server responded with a status of 406 ()
+ KYC status check: stored="verified" current="verified"
+ Setting up SINGLETON real-time subscription: required-actions-singleton
+ [Notifications] fetchNotifications: count= 3 error= none
+ [PERIOD_DEBUG parent] RENDER: Object
+ [PERIOD_DEBUG parent] RENDER: Object
+ [useOnboardingStatus] Total Onboarding Status: COMPLETE ✅ Object
+ [PERIOD_DEBUG parent] RENDER: Object
+ [PERIOD_DEBUG parent] RENDER: Object
+index-urfIq6m1.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-urfIq6m1.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-urfIq6m1.js:7 [realtime-prices] Subscription status: SUBSCRIBED
+index-urfIq6m1.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-urfIq6m1.js:2 Notifications singleton status: SUBSCRIBED
+index-urfIq6m1.js:7 Singleton subscription status: SUBSCRIBED
+index-urfIq6m1.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-urfIq6m1.js:7 [useOnboardingStatus] Total Onboarding Status: COMPLETE ✅ Object
+index-urfIq6m1.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-urfIq6m1.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-urfIq6m1.js:7 [useFinancialData] Updated balance from DB: 46858.37
+index-urfIq6m1.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-urfIq6m1.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-urfIq6m1.js:2 🔍 Fetching latest intraday data from stock_intraday_c...
+index-urfIq6m1.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-urfIq6m1.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-urfIq6m1.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-urfIq6m1.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-urfIq6m1.js:7 [SwipeableBalanceCard] Loaded holdings: Object
+index-urfIq6m1.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-urfIq6m1.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-urfIq6m1.js:2 ✅ Fetched 240 securities with intraday metrics
+index-urfIq6m1.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-urfIq6m1.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-urfIq6m1.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-urfIq6m1.js:7 [SwipeableBalanceCard] Loaded holdings: Object
+index-urfIq6m1.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-urfIq6m1.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-urfIq6m1.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-urfIq6m1.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-urfIq6m1.js:7 Polling Sumsub status...
+index-urfIq6m1.js:7 KYC status check: stored="verified" current="verified"
+index-urfIq6m1.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-urfIq6m1.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-urfIq6m1.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-urfIq6m1.js:2 [Notifications] authStateChange event= SIGNED_IN userId= 3401d428-4ed7-4ba1-ae64-4bd16d2485a4
+index-urfIq6m1.js:2 [Notifications] fetchNotifications: userId= 3401d428-4ed7-4ba1-ae64-4bd16d2485a4
+index-urfIq6m1.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-urfIq6m1.js:2 [Notifications] fetchNotifications: count= 3 error= none
+index-urfIq6m1.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-urfIq6m1.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-urfIq6m1.js:7 [useOnboardingStatus] Total Onboarding Status: COMPLETE ✅ Object
+index-urfIq6m1.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-urfIq6m1.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-urfIq6m1.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-urfIq6m1.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-urfIq6m1.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-urfIq6m1.js:2 [Notifications] authStateChange event= SIGNED_IN userId= 3401d428-4ed7-4ba1-ae64-4bd16d2485a4
+index-urfIq6m1.js:2 [Notifications] fetchNotifications: userId= 3401d428-4ed7-4ba1-ae64-4bd16d2485a4
+index-urfIq6m1.js:2 [Notifications] fetchNotifications: count= 3 error= none
+index-urfIq6m1.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-urfIq6m1.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-urfIq6m1.js:7 [useOnboardingStatus] Total Onboarding Status: COMPLETE ✅ Object
+index-urfIq6m1.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-urfIq6m1.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-urfIq6m1.js:7 [useFinancialData] Updated balance from DB: 46858.37
+index-urfIq6m1.js:7 [PERIOD_DEBUG parent] RENDER: Object
+index-urfIq6m1.js:7 [PERIOD_DEBUG parent] RENDER: {activeTab: 'ytd', parentYearStartBasketCents: null, yearStartRands: null, parentSnapshotStartBasketCents: null, startBasketRands: null, …}
+index-urfIq6m1.js:7 [SwipeableBalanceCard] Loaded holdings: {count: 0, totalMarketValue: 0, holdings: Array(0)}
+index-urfIq6m1.js:7 [PERIOD_DEBUG parent] RENDER: {activeTab: 'ytd', parentYearStartBasketCents: null, yearStartRands: null, parentSnapshotStartBasketCents: null, startBasketRands: null, …}
+index-urfIq6m1.js:7 [PERIOD_DEBUG parent] RENDER: {activeTab: 'ytd', parentYearStartBasketCents: null, yearStartRands: null, parentSnapshotStartBasketCents: null, startBasketRands: null, …}
+index-urfIq6m1.js:7 Polling Sumsub status...
+index-urfIq6m1.js:7 KYC status check: stored="verified" current="verified"
+index-urfIq6m1.js:7 [PERIOD_DEBUG parent] RENDER: {activeTab: 'ytd', parentYearStartBasketCents: null, yearStartRands: null, parentSnapshotStartBasketCents: null, startBasketRands: null, …}
+index-urfIq6m1.js:7 [PERIOD_DEBUG parent] RENDER: {activeTab: 'ytd', parentYearStartBasketCents: null, yearStartRands: null, parentSnapshotStartBasketCents: null, startBasketRands: null, …}
+index-urfIq6m1.js:7 [PERIOD_DEBUG parent] RENDER: {activeTab: 'ytd', parentYearStartBasketCents: null, yearStartRands: null, parentSnapshotStartBasketCents: null, startBasketRands: null, …}
+index-urfIq6m1.js:7 [PERIOD_DEBUG parent] RENDER: {activeTab: 'ytd', parentYearStartBasketCents: null, yearStartRands: null, parentSnapshotStartBasketCents: null, startBasketRands: null, …}
+index-urfIq6m1.js:7 [PERIOD_DEBUG parent] RENDER: {activeTab: 'ytd', parentYearStartBasketCents: null, yearStartRands: null, parentSnapshotStartBasketCents: null, startBasketRands: null, …}
+index-urfIq6m1.js:7 [PERIOD_DEBUG parent] RENDER: {activeTab: 'ytd', parentYearStartBasketCents: null, yearStartRands: null, parentSnapshotStartBasketCents: null, startBasketRands: null, …}
+MarketsPage-C824uodu.js:13 [Chart] TimeFrame: YTD, Base: 100.31, End: 102.38, Return: 2.06%
+index-urfIq6m1.js:2 📦 Using cached markets data
+index-urfIq6m1.js:7 🔍 Fetching strategies with metrics from Supabase...
+index-urfIq6m1.js:7 🔍 Fetching public strategies from Supabase...
+MarketsPage-C824uodu.js:13 🔍 Fetching news articles from News_articles table...
+index-urfIq6m1.js:2 🔍 Fetching price history for cdb08821-d07a-4198-8ce8-b195f46a404f, timeframe 1M...
+index-urfIq6m1.js:2 🔍 Fetching price history for edd5dd04-7274-48ce-8f92-5299cd231256, timeframe 1M...
+index-urfIq6m1.js:2 🔍 Fetching price history for db9e9278-1d4b-40af-bda6-5ad1dc9dc735, timeframe 1M...
+index-urfIq6m1.js:2 🔍 Fetching price history for 7ae14f0b-d897-451a-acd0-a746c23934fa, timeframe 1M...
+index-urfIq6m1.js:2 🔍 Fetching price history for 91bf54ca-a7a3-4ea0-a274-f2225378b9c1, timeframe 1M...
+index-urfIq6m1.js:2 🔍 Fetching price history for 54539f26-2b28-416c-b9cf-25aecb9f2361, timeframe 1M...
+index-urfIq6m1.js:2 🔍 Fetching price history for 5bafe4a7-90ba-41bd-9836-606dfd20ff60, timeframe 1M...
+index-urfIq6m1.js:2 🔍 Fetching price history for 27e45586-c932-4c52-a33e-d51bb86a8087, timeframe 1M...
+index-urfIq6m1.js:2 🔍 Fetching price history for 1867614b-28ae-46ae-b6b4-5a81f99acffe, timeframe 1M...
+index-urfIq6m1.js:2 🔍 Fetching price history for 71082e14-2e8f-4bff-b273-30c4b616ed3a, timeframe 1M...
+index-urfIq6m1.js:2 🔍 Fetching price history for 04088874-53ac-437c-af81-f521b77a7d6a, timeframe 1M...
+index-urfIq6m1.js:2 🔍 Fetching price history for 4e3f0cd5-26f7-45ec-99d0-0fdd5c0499d3, timeframe 1M...
+index-urfIq6m1.js:2 🔍 Fetching price history for 8d70ce58-bbea-4148-873b-ad099cea0705, timeframe 1M...
+index-urfIq6m1.js:2 🔍 Fetching price history for 9e722062-432a-4af0-b775-4932099bf7ca, timeframe 1M...
+index-urfIq6m1.js:2 🔍 Fetching price history for 42ced564-a61d-4353-8d1f-57eff7b3e8fc, timeframe 1M...
+index-urfIq6m1.js:2 🔍 Fetching price history for fe7c325c-f1f1-42c3-9ce4-7dab640a9e64, timeframe 1M...
+index-urfIq6m1.js:2 🔍 Fetching price history for 20caa821-84c7-4764-b75d-d034e8b45e8b, timeframe 1M...
+index-urfIq6m1.js:2 🔍 Fetching price history for 8d590c7d-dcc1-428f-8155-0f422174b694, timeframe 1M...
+index-urfIq6m1.js:2 🔍 Fetching price history for 5a17fb2c-a141-4a55-a40e-95b185a33cd1, timeframe 1M...
+index-urfIq6m1.js:2 🔍 Fetching price history for f9c1b5a1-baee-48b4-97c0-c627a221f04c, timeframe 1M...
+index-urfIq6m1.js:2 🔍 Fetching price history for d1476e08-dda1-4c27-8b20-002271abcfd8, timeframe 1M...
+index-urfIq6m1.js:2 🔍 Fetching price history for a6fa0333-e7f4-4772-bfe6-3ce25a41dd38, timeframe 1M...
+index-urfIq6m1.js:2 🔍 Fetching price history for dff3d27d-4908-48cd-9c91-c8a9eef61167, timeframe 1M...
+index-urfIq6m1.js:2 🔍 Fetching price history for 51e49b96-dfde-42e0-8638-187d693f560b, timeframe 1M...
+index-urfIq6m1.js:2 🔍 Fetching price history for 0cec45cb-10fe-4cb4-8966-94078620d65a, timeframe 1M...
+index-urfIq6m1.js:2 🔍 Fetching price history for f01437eb-d4a8-483c-af43-a18d7f447932, timeframe 1M...
+index-urfIq6m1.js:2 🔍 Fetching price history for 77b3c0d0-5bd9-4df0-a5f8-8a31c6834404, timeframe 1M...
+index-urfIq6m1.js:2 🔍 Fetching price history for 0bb12be4-ef24-4883-8e75-5c0b14951060, timeframe 1M...
+index-urfIq6m1.js:7 ✅ Fetched 7 public strategies with dynamic metrics
+index-urfIq6m1.js:2 The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+console.warn @ index-urfIq6m1.js:2
+Lb @ vendor-recharts-BfjPiJtV.js:8
+(anonymous) @ vendor-recharts-BfjPiJtV.js:8
+od @ vendor-recharts-BfjPiJtV.js:6
+w0 @ vendor-recharts-BfjPiJtV.js:8
+Q0 @ vendor-recharts-BfjPiJtV.js:8
+Y0 @ vendor-recharts-BfjPiJtV.js:8
+nj @ vendor-recharts-BfjPiJtV.js:8
+$u @ vendor-recharts-BfjPiJtV.js:8
+K0 @ vendor-recharts-BfjPiJtV.js:8
+I @ vendor-recharts-BfjPiJtV.js:1
+F @ vendor-recharts-BfjPiJtV.js:1
+postMessage
+re @ vendor-recharts-BfjPiJtV.js:1
+he @ vendor-recharts-BfjPiJtV.js:1
+e.unstable_scheduleCallback @ vendor-recharts-BfjPiJtV.js:1
+J0 @ vendor-recharts-BfjPiJtV.js:8
+Vt @ vendor-recharts-BfjPiJtV.js:8
+jr @ vendor-recharts-BfjPiJtV.js:8
+WC @ vendor-recharts-BfjPiJtV.js:6
+(anonymous) @ MarketsPage-C824uodu.js:13
+await in (anonymous)
+(anonymous) @ MarketsPage-C824uodu.js:13
+ju @ vendor-recharts-BfjPiJtV.js:8
+ha @ vendor-recharts-BfjPiJtV.js:8
+(anonymous) @ vendor-recharts-BfjPiJtV.js:8
+I @ vendor-recharts-BfjPiJtV.js:1
+F @ vendor-recharts-BfjPiJtV.js:1
+postMessage
+re @ vendor-recharts-BfjPiJtV.js:1
+F @ vendor-recharts-BfjPiJtV.js:1
+postMessage
+re @ vendor-recharts-BfjPiJtV.js:1
+F @ vendor-recharts-BfjPiJtV.js:1
+postMessage
+re @ vendor-recharts-BfjPiJtV.js:1
+F @ vendor-recharts-BfjPiJtV.js:1
+postMessage
+re @ vendor-recharts-BfjPiJtV.js:1
+he @ vendor-recharts-BfjPiJtV.js:1
+e.unstable_scheduleCallback @ vendor-recharts-BfjPiJtV.js:1
+J0 @ vendor-recharts-BfjPiJtV.js:8
+Vt @ vendor-recharts-BfjPiJtV.js:8
+Z0 @ vendor-recharts-BfjPiJtV.js:8
+uj @ vendor-recharts-BfjPiJtV.js:8
+Promise.then
+(anonymous) @ vendor-recharts-BfjPiJtV.js:8
+$0 @ vendor-recharts-BfjPiJtV.js:8
+z0 @ vendor-recharts-BfjPiJtV.js:8
+Cr @ vendor-recharts-BfjPiJtV.js:8
+z0 @ vendor-recharts-BfjPiJtV.js:8
+Cr @ vendor-recharts-BfjPiJtV.js:8
+z0 @ vendor-recharts-BfjPiJtV.js:8
+Cr @ vendor-recharts-BfjPiJtV.js:8
+z0 @ vendor-recharts-BfjPiJtV.js:8
+Cr @ vendor-recharts-BfjPiJtV.js:8
+z0 @ vendor-recharts-BfjPiJtV.js:8
+Cr @ vendor-recharts-BfjPiJtV.js:8
+z0 @ vendor-recharts-BfjPiJtV.js:8
+Cr @ vendor-recharts-BfjPiJtV.js:8
+z0 @ vendor-recharts-BfjPiJtV.js:8
+aj @ vendor-recharts-BfjPiJtV.js:8
+vi @ vendor-recharts-BfjPiJtV.js:8
+q0 @ vendor-recharts-BfjPiJtV.js:8
+Dn @ vendor-recharts-BfjPiJtV.js:6
+(anonymous) @ vendor-recharts-BfjPiJtV.js:8
+index-urfIq6m1.js:2 The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+console.warn @ index-urfIq6m1.js:2
+Lb @ vendor-recharts-BfjPiJtV.js:8
+(anonymous) @ vendor-recharts-BfjPiJtV.js:8
+od @ vendor-recharts-BfjPiJtV.js:6
+w0 @ vendor-recharts-BfjPiJtV.js:8
+Q0 @ vendor-recharts-BfjPiJtV.js:8
+Y0 @ vendor-recharts-BfjPiJtV.js:8
+nj @ vendor-recharts-BfjPiJtV.js:8
+$u @ vendor-recharts-BfjPiJtV.js:8
+K0 @ vendor-recharts-BfjPiJtV.js:8
+I @ vendor-recharts-BfjPiJtV.js:1
+F @ vendor-recharts-BfjPiJtV.js:1
+postMessage
+re @ vendor-recharts-BfjPiJtV.js:1
+he @ vendor-recharts-BfjPiJtV.js:1
+e.unstable_scheduleCallback @ vendor-recharts-BfjPiJtV.js:1
+J0 @ vendor-recharts-BfjPiJtV.js:8
+Vt @ vendor-recharts-BfjPiJtV.js:8
+jr @ vendor-recharts-BfjPiJtV.js:8
+WC @ vendor-recharts-BfjPiJtV.js:6
+(anonymous) @ MarketsPage-C824uodu.js:13
+await in (anonymous)
+(anonymous) @ MarketsPage-C824uodu.js:13
+ju @ vendor-recharts-BfjPiJtV.js:8
+ha @ vendor-recharts-BfjPiJtV.js:8
+(anonymous) @ vendor-recharts-BfjPiJtV.js:8
+I @ vendor-recharts-BfjPiJtV.js:1
+F @ vendor-recharts-BfjPiJtV.js:1
+postMessage
+re @ vendor-recharts-BfjPiJtV.js:1
+F @ vendor-recharts-BfjPiJtV.js:1
+postMessage
+re @ vendor-recharts-BfjPiJtV.js:1
+F @ vendor-recharts-BfjPiJtV.js:1
+postMessage
+re @ vendor-recharts-BfjPiJtV.js:1
+F @ vendor-recharts-BfjPiJtV.js:1
+postMessage
+re @ vendor-recharts-BfjPiJtV.js:1
+he @ vendor-recharts-BfjPiJtV.js:1
+e.unstable_scheduleCallback @ vendor-recharts-BfjPiJtV.js:1
+J0 @ vendor-recharts-BfjPiJtV.js:8
+Vt @ vendor-recharts-BfjPiJtV.js:8
+Z0 @ vendor-recharts-BfjPiJtV.js:8
+uj @ vendor-recharts-BfjPiJtV.js:8
+Promise.then
+(anonymous) @ vendor-recharts-BfjPiJtV.js:8
+$0 @ vendor-recharts-BfjPiJtV.js:8
+z0 @ vendor-recharts-BfjPiJtV.js:8
+Cr @ vendor-recharts-BfjPiJtV.js:8
+z0 @ vendor-recharts-BfjPiJtV.js:8
+Cr @ vendor-recharts-BfjPiJtV.js:8
+z0 @ vendor-recharts-BfjPiJtV.js:8
+Cr @ vendor-recharts-BfjPiJtV.js:8
+z0 @ vendor-recharts-BfjPiJtV.js:8
+Cr @ vendor-recharts-BfjPiJtV.js:8
+z0 @ vendor-recharts-BfjPiJtV.js:8
+Cr @ vendor-recharts-BfjPiJtV.js:8
+z0 @ vendor-recharts-BfjPiJtV.js:8
+Cr @ vendor-recharts-BfjPiJtV.js:8
+z0 @ vendor-recharts-BfjPiJtV.js:8
+aj @ vendor-recharts-BfjPiJtV.js:8
+vi @ vendor-recharts-BfjPiJtV.js:8
+q0 @ vendor-recharts-BfjPiJtV.js:8
+Dn @ vendor-recharts-BfjPiJtV.js:6
+(anonymous) @ vendor-recharts-BfjPiJtV.js:8
+index-urfIq6m1.js:2 The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+console.warn @ index-urfIq6m1.js:2
+Lb @ vendor-recharts-BfjPiJtV.js:8
+(anonymous) @ vendor-recharts-BfjPiJtV.js:8
+od @ vendor-recharts-BfjPiJtV.js:6
+w0 @ vendor-recharts-BfjPiJtV.js:8
+Q0 @ vendor-recharts-BfjPiJtV.js:8
+Y0 @ vendor-recharts-BfjPiJtV.js:8
+nj @ vendor-recharts-BfjPiJtV.js:8
+$u @ vendor-recharts-BfjPiJtV.js:8
+K0 @ vendor-recharts-BfjPiJtV.js:8
+I @ vendor-recharts-BfjPiJtV.js:1
+F @ vendor-recharts-BfjPiJtV.js:1
+postMessage
+re @ vendor-recharts-BfjPiJtV.js:1
+he @ vendor-recharts-BfjPiJtV.js:1
+e.unstable_scheduleCallback @ vendor-recharts-BfjPiJtV.js:1
+J0 @ vendor-recharts-BfjPiJtV.js:8
+Vt @ vendor-recharts-BfjPiJtV.js:8
+jr @ vendor-recharts-BfjPiJtV.js:8
+WC @ vendor-recharts-BfjPiJtV.js:6
+(anonymous) @ MarketsPage-C824uodu.js:13
+await in (anonymous)
+(anonymous) @ MarketsPage-C824uodu.js:13
+ju @ vendor-recharts-BfjPiJtV.js:8
+ha @ vendor-recharts-BfjPiJtV.js:8
+(anonymous) @ vendor-recharts-BfjPiJtV.js:8
+I @ vendor-recharts-BfjPiJtV.js:1
+F @ vendor-recharts-BfjPiJtV.js:1
+postMessage
+re @ vendor-recharts-BfjPiJtV.js:1
+F @ vendor-recharts-BfjPiJtV.js:1
+postMessage
+re @ vendor-recharts-BfjPiJtV.js:1
+F @ vendor-recharts-BfjPiJtV.js:1
+postMessage
+re @ vendor-recharts-BfjPiJtV.js:1
+F @ vendor-recharts-BfjPiJtV.js:1
+postMessage
+re @ vendor-recharts-BfjPiJtV.js:1
+he @ vendor-recharts-BfjPiJtV.js:1
+e.unstable_scheduleCallback @ vendor-recharts-BfjPiJtV.js:1
+J0 @ vendor-recharts-BfjPiJtV.js:8
+Vt @ vendor-recharts-BfjPiJtV.js:8
+Z0 @ vendor-recharts-BfjPiJtV.js:8
+uj @ vendor-recharts-BfjPiJtV.js:8
+Promise.then
+(anonymous) @ vendor-recharts-BfjPiJtV.js:8
+$0 @ vendor-recharts-BfjPiJtV.js:8
+z0 @ vendor-recharts-BfjPiJtV.js:8
+Cr @ vendor-recharts-BfjPiJtV.js:8
+z0 @ vendor-recharts-BfjPiJtV.js:8
+Cr @ vendor-recharts-BfjPiJtV.js:8
+z0 @ vendor-recharts-BfjPiJtV.js:8
+Cr @ vendor-recharts-BfjPiJtV.js:8
+z0 @ vendor-recharts-BfjPiJtV.js:8
+Cr @ vendor-recharts-BfjPiJtV.js:8
+z0 @ vendor-recharts-BfjPiJtV.js:8
+Cr @ vendor-recharts-BfjPiJtV.js:8
+z0 @ vendor-recharts-BfjPiJtV.js:8
+Cr @ vendor-recharts-BfjPiJtV.js:8
+z0 @ vendor-recharts-BfjPiJtV.js:8
+aj @ vendor-recharts-BfjPiJtV.js:8
+vi @ vendor-recharts-BfjPiJtV.js:8
+q0 @ vendor-recharts-BfjPiJtV.js:8
+Dn @ vendor-recharts-BfjPiJtV.js:6
+(anonymous) @ vendor-recharts-BfjPiJtV.js:8
+index-urfIq6m1.js:2 The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+console.warn @ index-urfIq6m1.js:2
+Lb @ vendor-recharts-BfjPiJtV.js:8
+(anonymous) @ vendor-recharts-BfjPiJtV.js:8
+od @ vendor-recharts-BfjPiJtV.js:6
+w0 @ vendor-recharts-BfjPiJtV.js:8
+Q0 @ vendor-recharts-BfjPiJtV.js:8
+Y0 @ vendor-recharts-BfjPiJtV.js:8
+nj @ vendor-recharts-BfjPiJtV.js:8
+$u @ vendor-recharts-BfjPiJtV.js:8
+K0 @ vendor-recharts-BfjPiJtV.js:8
+I @ vendor-recharts-BfjPiJtV.js:1
+F @ vendor-recharts-BfjPiJtV.js:1
+postMessage
+re @ vendor-recharts-BfjPiJtV.js:1
+he @ vendor-recharts-BfjPiJtV.js:1
+e.unstable_scheduleCallback @ vendor-recharts-BfjPiJtV.js:1
+J0 @ vendor-recharts-BfjPiJtV.js:8
+Vt @ vendor-recharts-BfjPiJtV.js:8
+jr @ vendor-recharts-BfjPiJtV.js:8
+WC @ vendor-recharts-BfjPiJtV.js:6
+(anonymous) @ MarketsPage-C824uodu.js:13
+await in (anonymous)
+(anonymous) @ MarketsPage-C824uodu.js:13
+ju @ vendor-recharts-BfjPiJtV.js:8
+ha @ vendor-recharts-BfjPiJtV.js:8
+(anonymous) @ vendor-recharts-BfjPiJtV.js:8
+I @ vendor-recharts-BfjPiJtV.js:1
+F @ vendor-recharts-BfjPiJtV.js:1
+postMessage
+re @ vendor-recharts-BfjPiJtV.js:1
+F @ vendor-recharts-BfjPiJtV.js:1
+postMessage
+re @ vendor-recharts-BfjPiJtV.js:1
+F @ vendor-recharts-BfjPiJtV.js:1
+postMessage
+re @ vendor-recharts-BfjPiJtV.js:1
+F @ vendor-recharts-BfjPiJtV.js:1
+postMessage
+re @ vendor-recharts-BfjPiJtV.js:1
+he @ vendor-recharts-BfjPiJtV.js:1
+e.unstable_scheduleCallback @ vendor-recharts-BfjPiJtV.js:1
+J0 @ vendor-recharts-BfjPiJtV.js:8
+Vt @ vendor-recharts-BfjPiJtV.js:8
+Z0 @ vendor-recharts-BfjPiJtV.js:8
+uj @ vendor-recharts-BfjPiJtV.js:8
+Promise.then
+(anonymous) @ vendor-recharts-BfjPiJtV.js:8
+$0 @ vendor-recharts-BfjPiJtV.js:8
+z0 @ vendor-recharts-BfjPiJtV.js:8
+Cr @ vendor-recharts-BfjPiJtV.js:8
+z0 @ vendor-recharts-BfjPiJtV.js:8
+Cr @ vendor-recharts-BfjPiJtV.js:8
+z0 @ vendor-recharts-BfjPiJtV.js:8
+Cr @ vendor-recharts-BfjPiJtV.js:8
+z0 @ vendor-recharts-BfjPiJtV.js:8
+Cr @ vendor-recharts-BfjPiJtV.js:8
+z0 @ vendor-recharts-BfjPiJtV.js:8
+Cr @ vendor-recharts-BfjPiJtV.js:8
+z0 @ vendor-recharts-BfjPiJtV.js:8
+Cr @ vendor-recharts-BfjPiJtV.js:8
+z0 @ vendor-recharts-BfjPiJtV.js:8
+aj @ vendor-recharts-BfjPiJtV.js:8
+vi @ vendor-recharts-BfjPiJtV.js:8
+q0 @ vendor-recharts-BfjPiJtV.js:8
+Dn @ vendor-recharts-BfjPiJtV.js:6
+(anonymous) @ vendor-recharts-BfjPiJtV.js:8
+index-urfIq6m1.js:2 The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+console.warn @ index-urfIq6m1.js:2
+Lb @ vendor-recharts-BfjPiJtV.js:8
+(anonymous) @ vendor-recharts-BfjPiJtV.js:8
+od @ vendor-recharts-BfjPiJtV.js:6
+w0 @ vendor-recharts-BfjPiJtV.js:8
+Q0 @ vendor-recharts-BfjPiJtV.js:8
+Y0 @ vendor-recharts-BfjPiJtV.js:8
+nj @ vendor-recharts-BfjPiJtV.js:8
+$u @ vendor-recharts-BfjPiJtV.js:8
+K0 @ vendor-recharts-BfjPiJtV.js:8
+I @ vendor-recharts-BfjPiJtV.js:1
+F @ vendor-recharts-BfjPiJtV.js:1
+postMessage
+re @ vendor-recharts-BfjPiJtV.js:1
+he @ vendor-recharts-BfjPiJtV.js:1
+e.unstable_scheduleCallback @ vendor-recharts-BfjPiJtV.js:1
+J0 @ vendor-recharts-BfjPiJtV.js:8
+Vt @ vendor-recharts-BfjPiJtV.js:8
+jr @ vendor-recharts-BfjPiJtV.js:8
+WC @ vendor-recharts-BfjPiJtV.js:6
+(anonymous) @ MarketsPage-C824uodu.js:13
+await in (anonymous)
+(anonymous) @ MarketsPage-C824uodu.js:13
+ju @ vendor-recharts-BfjPiJtV.js:8
+ha @ vendor-recharts-BfjPiJtV.js:8
+(anonymous) @ vendor-recharts-BfjPiJtV.js:8
+I @ vendor-recharts-BfjPiJtV.js:1
+F @ vendor-recharts-BfjPiJtV.js:1
+postMessage
+re @ vendor-recharts-BfjPiJtV.js:1
+F @ vendor-recharts-BfjPiJtV.js:1
+postMessage
+re @ vendor-recharts-BfjPiJtV.js:1
+F @ vendor-recharts-BfjPiJtV.js:1
+postMessage
+re @ vendor-recharts-BfjPiJtV.js:1
+F @ vendor-recharts-BfjPiJtV.js:1
+postMessage
+re @ vendor-recharts-BfjPiJtV.js:1
+he @ vendor-recharts-BfjPiJtV.js:1
+e.unstable_scheduleCallback @ vendor-recharts-BfjPiJtV.js:1
+J0 @ vendor-recharts-BfjPiJtV.js:8
+Vt @ vendor-recharts-BfjPiJtV.js:8
+Z0 @ vendor-recharts-BfjPiJtV.js:8
+uj @ vendor-recharts-BfjPiJtV.js:8
+Promise.then
+(anonymous) @ vendor-recharts-BfjPiJtV.js:8
+$0 @ vendor-recharts-BfjPiJtV.js:8
+z0 @ vendor-recharts-BfjPiJtV.js:8
+Cr @ vendor-recharts-BfjPiJtV.js:8
+z0 @ vendor-recharts-BfjPiJtV.js:8
+Cr @ vendor-recharts-BfjPiJtV.js:8
+z0 @ vendor-recharts-BfjPiJtV.js:8
+Cr @ vendor-recharts-BfjPiJtV.js:8
+z0 @ vendor-recharts-BfjPiJtV.js:8
+Cr @ vendor-recharts-BfjPiJtV.js:8
+z0 @ vendor-recharts-BfjPiJtV.js:8
+Cr @ vendor-recharts-BfjPiJtV.js:8
+z0 @ vendor-recharts-BfjPiJtV.js:8
+Cr @ vendor-recharts-BfjPiJtV.js:8
+z0 @ vendor-recharts-BfjPiJtV.js:8
+aj @ vendor-recharts-BfjPiJtV.js:8
+vi @ vendor-recharts-BfjPiJtV.js:8
+q0 @ vendor-recharts-BfjPiJtV.js:8
+Dn @ vendor-recharts-BfjPiJtV.js:6
+(anonymous) @ vendor-recharts-BfjPiJtV.js:8
+index-urfIq6m1.js:2 The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+console.warn @ index-urfIq6m1.js:2
+Lb @ vendor-recharts-BfjPiJtV.js:8
+(anonymous) @ vendor-recharts-BfjPiJtV.js:8
+od @ vendor-recharts-BfjPiJtV.js:6
+w0 @ vendor-recharts-BfjPiJtV.js:8
+Q0 @ vendor-recharts-BfjPiJtV.js:8
+Y0 @ vendor-recharts-BfjPiJtV.js:8
+nj @ vendor-recharts-BfjPiJtV.js:8
+$u @ vendor-recharts-BfjPiJtV.js:8
+K0 @ vendor-recharts-BfjPiJtV.js:8
+I @ vendor-recharts-BfjPiJtV.js:1
+F @ vendor-recharts-BfjPiJtV.js:1
+postMessage
+re @ vendor-recharts-BfjPiJtV.js:1
+he @ vendor-recharts-BfjPiJtV.js:1
+e.unstable_scheduleCallback @ vendor-recharts-BfjPiJtV.js:1
+J0 @ vendor-recharts-BfjPiJtV.js:8
+Vt @ vendor-recharts-BfjPiJtV.js:8
+jr @ vendor-recharts-BfjPiJtV.js:8
+WC @ vendor-recharts-BfjPiJtV.js:6
+(anonymous) @ MarketsPage-C824uodu.js:13
+await in (anonymous)
+(anonymous) @ MarketsPage-C824uodu.js:13
+ju @ vendor-recharts-BfjPiJtV.js:8
+ha @ vendor-recharts-BfjPiJtV.js:8
+(anonymous) @ vendor-recharts-BfjPiJtV.js:8
+I @ vendor-recharts-BfjPiJtV.js:1
+F @ vendor-recharts-BfjPiJtV.js:1
+postMessage
+re @ vendor-recharts-BfjPiJtV.js:1
+F @ vendor-recharts-BfjPiJtV.js:1
+postMessage
+re @ vendor-recharts-BfjPiJtV.js:1
+F @ vendor-recharts-BfjPiJtV.js:1
+postMessage
+re @ vendor-recharts-BfjPiJtV.js:1
+F @ vendor-recharts-BfjPiJtV.js:1
+postMessage
+re @ vendor-recharts-BfjPiJtV.js:1
+he @ vendor-recharts-BfjPiJtV.js:1
+e.unstable_scheduleCallback @ vendor-recharts-BfjPiJtV.js:1
+J0 @ vendor-recharts-BfjPiJtV.js:8
+Vt @ vendor-recharts-BfjPiJtV.js:8
+Z0 @ vendor-recharts-BfjPiJtV.js:8
+uj @ vendor-recharts-BfjPiJtV.js:8
+Promise.then
+(anonymous) @ vendor-recharts-BfjPiJtV.js:8
+$0 @ vendor-recharts-BfjPiJtV.js:8
+z0 @ vendor-recharts-BfjPiJtV.js:8
+Cr @ vendor-recharts-BfjPiJtV.js:8
+z0 @ vendor-recharts-BfjPiJtV.js:8
+Cr @ vendor-recharts-BfjPiJtV.js:8
+z0 @ vendor-recharts-BfjPiJtV.js:8
+Cr @ vendor-recharts-BfjPiJtV.js:8
+z0 @ vendor-recharts-BfjPiJtV.js:8
+Cr @ vendor-recharts-BfjPiJtV.js:8
+z0 @ vendor-recharts-BfjPiJtV.js:8
+Cr @ vendor-recharts-BfjPiJtV.js:8
+z0 @ vendor-recharts-BfjPiJtV.js:8
+Cr @ vendor-recharts-BfjPiJtV.js:8
+z0 @ vendor-recharts-BfjPiJtV.js:8
+aj @ vendor-recharts-BfjPiJtV.js:8
+vi @ vendor-recharts-BfjPiJtV.js:8
+q0 @ vendor-recharts-BfjPiJtV.js:8
+Dn @ vendor-recharts-BfjPiJtV.js:6
+(anonymous) @ vendor-recharts-BfjPiJtV.js:8
+index-urfIq6m1.js:2 The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+console.warn @ index-urfIq6m1.js:2
+Lb @ vendor-recharts-BfjPiJtV.js:8
+(anonymous) @ vendor-recharts-BfjPiJtV.js:8
+od @ vendor-recharts-BfjPiJtV.js:6
+w0 @ vendor-recharts-BfjPiJtV.js:8
+Q0 @ vendor-recharts-BfjPiJtV.js:8
+Y0 @ vendor-recharts-BfjPiJtV.js:8
+nj @ vendor-recharts-BfjPiJtV.js:8
+$u @ vendor-recharts-BfjPiJtV.js:8
+K0 @ vendor-recharts-BfjPiJtV.js:8
+I @ vendor-recharts-BfjPiJtV.js:1
+F @ vendor-recharts-BfjPiJtV.js:1
+postMessage
+re @ vendor-recharts-BfjPiJtV.js:1
+he @ vendor-recharts-BfjPiJtV.js:1
+e.unstable_scheduleCallback @ vendor-recharts-BfjPiJtV.js:1
+J0 @ vendor-recharts-BfjPiJtV.js:8
+Vt @ vendor-recharts-BfjPiJtV.js:8
+jr @ vendor-recharts-BfjPiJtV.js:8
+WC @ vendor-recharts-BfjPiJtV.js:6
+(anonymous) @ MarketsPage-C824uodu.js:13
+await in (anonymous)
+(anonymous) @ MarketsPage-C824uodu.js:13
+ju @ vendor-recharts-BfjPiJtV.js:8
+ha @ vendor-recharts-BfjPiJtV.js:8
+(anonymous) @ vendor-recharts-BfjPiJtV.js:8
+I @ vendor-recharts-BfjPiJtV.js:1
+F @ vendor-recharts-BfjPiJtV.js:1
+postMessage
+re @ vendor-recharts-BfjPiJtV.js:1
+F @ vendor-recharts-BfjPiJtV.js:1
+postMessage
+re @ vendor-recharts-BfjPiJtV.js:1
+F @ vendor-recharts-BfjPiJtV.js:1
+postMessage
+re @ vendor-recharts-BfjPiJtV.js:1
+F @ vendor-recharts-BfjPiJtV.js:1
+postMessage
+re @ vendor-recharts-BfjPiJtV.js:1
+he @ vendor-recharts-BfjPiJtV.js:1
+e.unstable_scheduleCallback @ vendor-recharts-BfjPiJtV.js:1
+J0 @ vendor-recharts-BfjPiJtV.js:8
+Vt @ vendor-recharts-BfjPiJtV.js:8
+Z0 @ vendor-recharts-BfjPiJtV.js:8
+uj @ vendor-recharts-BfjPiJtV.js:8
+Promise.then
+(anonymous) @ vendor-recharts-BfjPiJtV.js:8
+$0 @ vendor-recharts-BfjPiJtV.js:8
+z0 @ vendor-recharts-BfjPiJtV.js:8
+Cr @ vendor-recharts-BfjPiJtV.js:8
+z0 @ vendor-recharts-BfjPiJtV.js:8
+Cr @ vendor-recharts-BfjPiJtV.js:8
+z0 @ vendor-recharts-BfjPiJtV.js:8
+Cr @ vendor-recharts-BfjPiJtV.js:8
+z0 @ vendor-recharts-BfjPiJtV.js:8
+Cr @ vendor-recharts-BfjPiJtV.js:8
+z0 @ vendor-recharts-BfjPiJtV.js:8
+Cr @ vendor-recharts-BfjPiJtV.js:8
+z0 @ vendor-recharts-BfjPiJtV.js:8
+Cr @ vendor-recharts-BfjPiJtV.js:8
+z0 @ vendor-recharts-BfjPiJtV.js:8
+aj @ vendor-recharts-BfjPiJtV.js:8
+vi @ vendor-recharts-BfjPiJtV.js:8
+q0 @ vendor-recharts-BfjPiJtV.js:8
+Dn @ vendor-recharts-BfjPiJtV.js:6
+(anonymous) @ vendor-recharts-BfjPiJtV.js:8
+MarketsPage-C824uodu.js:13 ✅ News articles fetched successfully!
+MarketsPage-C824uodu.js:13 📊 Total count in DB: 5952
+MarketsPage-C824uodu.js:13 📰 Articles returned: 50
+MarketsPage-C824uodu.js:13 Sample article: {id: '746f4b3e-c658-4789-9641-dab7524ccac0', title: 'OpenAI to launch new GPT-5.6 model after US freeze', source: 'Alliance News', published_at: '2026-07-08T13:46:19+00:00'}
+index-urfIq6m1.js:7 ✅ Fetched 9 strategies with metrics
+index-urfIq6m1.js:2 ✅ Fetched 7 price points from stock_returns_c for 1M
+index-urfIq6m1.js:2 ✅ Fetched 7 price points from stock_returns_c for 1M
+index-urfIq6m1.js:2 ✅ Fetched 7 price points from stock_returns_c for 1M
+index-urfIq6m1.js:2 ✅ Fetched 7 price points from stock_returns_c for 1M
+index-urfIq6m1.js:2 ✅ Fetched 7 price points from stock_returns_c for 1M
+index-urfIq6m1.js:2 ✅ Fetched 7 price points from stock_returns_c for 1M
+index-urfIq6m1.js:2 ✅ Fetched 7 price points from stock_returns_c for 1M
+index-urfIq6m1.js:2 ✅ Fetched 7 price points from stock_returns_c for 1M
+index-urfIq6m1.js:2 ✅ Fetched 7 price points from stock_returns_c for 1M
+index-urfIq6m1.js:2 ✅ Fetched 7 price points from stock_returns_c for 1M
+index-urfIq6m1.js:2 ✅ Fetched 7 price points from stock_returns_c for 1M
+index-urfIq6m1.js:2 ✅ Fetched 7 price points from stock_returns_c for 1M
+index-urfIq6m1.js:2 ✅ Fetched 7 price points from stock_returns_c for 1M
+index-urfIq6m1.js:7 [SwipeableBalanceCard] Loaded holdings: {count: 0, totalMarketValue: 0, holdings: Array(0)}
+index-urfIq6m1.js:7 [PERIOD_DEBUG parent] RENDER: {activeTab: 'ytd', parentYearStartBasketCents: null, yearStartRands: null, parentSnapshotStartBasketCents: null, startBasketRands: null, …}
+index-urfIq6m1.js:7 [PERIOD_DEBUG parent] RENDER: {activeTab: 'ytd', parentYearStartBasketCents: null, yearStartRands: null, parentSnapshotStartBasketCents: null, startBasketRands: null, …}
+index-urfIq6m1.js:2 ✅ Fetched 7 price points from stock_returns_c for 1M
+index-urfIq6m1.js:2 ✅ Fetched 7 price points from stock_returns_c for 1M
+index-urfIq6m1.js:2 ✅ Fetched 7 price points from stock_returns_c for 1M
+index-urfIq6m1.js:2 ✅ Fetched 7 price points from stock_returns_c for 1M
+index-urfIq6m1.js:2 ✅ Fetched 7 price points from stock_returns_c for 1M
+index-urfIq6m1.js:2 ✅ Fetched 7 price points from stock_returns_c for 1M
+index-urfIq6m1.js:2 ✅ Fetched 7 price points from stock_returns_c for 1M
+index-urfIq6m1.js:2 ✅ Fetched 7 price points from stock_returns_c for 1M
+index-urfIq6m1.js:2 ✅ Fetched 7 price points from stock_returns_c for 1M
+index-urfIq6m1.js:2 ✅ Fetched 7 price points from stock_returns_c for 1M
+index-urfIq6m1.js:2 ✅ Fetched 7 price points from stock_returns_c for 1M
+index-urfIq6m1.js:2 ✅ Fetched 7 price points from stock_returns_c for 1M
+index-urfIq6m1.js:2 ✅ Fetched 7 price points from stock_returns_c for 1M
+index-urfIq6m1.js:2 ✅ Fetched 7 price points from stock_returns_c for 1M
+index-urfIq6m1.js:2 ✅ Fetched 7 price points from stock_returns_c for 1M
+index-urfIq6m1.js:7 [PERIOD_DEBUG parent] RENDER: {activeTab: 'ytd', parentYearStartBasketCents: null, yearStartRands: null, parentSnapshotStartBasketCents: null, startBasketRands: null, …}
+index-urfIq6m1.js:7 [PERIOD_DEBUG parent] RENDER: {activeTab: 'ytd', parentYearStartBasketCents: null, yearStartRands: null, parentSnapshotStartBasketCents: null, startBasketRands: null, …}
+index-urfIq6m1.js:7 [PERIOD_DEBUG parent] RENDER: {activeTab: 'ytd', parentYearStartBasketCents: null, yearStartRands: null, parentSnapshotStartBasketCents: null, startBasketRands: null, …}
+index-urfIq6m1.js:7 [realtime-prices] Tearing down subscription
+index-urfIq6m1.js:7 [realtime-prices] Subscription status: CLOSED
+index-urfIq6m1.js:2 The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+console.warn @ index-urfIq6m1.js:2
+Lb @ vendor-recharts-BfjPiJtV.js:8
+(anonymous) @ vendor-recharts-BfjPiJtV.js:8
+od @ vendor-recharts-BfjPiJtV.js:6
+w0 @ vendor-recharts-BfjPiJtV.js:8
+Q0 @ vendor-recharts-BfjPiJtV.js:8
+Y0 @ vendor-recharts-BfjPiJtV.js:8
+nj @ vendor-recharts-BfjPiJtV.js:8
+$u @ vendor-recharts-BfjPiJtV.js:8
+K0 @ vendor-recharts-BfjPiJtV.js:8
+I @ vendor-recharts-BfjPiJtV.js:1
+F @ vendor-recharts-BfjPiJtV.js:1
+postMessage
+re @ vendor-recharts-BfjPiJtV.js:1
+he @ vendor-recharts-BfjPiJtV.js:1
+e.unstable_scheduleCallback @ vendor-recharts-BfjPiJtV.js:1
+J0 @ vendor-recharts-BfjPiJtV.js:8
+Vt @ vendor-recharts-BfjPiJtV.js:8
+jr @ vendor-recharts-BfjPiJtV.js:8
+WC @ vendor-recharts-BfjPiJtV.js:6
+(anonymous) @ useGiftRegistry-08fihQnH.js:1
+await in (anonymous)
+(anonymous) @ useGiftRegistry-08fihQnH.js:1
+ju @ vendor-recharts-BfjPiJtV.js:8
+ha @ vendor-recharts-BfjPiJtV.js:8
+(anonymous) @ vendor-recharts-BfjPiJtV.js:8
+I @ vendor-recharts-BfjPiJtV.js:1
+F @ vendor-recharts-BfjPiJtV.js:1
+postMessage
+re @ vendor-recharts-BfjPiJtV.js:1
+he @ vendor-recharts-BfjPiJtV.js:1
+e.unstable_scheduleCallback @ vendor-recharts-BfjPiJtV.js:1
+J0 @ vendor-recharts-BfjPiJtV.js:8
+Vt @ vendor-recharts-BfjPiJtV.js:8
+oj @ vendor-recharts-BfjPiJtV.js:8
+Promise.then
+m0 @ vendor-recharts-BfjPiJtV.js:8
+H0 @ vendor-recharts-BfjPiJtV.js:8
+K0 @ vendor-recharts-BfjPiJtV.js:8
+I @ vendor-recharts-BfjPiJtV.js:1
+F @ vendor-recharts-BfjPiJtV.js:1
+postMessage
+re @ vendor-recharts-BfjPiJtV.js:1
+he @ vendor-recharts-BfjPiJtV.js:1
+e.unstable_scheduleCallback @ vendor-recharts-BfjPiJtV.js:1
+J0 @ vendor-recharts-BfjPiJtV.js:8
+aj @ vendor-recharts-BfjPiJtV.js:8
+vi @ vendor-recharts-BfjPiJtV.js:8
+q0 @ vendor-recharts-BfjPiJtV.js:8
+Dn @ vendor-recharts-BfjPiJtV.js:6
+(anonymous) @ vendor-recharts-BfjPiJtV.js:8
+index-urfIq6m1.js:2 The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+console.warn @ index-urfIq6m1.js:2
+Lb @ vendor-recharts-BfjPiJtV.js:8
+(anonymous) @ vendor-recharts-BfjPiJtV.js:8
+od @ vendor-recharts-BfjPiJtV.js:6
+w0 @ vendor-recharts-BfjPiJtV.js:8
+Q0 @ vendor-recharts-BfjPiJtV.js:8
+Y0 @ vendor-recharts-BfjPiJtV.js:8
+nj @ vendor-recharts-BfjPiJtV.js:8
+$u @ vendor-recharts-BfjPiJtV.js:8
+K0 @ vendor-recharts-BfjPiJtV.js:8
+I @ vendor-recharts-BfjPiJtV.js:1
+F @ vendor-recharts-BfjPiJtV.js:1
+postMessage
+re @ vendor-recharts-BfjPiJtV.js:1
+he @ vendor-recharts-BfjPiJtV.js:1
+e.unstable_scheduleCallback @ vendor-recharts-BfjPiJtV.js:1
+J0 @ vendor-recharts-BfjPiJtV.js:8
+Vt @ vendor-recharts-BfjPiJtV.js:8
+jr @ vendor-recharts-BfjPiJtV.js:8
+WC @ vendor-recharts-BfjPiJtV.js:6
+(anonymous) @ useGiftRegistry-08fihQnH.js:1
+await in (anonymous)
+(anonymous) @ useGiftRegistry-08fihQnH.js:1
+ju @ vendor-recharts-BfjPiJtV.js:8
+ha @ vendor-recharts-BfjPiJtV.js:8
+(anonymous) @ vendor-recharts-BfjPiJtV.js:8
+I @ vendor-recharts-BfjPiJtV.js:1
+F @ vendor-recharts-BfjPiJtV.js:1
+postMessage
+re @ vendor-recharts-BfjPiJtV.js:1
+he @ vendor-recharts-BfjPiJtV.js:1
+e.unstable_scheduleCallback @ vendor-recharts-BfjPiJtV.js:1
+J0 @ vendor-recharts-BfjPiJtV.js:8
+Vt @ vendor-recharts-BfjPiJtV.js:8
+oj @ vendor-recharts-BfjPiJtV.js:8
+Promise.then
+m0 @ vendor-recharts-BfjPiJtV.js:8
+H0 @ vendor-recharts-BfjPiJtV.js:8
+K0 @ vendor-recharts-BfjPiJtV.js:8
+I @ vendor-recharts-BfjPiJtV.js:1
+F @ vendor-recharts-BfjPiJtV.js:1
+postMessage
+re @ vendor-recharts-BfjPiJtV.js:1
+he @ vendor-recharts-BfjPiJtV.js:1
+e.unstable_scheduleCallback @ vendor-recharts-BfjPiJtV.js:1
+J0 @ vendor-recharts-BfjPiJtV.js:8
+aj @ vendor-recharts-BfjPiJtV.js:8
+vi @ vendor-recharts-BfjPiJtV.js:8
+q0 @ vendor-recharts-BfjPiJtV.js:8
+Dn @ vendor-recharts-BfjPiJtV.js:6
+(anonymous) @ vendor-recharts-BfjPiJtV.js:8
+GiftRegistryDetailPage-CZf_fMHd.js:1  GET https://mint-development-git-giftregister-tsie-masilos-projects.vercel.app/api/gift-registry/59d760b1-8293-44cd-9756-aabb9f381fea/view-count 404 (Not Found)
+(anonymous) @ GiftRegistryDetailPage-CZf_fMHd.js:1
+await in (anonymous)
+(anonymous) @ GiftRegistryDetailPage-CZf_fMHd.js:1
+ju @ vendor-recharts-BfjPiJtV.js:8
+ha @ vendor-recharts-BfjPiJtV.js:8
+(anonymous) @ vendor-recharts-BfjPiJtV.js:8
+I @ vendor-recharts-BfjPiJtV.js:1
+F @ vendor-recharts-BfjPiJtV.js:1
+postMessage
+re @ vendor-recharts-BfjPiJtV.js:1
+F @ vendor-recharts-BfjPiJtV.js:1
+postMessage
+re @ vendor-recharts-BfjPiJtV.js:1
+he @ vendor-recharts-BfjPiJtV.js:1
+e.unstable_scheduleCallback @ vendor-recharts-BfjPiJtV.js:1
+J0 @ vendor-recharts-BfjPiJtV.js:8
+Vt @ vendor-recharts-BfjPiJtV.js:8
+jr @ vendor-recharts-BfjPiJtV.js:8
+WC @ vendor-recharts-BfjPiJtV.js:6
+(anonymous) @ useGiftRegistry-08fihQnH.js:1
+await in (anonymous)
+(anonymous) @ useGiftRegistry-08fihQnH.js:1
+ju @ vendor-recharts-BfjPiJtV.js:8
+ha @ vendor-recharts-BfjPiJtV.js:8
+(anonymous) @ vendor-recharts-BfjPiJtV.js:8
+I @ vendor-recharts-BfjPiJtV.js:1
+F @ vendor-recharts-BfjPiJtV.js:1
+postMessage
+re @ vendor-recharts-BfjPiJtV.js:1
+he @ vendor-recharts-BfjPiJtV.js:1
+e.unstable_scheduleCallback @ vendor-recharts-BfjPiJtV.js:1
+J0 @ vendor-recharts-BfjPiJtV.js:8
+Vt @ vendor-recharts-BfjPiJtV.js:8
+oj @ vendor-recharts-BfjPiJtV.js:8
+Promise.then
+m0 @ vendor-recharts-BfjPiJtV.js:8
+H0 @ vendor-recharts-BfjPiJtV.js:8
+K0 @ vendor-recharts-BfjPiJtV.js:8
+I @ vendor-recharts-BfjPiJtV.js:1
+F @ vendor-recharts-BfjPiJtV.js:1
+postMessage
+re @ vendor-recharts-BfjPiJtV.js:1
+he @ vendor-recharts-BfjPiJtV.js:1
+e.unstable_scheduleCallback @ vendor-recharts-BfjPiJtV.js:1
+J0 @ vendor-recharts-BfjPiJtV.js:8
+aj @ vendor-recharts-BfjPiJtV.js:8
+vi @ vendor-recharts-BfjPiJtV.js:8
+q0 @ vendor-recharts-BfjPiJtV.js:8
+Dn @ vendor-recharts-BfjPiJtV.js:6
+(anonymous) @ vendor-recharts-BfjPiJtV.js:8
+index-urfIq6m1.js:2 [Notifications] authStateChange event= SIGNED_IN userId= 3401d428-4ed7-4ba1-ae64-4bd16d2485a4
+index-urfIq6m1.js:2 [Notifications] fetchNotifications: userId= 3401d428-4ed7-4ba1-ae64-4bd16d2485a4
+index-urfIq6m1.js:2 [Notifications] fetchNotifications: count= 3 error= none
+index-urfIq6m1.js:7 [useOnboardingStatus] Total Onboarding Status: COMPLETE ✅ {success: true, onboarding: {…}, onboarding_id: '865eb670-45b2-4baf-b3b6-69a57941de3b', is_fully_onboarded: true, flags: {…}}
+GiftRegistrySharePopup-wXFJHSmQ.js:1 [share:mint] ▶ searching for MINT number: TSI5260100626
+GiftRegistrySharePopup-wXFJHSmQ.js:1 [share:mint] auth token: ✅ present
+GiftRegistrySharePopup-wXFJHSmQ.js:1 [share:mint] → GET /api/user/lookup-by-mint?mint_number= TSI5260100626
+GiftRegistrySharePopup-wXFJHSmQ.js:1 [share:mint] ← response 200 {user: {…}}
+GiftRegistrySharePopup-wXFJHSmQ.js:1 [share:mint] ✅ user found: Tsie Test Masilo mint: TSI5260100626
+GiftRegistrySharePopup-wXFJHSmQ.js:1 [share:send-via-found] ▶ sending to found user {email: 'stunnertsie645@gmail.com', firstName: 'Tsie', mintNumber: 'TSI5260100626', panel: 'mint'}
+GiftRegistrySharePopup-wXFJHSmQ.js:1 [share:notify] ▶ sendToMint called {email: 'stunnertsie645@gmail.com', firstName: 'Tsie', lastName: 'Test Masilo', registryId: '59d760b1-8293-44cd-9756-aabb9f381fea'}
+GiftRegistrySharePopup-wXFJHSmQ.js:1 [share:notify] auth token obtained: ✅ present
+GiftRegistrySharePopup-wXFJHSmQ.js:1 [share:notify] beneficiary state: sent (isNudge: false )
+GiftRegistrySharePopup-wXFJHSmQ.js:1 [share:notify] → POST /api/gift-registry/59d760b1-8293-44cd-9756-aabb9f381fea/notify-beneficiary
+GiftRegistrySharePopup-wXFJHSmQ.js:1 [share:notify] ← response 200 {ok: true, sent: false, reason: 'already_sent', state: 'sent'}
+GiftRegistrySharePopup-wXFJHSmQ.js:1 [share:notify] already_sent — updating local state
+GiftRegistrySharePopup-wXFJHSmQ.js:1 [share:id] ▶ searching for SA ID number: 9906215260083
+GiftRegistrySharePopup-wXFJHSmQ.js:1 [share:id] auth token: ✅ present
+GiftRegistrySharePopup-wXFJHSmQ.js:1 [share:id] → GET /api/user/lookup-by-id?id_number= 9906215260083
+GiftRegistrySharePopup-wXFJHSmQ.js:1 [share:id] ← response 200 {user: {…}}
+GiftRegistrySharePopup-wXFJHSmQ.js:1 [share:id] ✅ user found: Tsie Test Masilo
+GiftRegistrySharePopup-wXFJHSmQ.js:1 [share:send-via-found] ▶ sending to found user {email: 'stunnertsie645@gmail.com', firstName: 'Tsie', mintNumber: 'TSI5260100626', panel: 'id'}
+GiftRegistrySharePopup-wXFJHSmQ.js:1 [share:notify] ▶ sendToMint called {email: 'stunnertsie645@gmail.com', firstName: 'Tsie', lastName: 'Test Masilo', registryId: '59d760b1-8293-44cd-9756-aabb9f381fea'}
+GiftRegistrySharePopup-wXFJHSmQ.js:1 [share:notify] auth token obtained: ✅ present
+GiftRegistrySharePopup-wXFJHSmQ.js:1 [share:notify] beneficiary state: sent (isNudge: false )
+GiftRegistrySharePopup-wXFJHSmQ.js:1 [share:notify] → POST /api/gift-registry/59d760b1-8293-44cd-9756-aabb9f381fea/notify-beneficiary
+GiftRegistrySharePopup-wXFJHSmQ.js:1 [share:notify] ← response 200 {ok: true, sent: false, reason: 'already_sent', state: 'sent'}
+GiftRegistrySharePopup-wXFJHSmQ.js:1 [share:notify] already_sent — updating local state
+GiftRegistrySharePopup-wXFJHSmQ.js:1 [share:enter-details] ▶ sending via manually-entered details {email: 'stunnertsie645@gmail.com', firstName: 'Almeerah', lastName: 'Losper'}
+GiftRegistrySharePopup-wXFJHSmQ.js:1 [share:notify] ▶ sendToMint called {email: 'stunnertsie645@gmail.com', firstName: 'Almeerah', lastName: 'Losper', registryId: '59d760b1-8293-44cd-9756-aabb9f381fea'}
+GiftRegistrySharePopup-wXFJHSmQ.js:1 [share:notify] auth token obtained: ✅ present
+GiftRegistrySharePopup-wXFJHSmQ.js:1 [share:notify] beneficiary state: sent (isNudge: false )
+GiftRegistrySharePopup-wXFJHSmQ.js:1 [share:notify] → POST /api/gift-registry/59d760b1-8293-44cd-9756-aabb9f381fea/notify-beneficiary
+GiftRegistrySharePopup-wXFJHSmQ.js:1 [share:notify] ← response 200 {ok: true, sent: false, reason: 'already_sent', state: 'sent'}
+GiftRegistrySharePopup-wXFJHSmQ.js:1 [share:notify] already_sent — updating local state
+GiftRegistrySharePopup-wXFJHSmQ.js:1 [share:email] ▶ searching by email: stunnertsie645@gmail.com
+GiftRegistrySharePopup-wXFJHSmQ.js:1 [share:email] auth token: ✅ present
+GiftRegistrySharePopup-wXFJHSmQ.js:1 [share:email] → GET /api/user/lookup-by-email?email= stunnertsie645@gmail.com
+GiftRegistrySharePopup-wXFJHSmQ.js:1 [share:email] ← response 200 {found: true, user: {…}}
+GiftRegistrySharePopup-wXFJHSmQ.js:1 [share:email] ✅ user found: Tsie Test Masilo
+GiftRegistrySharePopup-wXFJHSmQ.js:1 [share:send-via-found] ▶ sending to found user {email: 'stunnertsie645@gmail.com', firstName: 'Tsie', mintNumber: 'TSI5260100626', panel: 'email'}
+GiftRegistrySharePopup-wXFJHSmQ.js:1 [share:notify] ▶ sendToMint called {email: 'stunnertsie645@gmail.com', firstName: 'Tsie', lastName: 'Test Masilo', registryId: '59d760b1-8293-44cd-9756-aabb9f381fea'}
+GiftRegistrySharePopup-wXFJHSmQ.js:1 [share:notify] auth token obtained: ✅ present
+GiftRegistrySharePopup-wXFJHSmQ.js:1 [share:notify] beneficiary state: sent (isNudge: false )
+GiftRegistrySharePopup-wXFJHSmQ.js:1 [share:notify] → POST /api/gift-registry/59d760b1-8293-44cd-9756-aabb9f381fea/notify-beneficiary
+GiftRegistrySharePopup-wXFJHSmQ.js:1 [share:notify] ← response 200 {ok: true, sent: false, reason: 'already_sent', state: 'sent'}
+GiftRegistrySharePopup-wXFJHSmQ.js:1 [share:notify] already_sent — updating local state
