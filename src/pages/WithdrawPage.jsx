@@ -273,7 +273,7 @@ layout(location=0) in vec2 a_pos;
 void main(){ gl_Position = vec4(a_pos, 0.0, 1.0); }`;
     // Recoloured to purple/black: accumulate a single intensity, then ramp it
     // through purple with a lilac highlight; black where there's no energy.
-    const FRAG = `#version 300 es
+    const FRAG_DEFAULT = `#version 300 es
 precision highp float;
 out vec4 fragColor;
 uniform vec3 iResolution;
@@ -300,6 +300,57 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord){
   fragColor = vec4(col, 1.0);
 }
 void main(){ mainImage(fragColor, gl_FragCoord.xy); }`;
+
+    // Child withdraw: a softer domain-warped "liquid" purple/violet field —
+    // ported to GLSL 300 es (iResolution/iTime uniforms, out fragColor).
+    const FRAG_CHILD = `#version 300 es
+precision highp float;
+out vec4 fragColor;
+uniform vec3 iResolution;
+uniform float iTime;
+
+const float SPEED    = 0.12;
+const float SCALE    = 1.4;
+const float SOFTNESS = 0.9;
+const vec3 C_BLACK = vec3(0.05, 0.04, 0.07);
+const vec3 C_DEEP  = vec3(0.18, 0.05, 0.35);
+const vec3 C_MAIN  = vec3(0.48, 0.32, 0.90);
+const vec3 C_LIGHT = vec3(0.72, 0.62, 0.96);
+
+mat2 rot(float a){ float s = sin(a), c = cos(a); return mat2(c, -s, s, c); }
+float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float noise(vec2 p){
+  vec2 i = floor(p), f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(hash(i), hash(i + vec2(1,0)), f.x),
+             mix(hash(i + vec2(0,1)), hash(i + vec2(1,1)), f.x), f.y);
+}
+float fbm(vec2 p){
+  float v = 0.0, a = 0.5;
+  for (int i = 0; i < 5; i++){ v += a * noise(p); p = rot(0.5) * p * 2.0; a *= 0.5; }
+  return v;
+}
+void main(){
+  vec2 res = iResolution.xy;
+  vec2 uv = (gl_FragCoord.xy - 0.5 * res) / res.y;
+  float t = iTime * SPEED;
+  vec2 p = uv * SCALE;
+  vec2 q = vec2(fbm(p + t * 0.6), fbm(p + vec2(5.2, 1.3) - t * 0.4));
+  vec2 rr = vec2(fbm(p + 3.0 * q + vec2(1.7, 9.2) + t * 0.5),
+                 fbm(p + 3.0 * q + vec2(8.3, 2.8) - t * 0.3));
+  float f = fbm(p + 3.0 * rr);
+  float band = smoothstep(0.2, 0.2 + SOFTNESS, f);
+  vec3 col = mix(C_BLACK, C_DEEP, smoothstep(0.15, 0.45, f));
+  col = mix(col, C_MAIN,  smoothstep(0.35, 0.65, f));
+  col = mix(col, C_LIGHT, smoothstep(0.62, 0.92, f) * band);
+  float sheen = pow(clamp(1.0 - abs(f - 0.7) * 4.0, 0.0, 1.0), 3.0);
+  col += sheen * 0.12 * vec3(0.8, 0.75, 1.0);
+  col *= 1.0 - 0.25 * dot(uv, uv);
+  fragColor = vec4(col, 1.0);
+}`;
+
+    // Child withdraw gets the liquid field; the parent flow keeps the swirl.
+    const FRAG = familyMemberId ? FRAG_CHILD : FRAG_DEFAULT;
 
     const compile = (type, src) => {
       const s = gl.createShader(type);
@@ -354,7 +405,8 @@ void main(){ mainImage(fragColor, gl_FragCoord.xy); }`;
       window.removeEventListener("resize", resize);
       try { gl.deleteBuffer(vbo); gl.deleteVertexArray(vao); gl.deleteProgram(prog); } catch {}
     };
-  }, []);
+    // Recompile if this switches between a parent and a child withdraw.
+  }, [familyMemberId]);
 
   const Avatar = ({ item, size = 42 }) => (
     <div
