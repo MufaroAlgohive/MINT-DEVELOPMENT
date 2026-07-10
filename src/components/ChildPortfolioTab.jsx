@@ -8,6 +8,7 @@ import {
 import { useUserStrategies, useStrategyChartData, useStrategyLivePeriodReturn } from "../lib/useUserStrategies";
 import { useProfile } from "../lib/useProfile";
 import { supabase } from "../lib/supabase";
+import { fetchStrategyCashCents } from "../lib/strategyValuation.js";
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -81,6 +82,27 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest, onWithdraw, 
 
   // strategy hooks — filtered to child
   const { strategies, selectedStrategy, loading: strategiesLoading, selectStrategy } = useUserStrategies(familyMemberId);
+
+  // Child's cash reserve = held 8% execution buffer + any rebalance residual,
+  // scoped to this child. Same source the parent portfolio / withdraw use, so it
+  // reconciles. Shown as the purple "Cash" coin below.
+  const [childCashRands, setChildCashRands] = useState(0);
+  useEffect(() => {
+    let cancelled = false;
+    const stratIds = [...new Set((rawHoldings || []).map((h) => h.strategy_id).filter(Boolean))];
+    if (!profile?.id || !familyMemberId || stratIds.length === 0) { setChildCashRands(0); return; }
+    (async () => {
+      try {
+        const { bufferCentsByStrategy = {}, residualCentsByStrategy = {} } =
+          await fetchStrategyCashCents({ userId: profile.id, familyMemberId, strategyIds: stratIds });
+        if (cancelled) return;
+        const totalCents = stratIds.reduce((s, sid) => s + (bufferCentsByStrategy[sid] || 0) + (residualCentsByStrategy[sid] || 0), 0);
+        setChildCashRands(Math.max(0, totalCents) / 100);
+      } catch { if (!cancelled) setChildCashRands(0); }
+    })();
+    return () => { cancelled = true; };
+  }, [profile?.id, familyMemberId, rawHoldings]);
+
   const [timeFilter, setTimeFilter] = useState("ytd");
   const [tabJustChanged, setTabJustChanged] = useState(false);
   const tabJustChangedTimer = useRef(null);
@@ -1058,6 +1080,29 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest, onWithdraw, 
                           </div>
                         );
                       })}
+
+                      {/* Cash reserve — the held 8% execution buffer + any
+                          rebalance residual. Same purple coin as the parent. */}
+                      {childCashRands > 0 && (
+                        <div className="rounded-2xl bg-white/70 backdrop-blur-xl p-4 shadow-sm border border-violet-100/50">
+                          <div className="flex items-center gap-3 w-full">
+                            <div className="h-11 w-11 rounded-full flex-shrink-0 flex items-center justify-center" style={{ background: "#7C3AED" }}>
+                              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.92)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                                <circle cx="12" cy="12" r="10" />
+                                <path d="M12 6v2m0 8v2M9.5 9.5C9.5 8.4 10.6 7.5 12 7.5s2.5.9 2.5 2c0 2-5 2-5 4 0 1.1 1.1 2 2.5 2s2.5-.9 2.5-2" />
+                              </svg>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-semibold text-slate-900">Cash</p>
+                              <p className="text-xs text-slate-500 font-medium">Execution reserve &amp; residual</p>
+                            </div>
+                            <div className="text-right flex-shrink-0">
+                              <p className="text-sm font-bold text-slate-900">{fmt(childCashRands)}</p>
+                              <p className="text-[10px] text-slate-400">{totalValue + childCashRands > 0 ? ((childCashRands / (totalValue + childCashRands)) * 100).toFixed(1) : "0.0"}% of portfolio</p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </motion.div>
                 </motion.div>
