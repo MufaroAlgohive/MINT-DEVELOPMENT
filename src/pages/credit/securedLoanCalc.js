@@ -10,9 +10,8 @@
  * - Identical fixed installments (DebiCheck ready)
  */
 
-const PRIME_RATE_ANNUAL = 0.105;       // 10.5% per annum
-const MONTHLY_RATE = PRIME_RATE_ANNUAL / 12; // 0.875% per month
-const DAILY_RATE = MONTHLY_RATE / 30;
+const MONTHLY_RATE = 0.04;       // 4% per month
+const DAILY_RATE = MONTHLY_RATE / 30; // Accrued daily
 const SERVICE_FEE_MONTHLY = 69.00;
 const DAILY_SERVICE_FEE = SERVICE_FEE_MONTHLY / 30;
 
@@ -144,4 +143,4 @@ export function calculateSecuredLoan({ principal, originationDate, nextSalaryDat
 export const SECURED_MONTHLY_RATE = MONTHLY_RATE;
 
 /** Expose annual rate for display */
-export const SECURED_ANNUAL_RATE = PRIME_RATE_ANNUAL * 100; // 10.5
+export const SECURED_ANNUAL_RATE = MONTHLY_RATE * 12 * 100; // 48
