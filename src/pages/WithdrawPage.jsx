@@ -7,6 +7,7 @@ import {
 import { supabase } from "../lib/supabase";
 import { getCachedSession } from "../lib/sessionCache.js";
 import { fetchRealizedCentsByStrategy, fetchStrategyCashCents } from "../lib/strategyValuation.js";
+import { useFees } from "../lib/useFees";
 
 /* Sell / withdraw flow — reached by tapping the balance card on Home.
    Cosmic deep-purple particle header fading to white, real holdings as cards,
@@ -128,6 +129,8 @@ export default function WithdrawPage({ onBack, familyMemberId = null, childName 
             // reserve is computed/returned at settlement (not pre-estimated here).
             positionsValue: e.value,
             reserveRefundCents: 0,
+            residualRefundCents: 0,
+            numAssets: 1,
           };
         });
 
@@ -163,9 +166,12 @@ export default function WithdrawPage({ onBack, familyMemberId = null, childName 
         let bufferCentsByStrategy = {};
         let residualCentsByStrategy = {};
         if (stratIds.length && uid) {
+          // Scope to the child when withdrawing for one — otherwise this looks up
+          // the PARENT's buffer/residual (0 for the child) and the reserve line
+          // never shows on a child withdraw.
           [realizedCentsByStrategy, { bufferCentsByStrategy, residualCentsByStrategy }] = await Promise.all([
-            fetchRealizedCentsByStrategy({ userId: uid, strategyIds: stratIds }),
-            fetchStrategyCashCents({ userId: uid, strategyIds: stratIds }),
+            fetchRealizedCentsByStrategy({ userId: uid, familyMemberId, strategyIds: stratIds }),
+            fetchStrategyCashCents({ userId: uid, familyMemberId, strategyIds: stratIds }),
           ]);
         }
 
@@ -190,9 +196,12 @@ export default function WithdrawPage({ onBack, familyMemberId = null, childName 
             up: pnl >= 0,
             pendingSell: s.pendingSell,
             // Breakdown inputs: proceeds = the holdings' market value; the unused
-            // 8% execution reserve (held buffer) is returned on top at full exit.
+            // 8% execution reserve + any rebalance residual are returned on a full
+            // exit. numAssets drives the per-asset custody fee.
             positionsValue: s.value,
             reserveRefundCents: Math.max(0, bufferCentsByStrategy[sid] || 0),
+            residualRefundCents: Math.max(0, residualCentsByStrategy[sid] || 0),
+            numAssets: s.count || 1,
           };
         });
 
@@ -273,7 +282,7 @@ layout(location=0) in vec2 a_pos;
 void main(){ gl_Position = vec4(a_pos, 0.0, 1.0); }`;
     // Recoloured to purple/black: accumulate a single intensity, then ramp it
     // through purple with a lilac highlight; black where there's no energy.
-    const FRAG = `#version 300 es
+    const FRAG_DEFAULT = `#version 300 es
 precision highp float;
 out vec4 fragColor;
 uniform vec3 iResolution;
@@ -300,6 +309,57 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord){
   fragColor = vec4(col, 1.0);
 }
 void main(){ mainImage(fragColor, gl_FragCoord.xy); }`;
+
+    // Child withdraw: a softer domain-warped "liquid" purple/violet field —
+    // ported to GLSL 300 es (iResolution/iTime uniforms, out fragColor).
+    const FRAG_CHILD = `#version 300 es
+precision highp float;
+out vec4 fragColor;
+uniform vec3 iResolution;
+uniform float iTime;
+
+const float SPEED    = 0.12;
+const float SCALE    = 1.4;
+const float SOFTNESS = 0.9;
+const vec3 C_BLACK = vec3(0.05, 0.04, 0.07);
+const vec3 C_DEEP  = vec3(0.18, 0.05, 0.35);
+const vec3 C_MAIN  = vec3(0.48, 0.32, 0.90);
+const vec3 C_LIGHT = vec3(0.72, 0.62, 0.96);
+
+mat2 rot(float a){ float s = sin(a), c = cos(a); return mat2(c, -s, s, c); }
+float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float noise(vec2 p){
+  vec2 i = floor(p), f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(hash(i), hash(i + vec2(1,0)), f.x),
+             mix(hash(i + vec2(0,1)), hash(i + vec2(1,1)), f.x), f.y);
+}
+float fbm(vec2 p){
+  float v = 0.0, a = 0.5;
+  for (int i = 0; i < 5; i++){ v += a * noise(p); p = rot(0.5) * p * 2.0; a *= 0.5; }
+  return v;
+}
+void main(){
+  vec2 res = iResolution.xy;
+  vec2 uv = (gl_FragCoord.xy - 0.5 * res) / res.y;
+  float t = iTime * SPEED;
+  vec2 p = uv * SCALE;
+  vec2 q = vec2(fbm(p + t * 0.6), fbm(p + vec2(5.2, 1.3) - t * 0.4));
+  vec2 rr = vec2(fbm(p + 3.0 * q + vec2(1.7, 9.2) + t * 0.5),
+                 fbm(p + 3.0 * q + vec2(8.3, 2.8) - t * 0.3));
+  float f = fbm(p + 3.0 * rr);
+  float band = smoothstep(0.2, 0.2 + SOFTNESS, f);
+  vec3 col = mix(C_BLACK, C_DEEP, smoothstep(0.15, 0.45, f));
+  col = mix(col, C_MAIN,  smoothstep(0.35, 0.65, f));
+  col = mix(col, C_LIGHT, smoothstep(0.62, 0.92, f) * band);
+  float sheen = pow(clamp(1.0 - abs(f - 0.7) * 4.0, 0.0, 1.0), 3.0);
+  col += sheen * 0.12 * vec3(0.8, 0.75, 1.0);
+  col *= 1.0 - 0.25 * dot(uv, uv);
+  fragColor = vec4(col, 1.0);
+}`;
+
+    // Child withdraw gets the liquid field; the parent flow keeps the swirl.
+    const FRAG = familyMemberId ? FRAG_CHILD : FRAG_DEFAULT;
 
     const compile = (type, src) => {
       const s = gl.createShader(type);
@@ -354,7 +414,8 @@ void main(){ mainImage(fragColor, gl_FragCoord.xy); }`;
       window.removeEventListener("resize", resize);
       try { gl.deleteBuffer(vbo); gl.deleteVertexArray(vao); gl.deleteProgram(prog); } catch {}
     };
-  }, []);
+    // Recompile if this switches between a parent and a child withdraw.
+  }, [familyMemberId]);
 
   const Avatar = ({ item, size = 42 }) => (
     <div
@@ -609,6 +670,9 @@ void main(){ mainImage(fragColor, gl_FragCoord.xy); }`;
    Real-money action: the client must tick an acknowledgement before "Confirm
    sell" unlocks; on confirm we POST and show the server-issued reference. */
 function SellSheet({ item, onClose, onSubmit, onSold, childName = null }) {
+  // Fee rates (CRM-tunable): a withdrawal charges broker + custody only — no
+  // transaction fee, no AUM — and returns the 8% reserve + rebalance residual.
+  const { BROKER_FEE_RATE = 0.0025, ISIN_FEE_PER_ASSET = 25 } = useFees() || {};
   const [ack, setAck] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
@@ -725,20 +789,27 @@ function SellSheet({ item, onClose, onSubmit, onSold, childName = null }) {
 
             {(() => {
               const proceeds = Number(item.positionsValue ?? item.value ?? 0) * frac;
-              // Reserve is only returned on a FULL exit — a partial sell keeps the position open.
+              const numAssets = Math.max(1, Number(item.numAssets) || 1);
+              // Fees: broker (% of proceeds) + custody (per asset). No transaction
+              // fee, no AUM. Reserve + residual are returned only on a FULL exit.
+              const broker = proceeds * BROKER_FEE_RATE;
+              const custody = ISIN_FEE_PER_ASSET * numAssets;
               const reserve = isPartial ? 0 : Math.max(0, Number(item.reserveRefundCents || 0)) / 100;
-              const net = proceeds + reserve;
+              const residual = isPartial ? 0 : Math.max(0, Number(item.residualRefundCents || 0)) / 100;
+              const net = Math.max(0, proceeds - broker - custody + reserve + residual);
               const row = (label, val, opts = {}) => (
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: opts.last ? "none" : "0.5px solid rgba(127,119,221,0.14)" }}>
                   <span style={{ fontSize: opts.strong ? 13 : 12.5, color: opts.strong ? "#26215C" : "#7d72a8", fontWeight: opts.strong ? 500 : 400 }}>{label}</span>
-                  <span style={{ fontSize: opts.strong ? 15 : 13, fontWeight: 500, color: opts.green ? "#0F6E56" : "#26215C", fontVariantNumeric: "tabular-nums" }}>{opts.green && val > 0 ? "+ " : ""}{fmtR(val)}</span>
+                  <span style={{ fontSize: opts.strong ? 15 : 13, fontWeight: 500, color: opts.green ? "#0F6E56" : opts.red ? "#B4415B" : "#26215C", fontVariantNumeric: "tabular-nums" }}>{opts.green && val > 0 ? "+ " : opts.red && val > 0 ? "− " : ""}{fmtR(val)}</span>
                 </div>
               );
               return (
                 <div style={{ marginTop: 16, padding: "4px 16px", borderRadius: 16, background: "#faf8ff", border: "0.5px solid rgba(127,119,221,0.16)" }}>
                   {row("Estimated proceeds", proceeds)}
-                  {row("Sell fee", 0)}
+                  {broker > 0 && row("Broker fee", broker, { red: true })}
                   {reserve > 0 && row("Unused 8% reserve returned", reserve, { green: true })}
+                  {custody > 0 && row(`Custody fee (${numAssets} asset${numAssets === 1 ? "" : "s"})`, custody, { red: true })}
+                  {residual > 0 && row("Rebalance residual returned", residual, { green: true })}
                   {row("Estimated to your wallet", net, { strong: true, last: true })}
                 </div>
               );
@@ -758,8 +829,8 @@ function SellSheet({ item, onClose, onSubmit, onSold, childName = null }) {
               <ShieldAlert size={16} color="#BA7517" style={{ flexShrink: 0, marginTop: 2 }} />
               <div style={{ fontSize: 12, color: "#7d6a3a", lineHeight: 1.6 }}>
                 <p style={{ margin: "0 0 6px" }}>Processed at the next market window and <span style={{ color: "#5a4d1a", fontWeight: 500 }}>cannot be cancelled</span> once submitted.</p>
-                <p style={{ margin: "0 0 6px" }}>Final amount is set by the actual execution price and may differ from the estimate.</p>
-                <p style={{ margin: 0 }}>No sell fee is charged. {Number(item.reserveRefundCents || 0) > 0 ? "Any unused 8% execution reserve from your purchase is returned to your wallet on this full exit." : "Any unused execution reserve from your purchase is returned to your wallet at settlement."}</p>
+                <p style={{ margin: "0 0 6px" }}>Final amounts are set by the actual execution price and may differ from the estimate.</p>
+                <p style={{ margin: 0 }}>A broker &amp; custody fee applies (no transaction or AUM fee). On a full exit your unused 8% execution reserve{Number(item.residualRefundCents || 0) > 0 ? " and any rebalance residual are" : " is"} returned to your wallet.</p>
               </div>
             </div>
 

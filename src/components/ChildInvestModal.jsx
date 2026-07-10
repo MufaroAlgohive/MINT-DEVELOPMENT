@@ -26,6 +26,8 @@ export default function ChildInvestModal({
   const [units, setUnits] = useState(1);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  // Server said this basket already has an unfilled purchase — ask before re-buying.
+  const [dupPending, setDupPending] = useState(false);
   const [feeExpanded, setFeeExpanded] = useState(false);
 
   const [minimum, setMinimum] = useState(strategy?.calculatedMinInvestment || null);
@@ -134,11 +136,12 @@ export default function ChildInvestModal({
   const ytdNum = strategy?.r_ytd != null ? (Math.abs(strategy.r_ytd) <= 1 ? strategy.r_ytd * 100 : strategy.r_ytd) : null;
   const lineColor = (ytdNum ?? 0) > 0 ? "#10b981" : (ytdNum ?? 0) < 0 ? "#ef4444" : "#94a3b8";
 
-  async function handleInvest() {
+  async function handleInvest(force = false) {
     if (isLimitedDiscretion) { setShowDiscretionModal(true); return; }
     if (baseAmountCents <= 0) { setError("Select a valid investment amount."); return; }
     if (insufficient) { setError("Insufficient funds in child's wallet."); return; }
-    setSaving(true); setError("");
+    if (saving) return; // double-tap guard
+    setSaving(true); setError(""); setDupPending(false);
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
@@ -150,10 +153,18 @@ export default function ChildInvestModal({
           strategy_id: strategy.id,
           amount: totalCostCents,
           base_amount: baseAmountCents,
+          units,
+          force,
         }),
       });
       const json = await res.json();
+      // Same basket already pending broker fill → confirm before buying again
+      // (this is what caused accidental double purchases).
+      if (res.status === 409 && json.pending_exists) { setDupPending(true); return; }
       if (!res.ok) { setError(json.error || "Investment failed."); return; }
+      // Let any mounted child views (dashboard/portfolio) refetch immediately so
+      // the pending card shows without leaving and re-entering the app.
+      try { window.dispatchEvent(new CustomEvent("mint:child-invested", { detail: { familyMemberId: child.id, ...json } })); } catch {}
       setStep("success");
     } catch { setError("Something went wrong."); } finally { setSaving(false); }
   }
@@ -167,7 +178,7 @@ export default function ChildInvestModal({
       if (!session?.user) { setStep("amount"); return; }
 
       const { data: childHoldings } = await supabase
-        .from("stock_holdings")
+        .from("stock_holdings_c")
         .select("strategy_id")
         .eq("family_member_id", child.id);
 
@@ -528,8 +539,35 @@ export default function ChildInvestModal({
                 </div>
               )}
 
+              {/* Duplicate-pending confirm — the same basket already has an
+                  unfilled purchase; make buying again an explicit choice. */}
+              {dupPending && (
+                <div className="rounded-xl bg-violet-50 border border-violet-200 px-4 py-3 mb-4">
+                  <p className="text-xs font-bold text-violet-800">You already have a pending purchase of this basket</p>
+                  <p className="text-[11px] text-violet-600 mt-1">
+                    {childFirstName}'s earlier order is waiting for the broker to fill — it can take a little while to show as invested. Buy it again anyway?
+                  </p>
+                  <div className="mt-3 flex gap-2">
+                    <button
+                      onClick={() => setDupPending(false)}
+                      className="flex-1 rounded-xl border border-violet-200 bg-white py-2.5 text-xs font-bold text-violet-700 active:scale-[0.98]"
+                    >
+                      No, keep waiting
+                    </button>
+                    <button
+                      onClick={() => handleInvest(true)}
+                      disabled={saving}
+                      className="flex-1 rounded-xl py-2.5 text-xs font-bold text-white active:scale-[0.98] disabled:opacity-50"
+                      style={{ background: "linear-gradient(135deg,#4f46e5,#7c3aed)" }}
+                    >
+                      Yes, buy again
+                    </button>
+                  </div>
+                </div>
+              )}
+
               <button
-                onClick={handleInvest}
+                onClick={() => handleInvest(false)}
                 disabled={insufficient || baseAmountCents <= 0 || saving || !minimum}
                 className="w-full rounded-2xl py-4 text-sm font-bold text-white shadow-lg active:scale-[0.98] transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                 style={{ background: "linear-gradient(135deg,#4f46e5,#7c3aed)" }}

@@ -8,6 +8,7 @@ import {
 import { useUserStrategies, useStrategyChartData, useStrategyLivePeriodReturn } from "../lib/useUserStrategies";
 import { useProfile } from "../lib/useProfile";
 import { supabase } from "../lib/supabase";
+import { fetchStrategyCashCents } from "../lib/strategyValuation.js";
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -62,6 +63,17 @@ const computeChildYtdTicks = (chartData) => {
 
 const PIE_COLORS = ["#4C1D95","#5B21B6","#6D28D9","#7C3AED","#8B5CF6","#A78BFA","#C4B5FD","#DDD6FE","#EDE9FE","#F5F3FF"];
 
+// Same spring/stagger entrance used on the child Home tab (ChildDashboardPage) —
+// reused here so Portfolio has the same "alive" feel instead of static cards.
+const container = {
+  hidden: {},
+  show: { transition: { staggerChildren: 0.07, delayChildren: 0.04 } },
+};
+const item = {
+  hidden: { opacity: 0, y: 16, scale: 0.98 },
+  show: { opacity: 1, y: 0, scale: 1, transition: { type: "spring", stiffness: 340, damping: 28 } },
+};
+
 // ─── ChildPortfolioTab ─────────────────────────────────────────────────────────
 
 const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest, onWithdraw, livePriceMap: livePriceMapProp = null }) => {
@@ -70,6 +82,27 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest, onWithdraw, 
 
   // strategy hooks — filtered to child
   const { strategies, selectedStrategy, loading: strategiesLoading, selectStrategy } = useUserStrategies(familyMemberId);
+
+  // Child's cash reserve = held 8% execution buffer + any rebalance residual,
+  // scoped to this child. Same source the parent portfolio / withdraw use, so it
+  // reconciles. Shown as the purple "Cash" coin below.
+  const [childCashRands, setChildCashRands] = useState(0);
+  useEffect(() => {
+    let cancelled = false;
+    const stratIds = [...new Set((rawHoldings || []).map((h) => h.strategy_id).filter(Boolean))];
+    if (!profile?.id || !familyMemberId || stratIds.length === 0) { setChildCashRands(0); return; }
+    (async () => {
+      try {
+        const { bufferCentsByStrategy = {}, residualCentsByStrategy = {} } =
+          await fetchStrategyCashCents({ userId: profile.id, familyMemberId, strategyIds: stratIds });
+        if (cancelled) return;
+        const totalCents = stratIds.reduce((s, sid) => s + (bufferCentsByStrategy[sid] || 0) + (residualCentsByStrategy[sid] || 0), 0);
+        setChildCashRands(Math.max(0, totalCents) / 100);
+      } catch { if (!cancelled) setChildCashRands(0); }
+    })();
+    return () => { cancelled = true; };
+  }, [profile?.id, familyMemberId, rawHoldings]);
+
   const [timeFilter, setTimeFilter] = useState("ytd");
   const [tabJustChanged, setTabJustChanged] = useState(false);
   const tabJustChangedTimer = useRef(null);
@@ -537,25 +570,31 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest, onWithdraw, 
             exit={{ opacity: 0, x: tabDirection * -40 }}
             transition={{ duration: 0.3, ease: [0.25, 0.46, 0.45, 0.94] }}
           >
-            <div className="px-4 pb-6 space-y-4">
+            <motion.div variants={container} initial="hidden" animate="show" className="px-4 pb-6 space-y-4">
               {strategies.length === 0 && !strategiesLoading ? (
-                <div className="rounded-3xl bg-white p-8 shadow-sm border border-slate-100 text-center">
+                <motion.div variants={item} className="rounded-3xl bg-white p-8 shadow-sm border border-slate-100 text-center">
                   <div className="mx-auto mb-4 h-16 w-16 rounded-full bg-violet-50 flex items-center justify-center">
                     <TrendingUp className="h-7 w-7 text-violet-500" />
                   </div>
                   <p className="text-base font-semibold text-slate-900 mb-1">No strategies yet</p>
                   <p className="text-sm text-slate-500 mb-5">Start investing on {child?.first_name || "their"}'s behalf to build their portfolio.</p>
-                  <button
+                  <motion.button
+                    whileTap={{ scale: 0.97 }}
                     onClick={onOpenInvest}
                     className="w-full py-3 rounded-full bg-gradient-to-r from-slate-800 to-slate-900 text-sm font-semibold uppercase tracking-[0.1em] text-white shadow-lg"
                   >
                     Browse Strategies
-                  </button>
-                </div>
+                  </motion.button>
+                </motion.div>
               ) : (
                 <>
-                  {/* Strategy selector + time filters */}
-                  <div className="flex items-center justify-between">
+                  {/* Hero card: strategy selector, value + P&L, equity curve —
+                      glass card + soft purple glow so it reads as a real "hero",
+                      matching the Home tab's balance card instead of floating flat. */}
+                  <motion.div variants={item} className="relative rounded-[28px] bg-white/90 backdrop-blur-xl p-5 shadow-xl border border-white/70 overflow-hidden">
+                    <div className="pointer-events-none absolute -top-10 -right-10 h-40 w-40 rounded-full bg-violet-300/20 blur-3xl" />
+                    <div className="pointer-events-none absolute -bottom-14 -left-10 h-40 w-40 rounded-full bg-purple-300/15 blur-3xl" />
+                  <div className="relative flex items-center justify-between">
                     <div className="relative" ref={dropdownRef}>
                       <button
                         onClick={() => setShowStrategyDropdown(!showStrategyDropdown)}
@@ -759,10 +798,11 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest, onWithdraw, 
                       </ResponsiveContainer>
                     )}
                   </div>
+                  </motion.div>
 
                   {/* Portfolio Holdings */}
                   {allStrategyHoldings.length > 0 && (
-                    <div className="rounded-3xl bg-white/80 backdrop-blur-xl p-5 shadow-sm border border-slate-100">
+                    <motion.div variants={item} className="rounded-3xl bg-white/80 backdrop-blur-xl p-5 shadow-sm border border-slate-100">
                       <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-900 mb-1">Portfolio Holdings</p>
                       <p className="text-xs text-slate-400 mb-4">All holdings by weight</p>
                       <div className="space-y-3">
@@ -802,29 +842,33 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest, onWithdraw, 
                           </div>
                         ))}
                       </div>
-                    </div>
+                    </motion.div>
                   )}
 
-                  {/* Invest more button */}
-                  <button
-                    onClick={onOpenInvest}
-                    className="w-full py-3.5 rounded-full bg-gradient-to-r from-slate-800 to-slate-900 text-sm font-semibold uppercase tracking-[0.1em] text-white shadow-lg"
-                  >
-                    Invest More
-                  </button>
-
-                  {/* Withdraw — sell the child's holdings (parent-operated). */}
-                  {onWithdraw && (
-                    <button
-                      onClick={onWithdraw}
-                      className="mt-3 w-full py-3.5 rounded-full border border-slate-200 bg-white text-sm font-semibold uppercase tracking-[0.1em] text-slate-700 shadow-sm active:scale-[0.99]"
+                  {/* Invest / Withdraw CTAs */}
+                  <motion.div variants={item}>
+                    <motion.button
+                      whileTap={{ scale: 0.97 }}
+                      onClick={onOpenInvest}
+                      className="w-full py-3.5 rounded-full bg-gradient-to-r from-slate-800 to-slate-900 text-sm font-semibold uppercase tracking-[0.1em] text-white shadow-lg"
                     >
-                      Withdraw
-                    </button>
-                  )}
+                      Invest More
+                    </motion.button>
+
+                    {/* Withdraw — sell the child's holdings (parent-operated). */}
+                    {onWithdraw && (
+                      <motion.button
+                        whileTap={{ scale: 0.97 }}
+                        onClick={onWithdraw}
+                        className="mt-3 w-full py-3.5 rounded-full border border-slate-200 bg-white text-sm font-semibold uppercase tracking-[0.1em] text-slate-700 shadow-sm"
+                      >
+                        Withdraw
+                      </motion.button>
+                    )}
+                  </motion.div>
                 </>
               )}
-            </div>
+            </motion.div>
           </motion.div>
         )}
 
@@ -865,9 +909,9 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest, onWithdraw, 
               const pagedHoldings = holdingsData.slice(holdingsPage * HOLDINGS_PER_PAGE, (holdingsPage + 1) * HOLDINGS_PER_PAGE);
 
               return (
-                <div className="px-4 pb-6 space-y-4">
+                <motion.div variants={container} initial="hidden" animate="show" className="px-4 pb-6 space-y-4">
                   {/* Summary card with pie chart */}
-                  <div className="rounded-3xl bg-white/80 backdrop-blur-xl p-5 shadow-sm border border-slate-100">
+                  <motion.div variants={item} className="rounded-3xl bg-white/80 backdrop-blur-xl p-5 shadow-sm border border-slate-100">
                     <div className="flex items-center justify-between">
                       <div className="flex flex-col gap-3">
                         <div>
@@ -923,10 +967,10 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest, onWithdraw, 
                         </ResponsiveContainer>
                       </div>
                     </div>
-                  </div>
+                  </motion.div>
 
                   {/* YOUR ASSETS list */}
-                  <div className="rounded-3xl bg-white/80 backdrop-blur-xl p-5 shadow-sm border border-slate-100">
+                  <motion.div variants={item} className="rounded-3xl bg-white/80 backdrop-blur-xl p-5 shadow-sm border border-slate-100">
                     <div className="flex items-center justify-between mb-4">
                       <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-900">Your Assets</p>
                       {totalPages > 1 && (
@@ -964,7 +1008,7 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest, onWithdraw, 
                                       <div className="text-right flex-shrink-0">
                                         <p className="text-sm font-bold text-slate-900">{stock.isPending ? "—" : fmt(stock.currentValue)}</p>
                                         {stock.isPending ? (
-                                          <p className="text-xs text-amber-500 font-semibold">Pending</p>
+                                          <p className="text-xs text-violet-600 font-semibold">Pending</p>
                                         ) : (
                                           <p className={`text-xs font-semibold ${changePnl >= 0 ? "text-emerald-500" : "text-rose-500"}`}>
                                             {changePnl >= 0 ? "+" : ""}{changePnl.toFixed(1)}% Total Return
@@ -994,7 +1038,7 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest, onWithdraw, 
                                   <div className="text-right flex-shrink-0">
                                     <p className="text-sm font-bold text-slate-900">{stock.isPending ? "—" : fmt(stock.currentValue)}</p>
                                     {stock.isPending ? (
-                                      <p className="text-xs text-amber-500 font-semibold">Pending</p>
+                                      <p className="text-xs text-violet-600 font-semibold">Pending</p>
                                     ) : (
                                       <p className={`text-xs font-semibold ${changePnl >= 0 ? "text-emerald-500" : "text-rose-500"}`}>
                                         {changePnl >= 0 ? "+" : ""}{changePnl.toFixed(1)}%
@@ -1036,9 +1080,32 @@ const ChildPortfolioTab = ({ child, rawHoldings = [], onOpenInvest, onWithdraw, 
                           </div>
                         );
                       })}
+
+                      {/* Cash reserve — the held 8% execution buffer + any
+                          rebalance residual. Same purple coin as the parent. */}
+                      {childCashRands > 0 && (
+                        <div className="rounded-2xl bg-white/70 backdrop-blur-xl p-4 shadow-sm border border-violet-100/50">
+                          <div className="flex items-center gap-3 w-full">
+                            <div className="h-11 w-11 rounded-full flex-shrink-0 flex items-center justify-center" style={{ background: "#7C3AED" }}>
+                              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.92)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                                <circle cx="12" cy="12" r="10" />
+                                <path d="M12 6v2m0 8v2M9.5 9.5C9.5 8.4 10.6 7.5 12 7.5s2.5.9 2.5 2c0 2-5 2-5 4 0 1.1 1.1 2 2.5 2s2.5-.9 2.5-2" />
+                              </svg>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-semibold text-slate-900">Cash</p>
+                              <p className="text-xs text-slate-500 font-medium">Execution reserve &amp; residual</p>
+                            </div>
+                            <div className="text-right flex-shrink-0">
+                              <p className="text-sm font-bold text-slate-900">{fmt(childCashRands)}</p>
+                              <p className="text-[10px] text-slate-400">{totalValue + childCashRands > 0 ? ((childCashRands / (totalValue + childCashRands)) * 100).toFixed(1) : "0.0"}% of portfolio</p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
-                  </div>
-                </div>
+                  </motion.div>
+                </motion.div>
               );
             })()}
           </motion.div>

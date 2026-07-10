@@ -1,6 +1,19 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Bell, Eye, EyeOff, ChevronDown, ChevronRight, ChevronLeft, ArrowLeft, TrendingUp, TrendingDown, Plus, ArrowUpRight } from "lucide-react";
+import { Bell, Eye, EyeOff, ChevronDown, ChevronRight, ChevronLeft, ArrowLeft, TrendingUp, TrendingDown, Plus, ArrowUpRight, HelpCircle } from "lucide-react";
+import SpotlightTour from "../components/SpotlightTour";
+
+// First-timer walkthrough for the Portfolio page. Steps whose section isn't on
+// the page (e.g. no goals yet) are skipped automatically by SpotlightTour.
+const PF_TOUR_SEEN_KEY = "mint_pf_tour_seen_v1";
+const PF_TOUR_STEPS = [
+  { selector: '[data-coach-pf-summary]', title: "Total Portfolio Value", body: "Everything your money is worth right now, plus how many assets you hold across baskets, stocks and cash. It updates live with the market." },
+  { selector: '[data-coach-pf-pie]', title: "Your money at a glance", body: "Each slice of this chart is one of your assets — the bigger the slice, the more of your portfolio it makes up. Tap a slice to highlight it." },
+  { selector: '[data-coach-pf-assets]', title: "Your Assets", body: "Every basket and stock you own, with its live value, total return, and share of your portfolio. Cash is here too — your execution reserve and rebalance leftovers, shown as Buffer & residual." },
+  { selector: '[data-coach-pf-other]', title: "Other Stocks", body: "Stocks on MINT that you don't own yet. Tap any of them to see its live price and chart — a quick way to scout your next investment." },
+  { selector: '[data-coach-pf-goals]', title: "Your Goals", body: "Your savings goals live here — each shows its target date, how much you've put in, and how far you still have to go. Investing toward a goal fills the bar." },
+  { selector: '[data-coach-pf-withdraw]', title: "Cash out anytime", body: "When you want your money back, tap Withdraw to sell a holding or a whole basket. The proceeds are credited straight to your wallet." },
+];
 import { Area, ComposedChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip, PieChart, Pie, Cell, ReferenceLine } from 'recharts';
 import { useInvestments } from "../lib/useFinancialData";
 import { useRealtimePrices } from "../lib/useRealtimePrices";
@@ -81,8 +94,12 @@ const getReturnColor = (value) => {
 };
 
 
-const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies, onBack, deepLink, onDeepLinkConsumed, onOpenStockDetail, onWithdraw }) => {
+const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies, onBack, deepLink, onDeepLinkConsumed, onOpenStockDetail, onWithdraw, isActive = false }) => {
   const [balanceVisible, setBalanceVisible] = useState(true);
+  const [showTour, setShowTour] = useState(false);
+  const [isDocumentVisible, setIsDocumentVisible] = useState(
+    typeof document === "undefined" ? true : document.visibilityState === "visible"
+  );
   const [activeTab, setActiveTab] = useState("holdings");
   const [timeFilter, setTimeFilter] = useState("ytd");
   const [failedLogos, setFailedLogos] = useState({});
@@ -101,6 +118,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
   const [modalTimeFilter, setModalTimeFilter] = useState("W");
   const expandedRowRef = useRef(null);
   const tabJustChangedTimer = useRef(null);
+  const tourStartTimerRef = useRef(null);
   const [tabRipple, setTabRipple] = useState(null);
   const [tabDirection, setTabDirection] = useState(0);
   const [calendarYear, setCalendarYear] = useState(new Date().getFullYear());
@@ -521,6 +539,62 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
   }, [rawHoldings, strategies, stocksList, liveQuotes]);
 
   const holdings = allStrategyHoldings;
+
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      setIsDocumentVisible(document.visibilityState === "visible");
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+  }, []);
+
+  const clearTourStartTimer = useCallback(() => {
+    if (tourStartTimerRef.current) {
+      clearTimeout(tourStartTimerRef.current);
+      tourStartTimerRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    if (isActive && isDocumentVisible) return;
+    clearTourStartTimer();
+    setShowTour(false);
+  }, [clearTourStartTimer, isActive, isDocumentVisible]);
+
+  // First-visit walkthrough: auto-plays EXACTLY ONCE ever. It's marked "seen"
+  // the instant it opens (not on finish) — so if the user switches tabs mid-tour
+  // it still never auto-plays again; after that the ? button is the only way to
+  // replay it. Only scheduled while the portfolio tab is actually visible.
+  useEffect(() => {
+    clearTourStartTimer();
+    if (!isActive || !isDocumentVisible || showTour) return;
+    if (holdingsLoading || !onWithdraw || allStrategyHoldings.length === 0) return;
+    let seen = false;
+    try { seen = localStorage.getItem(PF_TOUR_SEEN_KEY) === "1"; } catch {}
+    if (seen) return;
+    tourStartTimerRef.current = setTimeout(() => {
+      if (isActive && document.visibilityState === "visible") {
+        try { localStorage.setItem(PF_TOUR_SEEN_KEY, "1"); } catch {} // consume the one auto-play now
+        setShowTour(true);
+      }
+      tourStartTimerRef.current = null;
+    }, 180);
+    return clearTourStartTimer;
+  }, [
+    allStrategyHoldings.length,
+    clearTourStartTimer,
+    holdingsLoading,
+    isActive,
+    isDocumentVisible,
+    onWithdraw,
+    showTour,
+  ]);
+
+  const closeTour = useCallback(() => {
+    setShowTour(false);
+    try { localStorage.setItem(PF_TOUR_SEEN_KEY, "1"); } catch {}
+  }, []);
 
   // ── direct strategy holdings ──────────────────────────────────────────────
   useEffect(() => {
@@ -1122,12 +1196,21 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
               />
               <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white mt-1">{fullName}</p>
             </div>
-            <button
-              className="flex h-10 w-10 items-center justify-center rounded-full border border-white/20 backdrop-blur-sm transition hover:bg-white/10"
-              onClick={onOpenNotifications}
-            >
-              <Bell className="h-5 w-5 text-white/90" />
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                aria-label="How this page works"
+                className="flex h-10 w-10 items-center justify-center rounded-full border border-white/20 backdrop-blur-sm transition hover:bg-white/10"
+                onClick={() => setShowTour(true)}
+              >
+                <HelpCircle className="h-5 w-5 text-white/90" />
+              </button>
+              <button
+                className="flex h-10 w-10 items-center justify-center rounded-full border border-white/20 backdrop-blur-sm transition hover:bg-white/10"
+                onClick={onOpenNotifications}
+              >
+                <Bell className="h-5 w-5 text-white/90" />
+              </button>
+            </div>
           </header>
 
           {/* Account balance */}
@@ -2301,7 +2384,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                     style={{ background: 'rgba(255,255,255,0.7)', fontFamily: "'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif" }}
                   >
                     <div className="flex items-center justify-between">
-                      <div className="flex flex-col gap-3">
+                      <div className="flex flex-col gap-3" data-coach-pf-summary="true">
                         <div>
                           <p className="text-xs text-slate-500 mb-0.5">Total Portfolio Value</p>
                           <p className="text-2xl font-bold text-slate-900">{formatCurrency(totalValue)}</p>
@@ -2316,7 +2399,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                       </div>
 
                       {/* Right: Pie Chart */}
-                      <div className="relative h-44 w-44 -mr-4 md:mr-0" style={{ pointerEvents: isLoadingData ? 'none' : 'auto', opacity: isLoadingData ? 0.5 : 1, transition: 'opacity 0.3s ease' }}>
+                      <div data-coach-pf-pie="true" className="relative h-44 w-44 -mr-4 md:mr-0" style={{ pointerEvents: isLoadingData ? 'none' : 'auto', opacity: isLoadingData ? 0.5 : 1, transition: 'opacity 0.3s ease' }}>
                         <ResponsiveContainer width="100%" height="100%">
                           <PieChart>
                             <defs>
@@ -2405,6 +2488,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                     return (
                       <>
                         <section
+                          data-coach-pf-assets="true"
                           className="rounded-3xl bg-white/70 backdrop-blur-xl p-5 shadow-sm border border-slate-100/50"
                           style={{ fontFamily: "'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif" }}
                         >
@@ -2679,7 +2763,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                           const otherPagedStocks = holdingsOtherStocks.slice(otherStocksPage * STOCKS_PER_PAGE, (otherStocksPage + 1) * STOCKS_PER_PAGE);
                           if (holdingsOtherStocks.length === 0) return null;
                           return (
-                            <section className="rounded-3xl bg-white/70 backdrop-blur-xl p-5 shadow-sm border border-slate-100/50 mt-4">
+                            <section data-coach-pf-other="true" className="rounded-3xl bg-white/70 backdrop-blur-xl p-5 shadow-sm border border-slate-100/50 mt-4">
                               <div className="flex items-center justify-between mb-4">
                                 <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-900">Other Stocks</p>
                                 {otherTotalPages > 1 && (
@@ -2746,7 +2830,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                         })()}
 
                         {investmentGoals && investmentGoals.length > 0 && (
-                          <section className="rounded-3xl bg-white/70 backdrop-blur-xl p-5 shadow-sm border border-slate-100/50 mt-4">
+                          <section data-coach-pf-goals="true" className="rounded-3xl bg-white/70 backdrop-blur-xl p-5 shadow-sm border border-slate-100/50 mt-4">
                             <div className="flex items-center justify-between mb-4">
                               <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-900">Your Goals</p>
                               <span className="text-xs font-semibold text-violet-600 bg-violet-50 rounded-full px-2 py-0.5">{investmentGoals.length}</span>
@@ -2814,7 +2898,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
             {/* Withdraw — sell-flow entry point (relocated here from the balance card) */}
             {!holdingsLoading && allStrategyHoldings.length > 0 && onWithdraw && (
               <div className="relative mx-auto w-full max-w-sm px-4 pb-10 md:max-w-md md:px-8">
-                <div className="rounded-3xl border border-violet-100 bg-gradient-to-br from-white to-violet-50/40 p-5 shadow-sm">
+                <div data-coach-pf-withdraw="true" className="rounded-3xl border border-violet-100 bg-gradient-to-br from-white to-violet-50/40 p-5 shadow-sm">
                   <div className="flex items-center gap-3">
                     <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-2xl bg-violet-100 text-violet-600">
                       <ArrowUpRight size={20} />
@@ -3217,6 +3301,11 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
           );
         })()}
       </AnimatePresence>
+
+      {/* First-timer walkthrough. Render is HARD-gated on this tab being the
+          active, visible one — the tour portals to <body> at a high z-index, so
+          without this it would appear over other tabs / the swipe-back preview. */}
+      <SpotlightTour open={showTour && isActive && isDocumentVisible} steps={PF_TOUR_STEPS} onClose={closeTour} />
 
     </div>
   );

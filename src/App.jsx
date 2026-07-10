@@ -1010,6 +1010,7 @@ const App = () => {
               onOpenInvest={noOp}
               onOpenStrategies={noOp}
               onWithdraw={() => { setWithdrawChild(null); navigateTo("withdraw"); }}
+              isActive={false}
             />
           </AppLayout>
         );
@@ -1473,6 +1474,7 @@ const App = () => {
                   onWithdraw={() => { setWithdrawChild(null); navigateTo("withdraw"); }}
                   deepLink={portfolioDeepLink}
                   onDeepLinkConsumed={() => setPortfolioDeepLink(null)}
+                  isActive={currentPage === "investments"}
                 />
               </AppLayout>
             )}

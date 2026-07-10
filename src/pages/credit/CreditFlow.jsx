@@ -37,6 +37,11 @@ const bandFor = (s) => {
   return "Below average";
 };
 
+// 1 → "1st", 22 → "22nd" — for the detected pay date.
+const ordinal = (n) => { const s = ["th", "st", "nd", "rd"], v = n % 100; return n + (s[(v - 20) % 10] || s[v] || s[0]); };
+// Friendly labels for flagged-transaction categories from detect-income.
+const FLAG_LABELS = { gambling: "Gambling", betting: "Betting", casino: "Casino", lottery: "Lottery", crypto: "Crypto", payday_loan: "Short-term loan", other_high_risk: "High-risk" };
+
 // Normalise a South African mobile number to local 10-digit form (0XXXXXXXXX).
 // Accepts "+27 82 123 4567", "2782...", "082 123 4567" etc. Returns "" if it
 // can't be coerced into a valid 10-digit SA mobile (must start 0, then 6/7/8).
@@ -186,8 +191,22 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
   const [statementUploading, setStatementUploading] = useState(false);
   const [statementDetecting, setStatementDetecting] = useState(false);
   const [statementError, setStatementError] = useState("");
+  const [statementPath, setStatementPath] = useState("");   // uploaded PDF path, for retry
+  const [statementRetryable, setStatementRetryable] = useState(false); // AI busy → show Try again
   // Gemini's salary-detection draft — the user confirms/edits before it becomes monthlyIncome.
   const [incomeDetection, setIncomeDetection] = useState(null);
+  const [showFlagged, setShowFlagged] = useState(false); // expand the flagged-transactions list
+  const [checkStep, setCheckStep] = useState(0);         // progressive reveal of the checks (0→4)
+
+  // Reveal the statement checks one-by-one once a result is in — each row spins
+  // until "found", then ticks green. Purely presentational (the result arrives
+  // all at once); it makes the wait feel like live verification, not a hang.
+  useEffect(() => {
+    if (!incomeDetection) { setCheckStep(0); return; }
+    setCheckStep(0);
+    const timers = [1, 2, 3, 4].map((i) => setTimeout(() => setCheckStep(i), i * 750));
+    return () => timers.forEach(clearTimeout);
+  }, [incomeDetection]);
   const [incomeSaving, setIncomeSaving] = useState(false);
   // Address (Experian requires street + suburb + postal). Prompted if missing/rejected.
   const [addrPrompt, setAddrPrompt] = useState(false);
@@ -465,6 +484,19 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
       // Never route an application with no contactable number — the lender intake
       // rejects it. Prompt for it inline instead (finally clears the loader).
       if (!borrowerPhone) { setNeedPhone(true); return; }
+      // Bureau result forwarded to the lender (informational, so their reviewer
+      // can see MINT's bureau score). Field names match EXACTLY what the lender
+      // reads: creditScore / scoreBand / riskCategory / enquiriesLast12Months /
+      // pulledAt / raw. Sent as `bureau` and mirrored to `creditProfile` (the
+      // shape AlgoLend stores on the quote request). Omitted when no score yet.
+      const bureau = (Number.isFinite(Number(score)) && Number(score) > 0)
+        ? {
+            creditScore: Number(score),
+            scoreBand: scoreBand || bandFor(Number(score)),
+            riskCategory: scoreBand || bandFor(Number(score)),
+            pulledAt: creditAt || undefined,
+          }
+        : null;
       const res = await fetch(`${ALGOLEND_URL}/api/marketplace/evaluate`, {
         method: "POST",
         headers: {
@@ -483,6 +515,8 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
           requestedAmount: Number(app.requested_amount),
           termMonths: Number(app.requested_term_months),
           mintUserId: email,
+          bureau,
+          creditProfile: bureau,
         }),
       });
       const data = await res.json();
@@ -499,7 +533,7 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
     } finally {
       setAlgolendLoading(false);
     }
-  }, [score, profile, monthlyIncome, idOnFile, idNumber, phoneOnFile, phone]);
+  }, [score, scoreBand, creditAt, profile, monthlyIncome, idOnFile, idNumber, phoneOnFile, phone]);
 
   // Save the number entered on the offers step's last-resort prompt, then retry
   // the evaluation so offers load with the borrower now fully contactable.
@@ -700,6 +734,40 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
     }
   }, [saveCreditFlag]);
 
+  // Run (or re-run) AI detection on an already-uploaded statement. Extracted so
+  // the "Try again" button can retry without re-uploading. Sets statementRetryable
+  // when the reader is just busy (Gemini 503), so the UI can offer a retry.
+  const runIncomeDetection = useCallback(async (path) => {
+    if (!path) return;
+    setStatementError("");
+    setStatementRetryable(false);
+    setStatementDetecting(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      const res = await fetch("/api/credit/detect-income", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ path, months: statementMonths }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) {
+        if (data.retryable) setStatementRetryable(true);
+        throw new Error(data.error || "Could not analyse statement");
+      }
+      setIncomeDetection(data.result);
+      if (data.result?.is_salary_detected && data.result.estimated_monthly_income > 0) {
+        setMonthlyIncome(Math.round(Number(data.result.estimated_monthly_income)));
+      }
+      await saveCreditFlag({ credit_income_ai_result: data.result, credit_income_ai_at: new Date().toISOString() });
+    } catch (err) {
+      console.warn("[CreditFlow] income detection failed:", err?.message || err);
+      setStatementError(err?.message || "Couldn't detect your salary automatically — please confirm it manually below.");
+    } finally {
+      setStatementDetecting(false);
+    }
+  }, [saveCreditFlag, statementMonths]);
+
   // Bank-statement upload for the income step (AI path): upload PDF to the
   // private income-statements bucket, then ask Gemini to detect the salary.
   const handleStatementUpload = useCallback(async (e) => {
@@ -725,6 +793,7 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
       const { error: upErr } = await supabase.storage.from(info.bucket).uploadToSignedUrl(info.path, info.token, file, { contentType: "application/pdf", upsert: true });
       if (upErr) throw upErr;
       setStatementName(file.name);
+      setStatementPath(info.path);
       await saveCreditFlag({ credit_bank_statement_path: info.path, credit_bank_statement_months: statementMonths });
     } catch (err) {
       console.warn("[CreditFlow] statement upload failed:", err?.message || err);
@@ -734,29 +803,8 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
     }
     setStatementUploading(false);
 
-    setStatementDetecting(true);
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token;
-      const res = await fetch("/api/credit/detect-income", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ path: info.path, months: statementMonths }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data.success) throw new Error(data.error || "Could not analyse statement");
-      setIncomeDetection(data.result);
-      if (data.result?.is_salary_detected && data.result.estimated_monthly_income > 0) {
-        setMonthlyIncome(Math.round(Number(data.result.estimated_monthly_income)));
-      }
-      await saveCreditFlag({ credit_income_ai_result: data.result, credit_income_ai_at: new Date().toISOString() });
-    } catch (err) {
-      console.warn("[CreditFlow] income detection failed:", err?.message || err);
-      setStatementError(err?.message || "Couldn't detect your salary automatically — please confirm it manually below.");
-    } finally {
-      setStatementDetecting(false);
-    }
-  }, [saveCreditFlag, statementMonths]);
+    await runIncomeDetection(info.path);
+  }, [saveCreditFlag, statementMonths, runIncomeDetection]);
 
   // Save monthly income (last onboarding step) and move on to My applications.
   const saveIncome = useCallback(async () => {
@@ -1219,6 +1267,9 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
               <style>{`
                 @keyframes cfFadeUp { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
                 .cf-fade { opacity: 0; animation: cfFadeUp .55s cubic-bezier(.22,1,.36,1) forwards; }
+                /* A found check "ticks in": the icon springs from a spinner. */
+                @keyframes cfTickPop { 0% { opacity: 0; transform: scale(0.2); } 60% { opacity: 1; transform: scale(1.25); } 100% { opacity: 1; transform: scale(1); } }
+                .cf-tick { transform-origin: center; animation: cfTickPop .45s cubic-bezier(.34,1.56,.64,1) both; }
               `}</style>
 
               {/* HERO */}
@@ -1280,7 +1331,18 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
                       </div>
                     )}
                     {statementError && !statementDetecting && (
-                      <p className="mt-3 text-[11px] font-medium text-rose-500">{statementError}</p>
+                      <div className="mt-3 flex items-center justify-between gap-3">
+                        <p className="text-[11px] font-medium text-rose-500">{statementError}</p>
+                        {statementPath && (
+                          <button
+                            type="button"
+                            onClick={() => runIncomeDetection(statementPath)}
+                            className="flex-shrink-0 rounded-full bg-violet-600 px-3 py-1.5 text-[11px] font-semibold text-white active:scale-95"
+                          >
+                            Try again
+                          </button>
+                        )}
+                      </div>
                     )}
                     {!statementName && (
                       <p className="mt-3 text-[11px] text-slate-400">We'll automatically detect your salary and pay date. You can confirm before continuing.</p>
@@ -1295,20 +1357,15 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
                     const confColor = score >= 0.85 ? "text-emerald-600" : score >= 0.5 ? "text-amber-600" : "text-slate-500";
                     const lastTxn = det?.salary_transactions?.[det.salary_transactions.length - 1];
                     return (
-                      <div className="cf-fade mt-4 rounded-[28px] border border-slate-100 bg-white p-6 shadow-xl">
-                        <p className="text-sm font-semibold text-slate-900">{found ? "Detected salary" : "Couldn't confidently detect a salary"}</p>
-                        {det && (
-                          <p className={`mt-0.5 text-xs font-medium ${confColor}`}>{confLabel} — {det.confidence_reason}</p>
-                        )}
-                        <div className="relative mt-3 flex items-end gap-1">
-                          <span className="mb-1.5 text-xl font-light text-slate-400">R</span>
-                          {found ? (
-                            // AI-detected salary is authoritative — read-only, not user-editable.
-                            <div className="w-full text-[36px] font-light leading-none text-slate-900">
-                              {monthlyIncome.toLocaleString("en-ZA")}
-                            </div>
-                          ) : (
-                            // Only when detection fails do we let the user type a figure in.
+                      <>
+                      {/* Only shown when the AI couldn't detect a salary — a manual
+                          fallback. When detection succeeds, the amount lives in the
+                          checks card below (Pay amount row), so no duplicate card. */}
+                      {!found && (
+                        <div className="cf-fade mt-4 rounded-[28px] border border-slate-100 bg-white p-6 shadow-xl">
+                          <p className="text-sm font-semibold text-slate-900">Couldn't confidently detect a salary</p>
+                          <div className="relative mt-3 flex items-end gap-1">
+                            <span className="mb-1.5 text-xl font-light text-slate-400">R</span>
                             <input
                               type="text" inputMode="numeric"
                               value={monthlyIncome ? monthlyIncome.toLocaleString("en-ZA") : ""}
@@ -1316,17 +1373,87 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
                               placeholder="0"
                               className="w-full bg-transparent text-[36px] font-light leading-none text-slate-900 placeholder-slate-300 outline-none"
                             />
-                          )}
+                          </div>
+                          <p className="mt-2 text-[11px] text-slate-400">We couldn't detect a salary automatically — enter your monthly income to continue.</p>
                         </div>
-                        {found && lastTxn?.salary_date && (
-                          <p className="mt-1 text-[11px] text-slate-400">Last deposit detected on {lastTxn.salary_date}{lastTxn.employer_name ? ` from ${lastTxn.employer_name}` : ""}.</p>
-                        )}
-                        <p className="mt-2 text-[11px] text-slate-400">
-                          {found
-                            ? "This figure is taken from your bank statement and can't be edited. Upload a different statement if it's not right."
-                            : "We couldn't detect a salary automatically — enter your monthly income to continue."}
-                        </p>
-                      </div>
+                      )}
+
+                      {/* Statement checks — what the AI verified, as tickable rows.
+                          Flaggable transactions expand via "See more". */}
+                      {det && (
+                        <div className="cf-fade mt-4 rounded-[28px] border border-slate-100 bg-white p-6 shadow-xl">
+                          <p className="text-sm font-semibold text-slate-900">Statement checks</p>
+                          <div className="mt-3 space-y-3">
+                            <div className="flex items-center gap-3">
+                              {checkStep >= 1
+                                ? <CheckCircle2 className={`cf-tick h-5 w-5 flex-shrink-0 ${found ? "text-emerald-500" : "text-slate-300"}`} />
+                                : <Loader2 className="h-5 w-5 flex-shrink-0 animate-spin text-slate-300" />}
+                              <div className="flex-1">
+                                <p className="text-xs font-semibold text-slate-800">Pay amount</p>
+                                <p className="text-[11px] text-slate-400">{checkStep < 1 ? "Checking…" : found ? `R${monthlyIncome.toLocaleString("en-ZA")} per month` : "Not detected"}</p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              {checkStep >= 2
+                                ? <CheckCircle2 className={`cf-tick h-5 w-5 flex-shrink-0 ${det.pay_day_of_month ? "text-emerald-500" : "text-slate-300"}`} />
+                                : <Loader2 className="h-5 w-5 flex-shrink-0 animate-spin text-slate-300" />}
+                              <div className="flex-1">
+                                <p className="text-xs font-semibold text-slate-800">Pay date</p>
+                                <p className="text-[11px] text-slate-400">{checkStep < 2 ? "Checking…" : det.pay_day_of_month ? `Around the ${ordinal(det.pay_day_of_month)} of each month` : "Not detected"}</p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              {checkStep >= 3
+                                ? <CheckCircle2 className={`cf-tick h-5 w-5 flex-shrink-0 ${det.bank_name ? "text-emerald-500" : "text-slate-300"}`} />
+                                : <Loader2 className="h-5 w-5 flex-shrink-0 animate-spin text-slate-300" />}
+                              <div className="flex-1">
+                                <p className="text-xs font-semibold text-slate-800">Bank</p>
+                                <p className="text-[11px] text-slate-400">{checkStep < 3 ? "Checking…" : det.bank_name || "Not identified"}</p>
+                              </div>
+                            </div>
+                            <div className="flex items-start gap-3">
+                              {checkStep < 4
+                                ? <Loader2 className="h-5 w-5 flex-shrink-0 animate-spin text-slate-300" />
+                                : (det.flagged_summary?.count || 0) > 0
+                                  ? <span className="cf-tick flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-amber-100 text-[11px] font-bold text-amber-600">!</span>
+                                  : <CheckCircle2 className="cf-tick h-5 w-5 flex-shrink-0 text-emerald-500" />}
+                              <div className="flex-1">
+                                <div className="flex items-center justify-between gap-2">
+                                  <div>
+                                    <p className="text-xs font-semibold text-slate-800">Flaggable transactions</p>
+                                    <p className="text-[11px] text-slate-400">
+                                      {checkStep < 4
+                                        ? "Checking…"
+                                        : (det.flagged_summary?.count || 0) > 0
+                                          ? `${det.flagged_summary.count} found — R${Number(det.flagged_summary.total || 0).toLocaleString("en-ZA")} total`
+                                          : "None found"}
+                                    </p>
+                                  </div>
+                                  {checkStep >= 4 && (det.flagged_summary?.count || 0) > 0 && (
+                                    <button type="button" onClick={() => setShowFlagged((v) => !v)} className="flex-shrink-0 text-[11px] font-semibold text-violet-600">
+                                      {showFlagged ? "Hide" : "See more"}
+                                    </button>
+                                  )}
+                                </div>
+                                {showFlagged && (det.flagged_transactions || []).length > 0 && (
+                                  <div className="mt-2 space-y-1.5 rounded-2xl bg-slate-50 p-3">
+                                    {(det.flagged_transactions || []).map((t, i) => (
+                                      <div key={i} className="flex items-center justify-between gap-2">
+                                        <div className="min-w-0">
+                                          <p className="truncate text-[11px] font-medium text-slate-700">{t.description}</p>
+                                          <p className="text-[10px] text-slate-400">{t.date} · {FLAG_LABELS[t.category] || "High-risk"}</p>
+                                        </div>
+                                        <p className="flex-shrink-0 text-[11px] font-bold text-slate-800">R{Number(t.amount).toLocaleString("en-ZA")}</p>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                      </>
                     );
                   })()}
                   </>
