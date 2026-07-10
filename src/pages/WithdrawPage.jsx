@@ -166,9 +166,12 @@ export default function WithdrawPage({ onBack, familyMemberId = null, childName 
         let bufferCentsByStrategy = {};
         let residualCentsByStrategy = {};
         if (stratIds.length && uid) {
+          // Scope to the child when withdrawing for one — otherwise this looks up
+          // the PARENT's buffer/residual (0 for the child) and the reserve line
+          // never shows on a child withdraw.
           [realizedCentsByStrategy, { bufferCentsByStrategy, residualCentsByStrategy }] = await Promise.all([
-            fetchRealizedCentsByStrategy({ userId: uid, strategyIds: stratIds }),
-            fetchStrategyCashCents({ userId: uid, strategyIds: stratIds }),
+            fetchRealizedCentsByStrategy({ userId: uid, familyMemberId, strategyIds: stratIds }),
+            fetchStrategyCashCents({ userId: uid, familyMemberId, strategyIds: stratIds }),
           ]);
         }
 
