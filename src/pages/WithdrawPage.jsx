@@ -7,6 +7,7 @@ import {
 import { supabase } from "../lib/supabase";
 import { getCachedSession } from "../lib/sessionCache.js";
 import { fetchRealizedCentsByStrategy, fetchStrategyCashCents } from "../lib/strategyValuation.js";
+import { useFees } from "../lib/useFees";
 
 /* Sell / withdraw flow — reached by tapping the balance card on Home.
    Cosmic deep-purple particle header fading to white, real holdings as cards,
@@ -44,6 +45,9 @@ function useCountUp(target, dur = 1100) {
 }
 
 export default function WithdrawPage({ onBack, familyMemberId = null, childName = null }) {
+  // Fee rates (CRM-tunable). A withdrawal charges broker + custody only — no
+  // transaction fee, no AUM — and returns the 8% reserve + rebalance residual.
+  const { BROKER_FEE_RATE = 0.0025, ISIN_FEE_PER_ASSET = 25 } = useFees() || {};
   const [loading, setLoading] = useState(true);
   const [strategies, setStrategies] = useState([]);
   const [singles, setSingles] = useState([]);
@@ -128,6 +132,8 @@ export default function WithdrawPage({ onBack, familyMemberId = null, childName 
             // reserve is computed/returned at settlement (not pre-estimated here).
             positionsValue: e.value,
             reserveRefundCents: 0,
+            residualRefundCents: 0,
+            numAssets: 1,
           };
         });
 
@@ -190,9 +196,12 @@ export default function WithdrawPage({ onBack, familyMemberId = null, childName 
             up: pnl >= 0,
             pendingSell: s.pendingSell,
             // Breakdown inputs: proceeds = the holdings' market value; the unused
-            // 8% execution reserve (held buffer) is returned on top at full exit.
+            // 8% execution reserve + any rebalance residual are returned on a full
+            // exit. numAssets drives the per-asset custody fee.
             positionsValue: s.value,
             reserveRefundCents: Math.max(0, bufferCentsByStrategy[sid] || 0),
+            residualRefundCents: Math.max(0, residualCentsByStrategy[sid] || 0),
+            numAssets: s.count || 1,
           };
         });
 
@@ -777,20 +786,27 @@ function SellSheet({ item, onClose, onSubmit, onSold, childName = null }) {
 
             {(() => {
               const proceeds = Number(item.positionsValue ?? item.value ?? 0) * frac;
-              // Reserve is only returned on a FULL exit — a partial sell keeps the position open.
+              const numAssets = Math.max(1, Number(item.numAssets) || 1);
+              // Fees: broker (% of proceeds) + custody (per asset). No transaction
+              // fee, no AUM. Reserve + residual are returned only on a FULL exit.
+              const broker = proceeds * BROKER_FEE_RATE;
+              const custody = ISIN_FEE_PER_ASSET * numAssets;
               const reserve = isPartial ? 0 : Math.max(0, Number(item.reserveRefundCents || 0)) / 100;
-              const net = proceeds + reserve;
+              const residual = isPartial ? 0 : Math.max(0, Number(item.residualRefundCents || 0)) / 100;
+              const net = Math.max(0, proceeds - broker - custody + reserve + residual);
               const row = (label, val, opts = {}) => (
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: opts.last ? "none" : "0.5px solid rgba(127,119,221,0.14)" }}>
                   <span style={{ fontSize: opts.strong ? 13 : 12.5, color: opts.strong ? "#26215C" : "#7d72a8", fontWeight: opts.strong ? 500 : 400 }}>{label}</span>
-                  <span style={{ fontSize: opts.strong ? 15 : 13, fontWeight: 500, color: opts.green ? "#0F6E56" : "#26215C", fontVariantNumeric: "tabular-nums" }}>{opts.green && val > 0 ? "+ " : ""}{fmtR(val)}</span>
+                  <span style={{ fontSize: opts.strong ? 15 : 13, fontWeight: 500, color: opts.green ? "#0F6E56" : opts.red ? "#B4415B" : "#26215C", fontVariantNumeric: "tabular-nums" }}>{opts.green && val > 0 ? "+ " : opts.red && val > 0 ? "− " : ""}{fmtR(val)}</span>
                 </div>
               );
               return (
                 <div style={{ marginTop: 16, padding: "4px 16px", borderRadius: 16, background: "#faf8ff", border: "0.5px solid rgba(127,119,221,0.16)" }}>
                   {row("Estimated proceeds", proceeds)}
-                  {row("Sell fee", 0)}
+                  {broker > 0 && row("Broker fee", broker, { red: true })}
                   {reserve > 0 && row("Unused 8% reserve returned", reserve, { green: true })}
+                  {custody > 0 && row(`Custody fee (${numAssets} asset${numAssets === 1 ? "" : "s"})`, custody, { red: true })}
+                  {residual > 0 && row("Rebalance residual returned", residual, { green: true })}
                   {row("Estimated to your wallet", net, { strong: true, last: true })}
                 </div>
               );
@@ -810,8 +826,8 @@ function SellSheet({ item, onClose, onSubmit, onSold, childName = null }) {
               <ShieldAlert size={16} color="#BA7517" style={{ flexShrink: 0, marginTop: 2 }} />
               <div style={{ fontSize: 12, color: "#7d6a3a", lineHeight: 1.6 }}>
                 <p style={{ margin: "0 0 6px" }}>Processed at the next market window and <span style={{ color: "#5a4d1a", fontWeight: 500 }}>cannot be cancelled</span> once submitted.</p>
-                <p style={{ margin: "0 0 6px" }}>Final amount is set by the actual execution price and may differ from the estimate.</p>
-                <p style={{ margin: 0 }}>No sell fee is charged. {Number(item.reserveRefundCents || 0) > 0 ? "Any unused 8% execution reserve from your purchase is returned to your wallet on this full exit." : "Any unused execution reserve from your purchase is returned to your wallet at settlement."}</p>
+                <p style={{ margin: "0 0 6px" }}>Final amounts are set by the actual execution price and may differ from the estimate.</p>
+                <p style={{ margin: 0 }}>A broker &amp; custody fee applies (no transaction or AUM fee). On a full exit your unused 8% execution reserve{Number(item.residualRefundCents || 0) > 0 ? " and any rebalance residual are" : " is"} returned to your wallet.</p>
               </div>
             </div>
 
