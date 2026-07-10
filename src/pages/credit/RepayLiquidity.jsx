@@ -356,8 +356,8 @@ const RepayLiquidity = ({ onBack, profile, fonts }) => {
               const totalRepayable = Number(selectedLoan.amount_repayable || 0);
               const months = Number(selectedLoan.number_of_months || 1);
               const monthlyDue = totalRepayable > 0 ? totalRepayable / months : 0;
-              const interestRate = Number(selectedLoan.interest_rate || 0);
-              const annualRate = 10.5; // Secured credit is charged at 10.5% p.a.
+              const interestRate = Number(selectedLoan.interest_rate || 0.04);
+              const monthlyRatePct = interestRate * 100;
               const amountPaid = Math.max(0, totalRepayable - principal);
               const progressPct = totalRepayable > 0 ? Math.min(100, (amountPaid / totalRepayable) * 100) : 0;
               const nextDate = selectedLoan.first_repayment_date
@@ -419,7 +419,7 @@ const RepayLiquidity = ({ onBack, profile, fonts }) => {
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Interest Rate</span>
-                      <span className="text-xs font-bold text-slate-900">{annualRate > 0 ? `${annualRate.toFixed(2)}% p.a.` : '—'}</span>
+                      <span className="text-xs font-bold text-slate-900">{monthlyRatePct > 0 ? `${monthlyRatePct.toFixed(2)}% p.m.` : '—'}</span>
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Next Payment</span>
