@@ -45,9 +45,6 @@ function useCountUp(target, dur = 1100) {
 }
 
 export default function WithdrawPage({ onBack, familyMemberId = null, childName = null }) {
-  // Fee rates (CRM-tunable). A withdrawal charges broker + custody only — no
-  // transaction fee, no AUM — and returns the 8% reserve + rebalance residual.
-  const { BROKER_FEE_RATE = 0.0025, ISIN_FEE_PER_ASSET = 25 } = useFees() || {};
   const [loading, setLoading] = useState(true);
   const [strategies, setStrategies] = useState([]);
   const [singles, setSingles] = useState([]);
@@ -670,6 +667,9 @@ void main(){
    Real-money action: the client must tick an acknowledgement before "Confirm
    sell" unlocks; on confirm we POST and show the server-issued reference. */
 function SellSheet({ item, onClose, onSubmit, onSold, childName = null }) {
+  // Fee rates (CRM-tunable): a withdrawal charges broker + custody only — no
+  // transaction fee, no AUM — and returns the 8% reserve + rebalance residual.
+  const { BROKER_FEE_RATE = 0.0025, ISIN_FEE_PER_ASSET = 25 } = useFees() || {};
   const [ack, setAck] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
