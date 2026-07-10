@@ -1,0 +1,28 @@
+IS THERE ANYTHING ELSE WE MISSING OR CAN IMPROVE ON THAT GIVE SUGGESTIONS
+
+1 minute ago
+
+Show less
+
+4 actions
+Based on what's already flagged plus a fresh look at the code, here's more that's worth thinking about — explained simply:
+
+Security/privacy risks (new, because of the full-name+email decision):
+
+No rate limiting anywhere on the public link. Since you're now showing real names and emails publicly, a bot could hit that link thousands of times per second to scrape everyone's email address off every wishlist. I'd strongly suggest adding basic rate limiting to the public endpoints before this goes live.
+No "don't index this page" tag. Right now if this page goes live, Google could crawl it and your users' names/emails could show up in search results. A simple noindex tag fixes this.
+No protection against guessing wishlist links. The token itself is fine (long random string), but there's nothing stopping someone from writing a script that just tries many people's /gift-registry/contribute calls quickly — worth adding basic abuse limits on that too.
+Things that would confuse or frustrate real users:
+4. You can add the exact same share twice by accident. Nothing stops someone from adding "MTN" to their wishlist twice as two separate lines — should probably merge them or warn.
+
+No "remove an item after someone's already paid for part of it" handling. If a creator tries to delete an item that already has a partial gift on it, what should happen to that gift? Needs a rule.
+No preview image when sharing to WhatsApp. Right now pasting the link into WhatsApp/iMessage will show nothing nice — just plain text. Worth adding a nice preview card (photo + "Help fund my wishlist!").
+No "thank you" moment for the gifter. After someone gifts something, there's no confirmation screen thanking them and showing what they bought — right now it likely just closes the sheet.
+No handling of what happens once a wishlist fully expires in terms of the public page — does it still show, say "expired," or disappear?
+Business/product gaps:
+9. No way to see how many times a link has been opened/viewed — useful for creators to know if people are seeing it.
+
+No limit on how many items one wishlist can have, or how many wishlists one person can create — could be abused to spam links.
+If you'd like, I can add these to the plan .md as a new "Additional Suggestions" section (still not building anything) — want me to do that?
+
+

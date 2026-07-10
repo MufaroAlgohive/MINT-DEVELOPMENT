@@ -7,7 +7,10 @@ import { getMarketsSecuritiesWithMetrics, getSecurityPrices, clearMarketDataCach
 import { useRealtimePrices } from "../lib/useRealtimePrices";
 import { getStrategiesWithMetrics, getPublicStrategies, formatChangePct, formatChangeAbs, getChangeColor } from "../lib/strategyData.js";
 import { useProfile } from "../lib/useProfile";
-import { TrendingUp, Search, SlidersHorizontal, X, ChevronRight, Star, PlayCircle } from "lucide-react";
+import { TrendingUp, Search, SlidersHorizontal, X, ChevronRight, Bookmark, PlayCircle, Gift, Heart } from "lucide-react";
+import WishlistModal from "../components/WishlistModal.jsx";
+import WishlistPickerSheet from "../components/WishlistPickerSheet.jsx";
+import WishlistToast from "../components/WishlistToast.jsx";
 import ChildInvestModal from "../components/ChildInvestModal.jsx";
 import { saveMarketsInvestFilters, loadMarketsInvestFilters, saveMarketsStrategyFilters, loadMarketsStrategyFilters, buildInvestChips, buildChipsFromFilters } from "../lib/usePersistedFilters.js";
 import NotificationBell from "../components/NotificationBell";
@@ -174,7 +177,9 @@ const CompactSecurityRow = ({ security, onClick }) => {
   );
 };
 
-const CollapsibleSection = ({ title, securities, onOpenStockDetail, onToggleWatchlist, watchlist, sparklineData, isExpanded, sectionRef }) => {
+const CollapsibleSection = ({ title, securities, onOpenStockDetail, onToggleWatchlist, onToggleWishlist, watchlist, wishlistedKeys, sparklineData, isExpanded, sectionRef }) => {
+  if (securities.length === 0) return null;
+
   return (
     <section ref={sectionRef}>
       <div className="mb-3 flex items-center justify-between">
@@ -196,7 +201,9 @@ const CollapsibleSection = ({ title, securities, onOpenStockDetail, onToggleWatc
                 security={security}
                 onClick={() => onOpenStockDetail(security)}
                 onToggleWatchlist={onToggleWatchlist}
+                onToggleWishlist={onToggleWishlist}
                 isWatched={watchlist.includes(security.symbol)}
+                isWishlisted={wishlistedKeys?.has(security.symbol)}
                 sparklinePoints={sparklineData[security.id]}
               />
             ))}
@@ -240,7 +247,7 @@ function generateSparkline(security) {
   return points.map((p, i) => ({ i, v: p }));
 }
 
-const SecuritySparklineCard = ({ security, onClick, onToggleWatchlist, isWatched, sparklinePoints }) => {
+const SecuritySparklineCard = ({ security, onClick, onToggleWatchlist, onToggleWishlist, isWatched, isWishlisted, sparklinePoints }) => {
   const hasRealData = sparklinePoints && sparklinePoints.length >= 2;
   const sparkData = React.useMemo(() => {
     if (hasRealData) return sparklinePoints;
@@ -270,13 +277,6 @@ const SecuritySparklineCard = ({ security, onClick, onToggleWatchlist, isWatched
             </div>
           )}
           <span className="flex-1 truncate text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-900">{security.symbol}</span>
-          <div
-            onClick={(e) => { e.stopPropagation(); onToggleWatchlist(e, security.symbol); }}
-            className="flex-shrink-0 p-1"
-          >
-            <Star className={`h-5 w-5 ${isWatched ? "fill-yellow-400 text-yellow-400" : "text-slate-300"}`} />
-          </div>
-          <ChevronRight className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
         </div>
 
         {/* Change % */}
@@ -297,6 +297,24 @@ const SecuritySparklineCard = ({ security, onClick, onToggleWatchlist, isWatched
             <span className="text-sm text-slate-400">—</span>
           )}
         </p>
+      </div>
+
+      {/* Bookmark + Heart — bottom-right overlay */}
+      <div className="absolute bottom-2 right-2 flex items-center gap-1 z-10">
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onToggleWatchlist(e, security.symbol); }}
+          className="flex h-8 w-8 items-center justify-center rounded-full bg-white/70 backdrop-blur-sm shadow-sm active:scale-90 transition-transform"
+        >
+          <Bookmark className={`h-5 w-5 ${isWatched ? "fill-yellow-400 text-yellow-400" : "text-slate-400"}`} />
+        </button>
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onToggleWishlist?.(e, security.symbol); }}
+          className="flex h-8 w-8 items-center justify-center rounded-full bg-white/70 backdrop-blur-sm shadow-sm active:scale-90 transition-transform"
+        >
+          <Heart className={`h-5 w-5 ${isWishlisted ? "fill-red-500 text-red-500" : "text-slate-400"}`} />
+        </button>
       </div>
 
       {/* Sparkline chart */}
@@ -363,7 +381,7 @@ registerCacheResetCallback(() => {
   _mkHoldingsSecurities = null;
 });
 
-const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNewsArticle, onOpenFactsheet, onInvestNow, initialViewMode, onViewModeChange, childFilter, onNavigateToHome, onNavigateToInvest }) => {
+const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNewsArticle, onOpenFactsheet, onInvestNow, initialViewMode, onViewModeChange, childFilter, onNavigateToHome, onNavigateToInvest, onOpenMyWishlists, onContinueToRegistry }) => {
   const { profile, loading: profileLoading } = useProfile();
   const [portalTarget, setPortalTarget] = useState(null);
   const { lastUpdated: pricesLastUpdated } = useRealtimePrices();
@@ -476,6 +494,89 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
   });
 
   const [watchlist, setWatchlist] = useState([]);
+  const [showWishlistMenu, setShowWishlistMenu] = useState(false);
+  const wishlistMenuRef = useRef(null);
+
+  // Wishlist (heart) state — loaded from Supabase user_metadata, not localStorage
+  const [wishlistedKeys, setWishlistedKeys] = useState(new Set());
+  const [strategyWatchlist, setStrategyWatchlist] = useState([]);
+  const [wishlistPickerKey, setWishlistPickerKey] = useState(null); // itemKey awaiting picker
+  const [wishlistToastMsg, setWishlistToastMsg] = useState("");
+  const [wishlistToastVisible, setWishlistToastVisible] = useState(false);
+  const [wishlistToastRegistryId, setWishlistToastRegistryId] = useState(null);
+
+  // Load wishlisted keys + strategy watchlist from API on mount
+  useEffect(() => {
+    async function loadPrefs() {
+      try {
+        const { data } = await supabase.auth.getSession();
+        const token = data?.session?.access_token;
+        if (!token) return;
+        const res = await fetch("/api/gift-wishlist-prefs", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const { wishlistedKeys: keys = [], watchlist = [] } = await res.json();
+          setWishlistedKeys(new Set(keys));
+          setStrategyWatchlist(watchlist);
+        }
+      } catch (e) {
+        console.error("[MarketsPage] loadPrefs error:", e);
+      }
+    }
+    loadPrefs();
+  }, []);
+
+  async function updateWishlistPrefs(patch) {
+    try {
+      const { data } = await supabase.auth.getSession();
+      const token = data?.session?.access_token;
+      if (!token) return;
+      await fetch("/api/gift-wishlist-prefs", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify(patch),
+      });
+    } catch (e) {
+      console.error("[MarketsPage] updatePrefs error:", e);
+    }
+  }
+
+  const toggleWishlistItem = (e, itemKey) => {
+    e.stopPropagation();
+    if (wishlistedKeys.has(itemKey)) {
+      const next = new Set(wishlistedKeys);
+      next.delete(itemKey);
+      setWishlistedKeys(next);
+      updateWishlistPrefs({ wishlistedKeys: [...next] });
+    } else {
+      // Show the wishlist picker so the user can choose a category
+      setWishlistPickerKey(itemKey);
+    }
+  };
+
+  const toggleStrategyWatchlist = (e, strategyId) => {
+    e.stopPropagation();
+    const isW = strategyWatchlist.includes(strategyId);
+    const next = isW ? strategyWatchlist.filter(id => id !== strategyId) : [...strategyWatchlist, strategyId];
+    setStrategyWatchlist(next);
+    updateWishlistPrefs({ watchlist: next });
+  };
+
+  useEffect(() => {
+    if (!showWishlistMenu) return;
+    function handleClickOutside(e) {
+      if (wishlistMenuRef.current && !wishlistMenuRef.current.contains(e.target)) {
+        setShowWishlistMenu(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("touchstart", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("touchstart", handleClickOutside);
+    };
+  }, [showWishlistMenu]);
 
   useEffect(() => { setPortalTarget(document.body); }, []);
 
@@ -1419,6 +1520,8 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
   return (
     <div className="min-h-screen bg-slate-50 pb-[env(safe-area-inset-bottom)] text-slate-900">
       {showOpenStrategiesMaintenance && <MaintenanceModal onClose={() => setShowOpenStrategiesMaintenance(false)} />}
+
+
       {showBasketsExplainer && (
         <MintBasketsExplainer
           onDone={() => setShowBasketsExplainer(false)}
@@ -1469,7 +1572,55 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
               />
             )}
             <h1 className="text-sm font-bold tracking-[0.18em] uppercase">{childFilter ? "Child Market" : "Markets"}</h1>
-            <NotificationBell onClick={onOpenNotifications} />
+            <div className="flex items-center gap-2">
+              <div className="relative" ref={wishlistMenuRef}>
+                <button
+                  type="button"
+                  aria-label="Wishlist"
+                  onClick={() => setShowWishlistMenu((v) => !v)}
+                  className="relative flex h-10 w-10 items-center justify-center rounded-full border border-white/30 bg-white/10 text-white backdrop-blur-md"
+                >
+                  <Bookmark className="h-5 w-5" />
+                </button>
+
+                <AnimatePresence>
+                  {showWishlistMenu && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -8, scale: 0.95 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: -8, scale: 0.95 }}
+                      transition={{ duration: 0.15 }}
+                      className="absolute right-0 top-12 z-50 w-44 overflow-hidden rounded-2xl bg-white text-slate-900 shadow-xl ring-1 ring-black/5"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowWishlistMenu(false);
+                          window.dispatchEvent(new CustomEvent("navigate-within-app", { detail: { page: "giftRegistryDashboard" } }));
+                        }}
+                        className="flex w-full items-center gap-2.5 px-4 py-3 text-left text-sm font-medium text-slate-700 hover:bg-slate-50"
+                      >
+                        <Bookmark className="h-4 w-4 text-violet-600" />
+                        My Wishlist
+                      </button>
+                      <div className="h-px bg-slate-100" />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowWishlistMenu(false);
+                          window.dispatchEvent(new CustomEvent("navigate-within-app", { detail: { page: "giftStrategies", openWishlistCreate: true } }));
+                        }}
+                        className="flex w-full items-center gap-2.5 px-4 py-3 text-left text-sm font-medium text-slate-700 hover:bg-slate-50"
+                      >
+                        <Gift className="h-4 w-4 text-violet-600" />
+                        New Wishlist
+                      </button>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+              <NotificationBell onClick={onOpenNotifications} />
+            </div>
           </header>
 
           {/* Toggle between Mint Baskets and Markets */}
@@ -1748,25 +1899,27 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
             {/* Grouped Sections - only show when NOT searching */}
             {!searchQuery && (
               <>
-                {watchedSecurities.length > 0 && (
-                  <CollapsibleSection
-                    title="My Watchlist"
-                    securities={watchedSecurities}
-                    onOpenStockDetail={onOpenStockDetail}
-                    onToggleWatchlist={toggleWatchlist}
-                    watchlist={watchlist}
-                    sparklineData={sparklineData}
-                    isExpanded={expandedSections.has("watchlist")}
-                    sectionRef={secRefWatchlist}
-                  />
-                )}
+                <CollapsibleSection
+                  title="My Watch List"
+                  securities={watchedSecurities}
+                  onOpenStockDetail={onOpenStockDetail}
+                  onToggleWatchlist={toggleWatchlist}
+                  onToggleWishlist={toggleWishlistItem}
+                  watchlist={watchlist}
+                  wishlistedKeys={wishlistedKeys}
+                  sparklineData={sparklineData}
+                  isExpanded={expandedSections.has("watchlist")}
+                  sectionRef={secRefWatchlist}
+                />
 
                 <CollapsibleSection
                   title="Largest companies"
                   securities={largestCompanies}
                   onOpenStockDetail={onOpenStockDetail}
                   onToggleWatchlist={toggleWatchlist}
+                  onToggleWishlist={toggleWishlistItem}
                   watchlist={watchlist}
+                  wishlistedKeys={wishlistedKeys}
                   sparklineData={sparklineData}
                   isExpanded={expandedSections.has("largest")}
                   sectionRef={secRefLargest}
@@ -1777,7 +1930,9 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                   securities={highestDividendYield}
                   onOpenStockDetail={onOpenStockDetail}
                   onToggleWatchlist={toggleWatchlist}
+                  onToggleWishlist={toggleWishlistItem}
                   watchlist={watchlist}
+                  wishlistedKeys={wishlistedKeys}
                   sparklineData={sparklineData}
                   isExpanded={expandedSections.has("dividend")}
                   sectionRef={secRefDividend}
@@ -1788,7 +1943,9 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                   securities={gainers}
                   onOpenStockDetail={onOpenStockDetail}
                   onToggleWatchlist={toggleWatchlist}
+                  onToggleWishlist={toggleWishlistItem}
                   watchlist={watchlist}
+                  wishlistedKeys={wishlistedKeys}
                   sparklineData={sparklineData}
                   isExpanded={expandedSections.has("gainers")}
                   sectionRef={secRefGainers}
@@ -1805,7 +1962,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                   <button
                     key={security.id}
                     onClick={() => onOpenStockDetail(security)}
-                    className="w-full rounded-3xl border border-slate-100/80 bg-white/90 backdrop-blur-sm p-4 text-left shadow-[0_2px_16px_-2px_rgba(0,0,0,0.08)] transition-all hover:shadow-[0_4px_24px_-4px_rgba(0,0,0,0.12)] active:scale-[0.97]"
+                    className="relative w-full rounded-3xl border border-slate-100/80 bg-white/90 backdrop-blur-sm p-4 text-left shadow-[0_2px_16px_-2px_rgba(0,0,0,0.08)] transition-all hover:shadow-[0_4px_24px_-4px_rgba(0,0,0,0.12)] active:scale-[0.97]"
                   >
                     <div className="flex items-start gap-3">
                       {security.logo_url ? (
@@ -1849,9 +2006,6 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                               <p className="text-xs text-slate-500">No pricing data</p>
                             )}
                           </div>
-                          <div onClick={(e) => toggleWatchlist(e, security.symbol)} className="ml-2 flex-shrink-0">
-                            <Star className={`h-5 w-5 ${watchlist.includes(security.symbol) ? "fill-yellow-400 text-yellow-400" : "text-slate-300"}`} />
-                          </div>
                         </div>
 
                         <div className="mt-3 flex items-center gap-2">
@@ -1872,6 +2026,24 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                               YTD {formatChangePct(security.returns.ytd)}
                             </span>
                           )}
+                        </div>
+
+                        {/* Bookmark + Heart — bottom-right */}
+                        <div className="absolute bottom-3 right-3 flex items-center gap-1.5 z-10">
+                          <button
+                            type="button"
+                            onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleWatchlist(e, security.symbol); }}
+                            className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 shadow-sm active:scale-90 transition-transform"
+                          >
+                            <Bookmark className={`h-5 w-5 ${watchlist.includes(security.symbol) ? "fill-yellow-400 text-yellow-400" : "text-slate-400"}`} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleWishlistItem(e, security.symbol); }}
+                            className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 shadow-sm active:scale-90 transition-transform"
+                          >
+                            <Heart className={`h-5 w-5 ${wishlistedKeys.has(security.symbol) ? "fill-red-500 text-red-500" : "text-slate-400"}`} />
+                          </button>
                         </div>
                       </div>
                     </div>
@@ -1901,7 +2073,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                       <button
                         key={security.id}
                         onClick={() => onOpenStockDetail(security)}
-                        className="w-full rounded-3xl border border-slate-100/80 bg-white/90 backdrop-blur-sm p-4 text-left shadow-[0_2px_16px_-2px_rgba(0,0,0,0.08)] transition-all hover:shadow-[0_4px_24px_-4px_rgba(0,0,0,0.12)] active:scale-[0.97]"
+                        className="relative w-full rounded-3xl border border-slate-100/80 bg-white/90 backdrop-blur-sm p-4 text-left shadow-[0_2px_16px_-2px_rgba(0,0,0,0.08)] transition-all hover:shadow-[0_4px_24px_-4px_rgba(0,0,0,0.12)] active:scale-[0.97]"
                       >
                         <div className="flex items-start gap-3">
                           {security.logo_url ? (
@@ -1945,9 +2117,6 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                                   <p className="text-xs text-slate-400">—</p>
                                 )}
                               </div>
-                              <div onClick={(e) => toggleWatchlist(e, security.symbol)} className="ml-2 flex-shrink-0">
-                                <Star className={`h-5 w-5 ${watchlist.includes(security.symbol) ? "fill-yellow-400 text-yellow-400" : "text-slate-300"}`} />
-                              </div>
                             </div>
 
                             <div className="mt-3 flex items-center gap-2">
@@ -1961,6 +2130,24 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                                   P/E {Number(security.pe).toFixed(2)}
                                 </span>
                               )}
+                            </div>
+
+                            {/* Bookmark + Heart — bottom-right */}
+                            <div className="absolute bottom-3 right-3 flex items-center gap-1.5 z-10">
+                              <button
+                                type="button"
+                                onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleWatchlist(e, security.symbol); }}
+                                className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 shadow-sm active:scale-90 transition-transform"
+                              >
+                                <Bookmark className={`h-5 w-5 ${watchlist.includes(security.symbol) ? "fill-yellow-400 text-yellow-400" : "text-slate-400"}`} />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleWishlistItem(e, security.symbol); }}
+                                className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 shadow-sm active:scale-90 transition-transform"
+                              >
+                                <Heart className={`h-5 w-5 ${wishlistedKeys.has(security.symbol) ? "fill-red-500 text-red-500" : "text-slate-400"}`} />
+                              </button>
                             </div>
                           </div>
                         </div>
@@ -1994,26 +2181,31 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                   2) else a sensible default (Equities first, ETFs last);
                   3) else natural order. CRM-numbered categories always sort ahead of
                   un-numbered ones, so the CRM control wins whenever it's used. */}
-              {[...new Set(filteredStrategies.map(s => s.sector || 'General'))]
-                .sort((a, b) => {
-                  const DEFAULTS = { 'Equities': 0, 'Fixed Income': 1, 'General': 2, 'ETFs': 3 };
-                  const rank = (s) => {
-                    const crm = Number(categoryOrder[s]);
-                    if (Number.isFinite(crm)) return crm;               // CRM-set: use directly
-                    const d = DEFAULTS[s];                              // else fallback default,
-                    return (d != null ? d : 50) + 1000;                // pushed after CRM-numbered
-                  };
-                  return rank(a) - rank(b);
-                })
+              {[
+                ...(strategyWatchlist.length > 0 ? ['__WATCHLIST__'] : []),
+                ...[...new Set(filteredStrategies.map(s => s.sector || 'General'))]
+                  .sort((a, b) => {
+                    const DEFAULTS = { 'Equities': 0, 'Fixed Income': 1, 'General': 2, 'ETFs': 3 };
+                    const rank = (s) => {
+                      const crm = Number(categoryOrder[s]);
+                      if (Number.isFinite(crm)) return crm;               // CRM-set: use directly
+                      const d = DEFAULTS[s];                              // else fallback default,
+                      return (d != null ? d : 50) + 1000;                // pushed after CRM-numbered
+                    };
+                    return rank(a) - rank(b);
+                  }),
+              ]
                 .map((sector) => {
-                const sectorStrategies = filteredStrategies.filter(s => (s.sector || 'General') === sector);
+                const sectorStrategies = sector === '__WATCHLIST__'
+                  ? filteredStrategies.filter(s => strategyWatchlist.includes(s.id))
+                  : filteredStrategies.filter(s => (s.sector || 'General') === sector);
                 
                 if (sectorStrategies.length === 0) return null;
               
               return (
                 <section key={sector}>
                   <div className="mb-4 flex items-center justify-between">
-                    <h2 className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">{sector === 'General' ? (childFilter ? 'Child Friendly' : 'Strategies') : sector}</h2>
+                    <h2 className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">{sector === '__WATCHLIST__' ? 'Watchlist' : (sector === 'General' ? (childFilter ? 'Child Friendly' : 'Strategies') : sector)}</h2>
                     {/* Show how many baskets are in this category instead of a chevron. */}
                     <span className="text-[11px] font-semibold tabular-nums text-slate-400">({sectorStrategies.length})</span>
                   </div>
@@ -2048,11 +2240,28 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                         data-coach-first={sectorStrategies[0]?.id === strategy.id ? 'true' : undefined}
                         data-coach-name={displayName}
                         data-coach-desc={truncatedDescription || ''}
-                        className="flex-shrink-0 w-80 rounded-2xl border border-slate-100 bg-white shadow-sm hover:shadow-md hover:border-slate-200 p-4 transition-all snap-center"
+                        className="relative flex-shrink-0 w-80 rounded-2xl border border-slate-100 bg-white shadow-sm hover:shadow-md hover:border-slate-200 p-4 transition-all snap-center"
                       >
+                        {/* Bookmark + Heart icons — bottom-right */}
+                        <div className="absolute bottom-3 right-3 flex items-center gap-1.5 z-10">
+                          <button
+                            type="button"
+                            onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleStrategyWatchlist(e, strategy.id); }}
+                            className="flex h-9 w-9 items-center justify-center rounded-full bg-white/80 backdrop-blur-sm shadow-sm active:scale-90 transition-transform"
+                          >
+                            <Bookmark className={`h-5 w-5 ${strategyWatchlist.includes(strategy.id) ? "fill-yellow-400 text-yellow-400" : "text-slate-400"}`} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleWishlistItem(e, `strategy:${strategy.id}`); }}
+                            className="flex h-9 w-9 items-center justify-center rounded-full bg-white/80 backdrop-blur-sm shadow-sm active:scale-90 transition-transform"
+                          >
+                            <Heart className={`h-5 w-5 ${wishlistedKeys.has(`strategy:${strategy.id}`) ? "fill-red-500 text-red-500" : "text-slate-400"}`} />
+                          </button>
+                        </div>
                         <div className="flex items-start gap-3">
                           <div className="flex-1 flex items-start justify-between gap-4">
-                            <div className="text-left space-y-1">
+                            <div className="text-left space-y-1 pr-16">
                               <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-900">{displayName}</p>
                               <div>
                                 <p className="text-xs text-slate-600 line-clamp-1">
@@ -3118,6 +3327,41 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
           </div>
         </div>
       , portalTarget)}
+
+      {/* Wishlist picker — Airbnb-style category selector */}
+      {wishlistPickerKey && (
+        <WishlistPickerSheet
+          itemKey={wishlistPickerKey}
+          onClose={() => setWishlistPickerKey(null)}
+          onSaved={(savedItemKey, listName, registryId) => {
+            const next = new Set([...wishlistedKeys, savedItemKey]);
+            setWishlistedKeys(next);
+            updateWishlistPrefs({ wishlistedKeys: [...next] });
+            setWishlistPickerKey(null);
+            setWishlistToastMsg(`Added to "${listName}"`);
+            setWishlistToastRegistryId(registryId || null);
+            setWishlistToastVisible(true);
+          }}
+          onCreateNew={(name) => {
+            const key = wishlistPickerKey;
+            setWishlistPickerKey(null);
+            onContinueToRegistry?.(key, name || null);
+          }}
+        />
+      )}
+
+      <WishlistToast
+        message={wishlistToastMsg}
+        visible={wishlistToastVisible}
+        onHide={() => setWishlistToastVisible(false)}
+        actionLabel="View →"
+        onAction={() => {
+          setWishlistToastVisible(false);
+          window.dispatchEvent(new CustomEvent("navigate-within-app", {
+            detail: { page: "giftRegistryDashboard", registryId: wishlistToastRegistryId }
+          }));
+        }}
+      />
     </div>
   );
 };

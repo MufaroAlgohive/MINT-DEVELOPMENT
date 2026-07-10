@@ -43,7 +43,9 @@ export default async function handler(req, res) {
     }
 
     const mintNumber = (req.query.mint_number || "").trim();
+    console.log("[lookup-by-mint] caller:", user.id, "| searching mint_number:", mintNumber);
     if (!mintNumber || mintNumber.length < 3) {
+      console.warn("[lookup-by-mint] ❌ mint number too short:", mintNumber);
       return res.status(400).json({ error: "Mint number too short" });
     }
 
@@ -54,24 +56,29 @@ export default async function handler(req, res) {
       .limit(1);
 
     if (profileError) {
-      console.error("[lookup-by-mint] profile error:", profileError.message);
+      console.error("[lookup-by-mint] ❌ DB error:", profileError.message, profileError.code);
       return res.status(500).json({ error: "Lookup failed" });
     }
 
+    console.log("[lookup-by-mint] profiles query returned", profiles?.length ?? 0, "row(s)");
     const profile = profiles?.[0] || null;
     if (!profile) {
+      console.log("[lookup-by-mint] ℹ️ no profile found for mint_number:", mintNumber);
       return res.status(404).json({ error: "No user found with that Mint number" });
     }
     if (profile.id === user.id) {
+      console.warn("[lookup-by-mint] ❌ caller tried to gift to themselves");
       return res.status(400).json({ error: "You cannot gift to yourself" });
     }
 
+    console.log("[lookup-by-mint] profile found — id:", profile.id, "| email in profiles:", profile.email ? "✅ set" : "❌ missing — will resolve from auth");
     const email = await resolveUserEmail(profile.id, profile.email);
     if (!email) {
-      console.error("[lookup-by-mint] profile found but email unresolvable for", profile.id);
+      console.error("[lookup-by-mint] ❌ email unresolvable for profile id:", profile.id);
       return res.status(503).json({ error: "Could not retrieve user details — please try again" });
     }
 
+    console.log("[lookup-by-mint] ✅ returning user:", profile.first_name, profile.last_name, "| mint:", profile.mint_number);
     return res.json({
       user: {
         first_name: profile.first_name || "",
@@ -81,7 +88,7 @@ export default async function handler(req, res) {
       },
     });
   } catch (e) {
-    console.error("[lookup-by-mint] error:", e.message);
+    console.error("[lookup-by-mint] ❌ unexpected error:", e.message, e.stack);
     return res.status(500).json({ error: e.message });
   }
 }

@@ -4,11 +4,11 @@
   "version": "1.0.0",
   "type": "module",
   "engines": {
-    "node": "22.x"
+    "node": ">=20"
   },
   "packageManager": "pnpm@10.26.1",
   "scripts": {
-    "dev": "node server/index.cjs & npx vite --port 5000",
+    "dev": "lsof -ti:5000,3001 | xargs kill -9 2>/dev/null; node server/index.cjs & npx vite --port 5000",
     "server": "node server/index.cjs",
     "build": "vite build",
     "preview": "vite preview",
@@ -51,6 +51,7 @@
     "p-limit": "^7.3.0",
     "p-retry": "^7.1.1",
     "pg": "^8.22.0",
+    "qrcode": "^1.5.4",
     "qrcode.react": "^4.2.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",

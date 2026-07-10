@@ -8,6 +8,7 @@ process.on('uncaughtException', (err) => {
 
 const fs = require("fs");
 const path = require("path");
+const { ensureGiftRegistryTables, registerGiftRegistryRoutes, sweepExpiredReservations } = require('./giftRegistryRoutes.cjs');
 
 function loadEnvFile(envPath) {
   try {
@@ -417,10 +418,16 @@ app.use(cors({
 }));
 
 // ── Rate limiting ──────────────────────────────────────────────────────────
-// General: 300 req / 15 min per IP
+// General: 1200 req / 15 min per IP.
+// The app polls several endpoints on short intervals (user/strategies every
+// 15s, held-securities refresh, notifications, balance card, etc.), so a
+// single active session can legitimately generate several hundred requests
+// within 15 minutes. 300 was too low and caused real user actions (e.g.
+// creating a new wishlist) to be blocked by background polling traffic.
+// Expensive/sensitive actions remain protected by the tighter limiters below.
 const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 300,
+  max: 1200,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: "Too many requests — please try again later." },
@@ -9284,6 +9291,18 @@ async function ensureFamilyMembersTablePg() {
   }
 }
 ensureFamilyMembersTable();
+ensureGiftRegistryTables(pgPool, supabaseAdmin);
+
+// Drop gift-registry columns that were defined in schema but never populated.
+// Guarded by SCHEMA_CLEANUP=true to prevent accidental data loss on every startup.
+if (pgPool && process.env.SCHEMA_CLEANUP === 'true') {
+  pgPool.query('ALTER TABLE gift_events DROP COLUMN IF EXISTS beneficiary_ref')
+    .then(() => console.log('[gift-registry] dropped unused column: gift_events.beneficiary_ref'))
+    .catch(() => {}); // table may not exist yet on first run
+  pgPool.query('ALTER TABLE gift_contributions DROP COLUMN IF EXISTS executed_amount_cents')
+    .then(() => console.log('[gift-registry] dropped unused column: gift_contributions.executed_amount_cents'))
+    .catch(() => {});
+}
 
 // Helper: run a raw SQL query on the family_members table via pgPool (bypasses RLS)
 async function fmQuery(sql, params = []) {
@@ -13129,6 +13148,51 @@ app.get('/api/fees-config', async (req, res) => {
   } catch (err) {
     console.error('[fees-config]', err);
     return res.status(500).json({ success: false, error: safeError(err) });
+  }
+});
+
+// Gift Registry routes + reservation sweeper cron
+registerGiftRegistryRoutes(app, supabaseAdmin);
+cron.schedule('* * * * *', () => sweepExpiredReservations(supabaseAdmin));
+console.log('[gift-registry] Reservation sweeper scheduled (every minute)');
+
+// ─── Wishlists ────────────────────────────────────────────────────────────────
+// GET  /api/wishlists  — return the signed-in user's saved wishlists
+// POST /api/wishlists  — overwrite the signed-in user's saved wishlists
+// Stored in auth.users.user_metadata so no extra table is required.
+
+app.get("/api/wishlists", async (req, res) => {
+  try {
+    const token = (req.headers.authorization || "").replace("Bearer ", "");
+    if (!token) return res.status(401).json({ error: "Unauthorized" });
+    const { data: { user }, error: authErr } = await supabaseAdmin.auth.getUser(token);
+    if (authErr || !user) return res.status(401).json({ error: "Unauthorized" });
+    const { data, error } = await supabaseAdmin.auth.admin.getUserById(user.id);
+    if (error) return res.status(500).json({ error: error.message });
+    return res.json({ wishlists: data.user.user_metadata?.wishlists || [] });
+  } catch (e) {
+    return res.status(500).json({ error: e.message });
+  }
+});
+
+app.post("/api/wishlists", async (req, res) => {
+  try {
+    const token = (req.headers.authorization || "").replace("Bearer ", "");
+    if (!token) return res.status(401).json({ error: "Unauthorized" });
+    const { data: { user }, error: authErr } = await supabaseAdmin.auth.getUser(token);
+    if (authErr || !user) return res.status(401).json({ error: "Unauthorized" });
+    const { wishlists } = req.body || {};
+    if (!Array.isArray(wishlists)) return res.status(400).json({ error: "wishlists must be an array" });
+    // Read existing metadata first to avoid clobbering unrelated keys
+    const { data: existing } = await supabaseAdmin.auth.admin.getUserById(user.id);
+    const existingMeta = existing?.user?.user_metadata ?? {};
+    const { error } = await supabaseAdmin.auth.admin.updateUserById(user.id, {
+      user_metadata: { ...existingMeta, wishlists },
+    });
+    if (error) return res.status(500).json({ error: error.message });
+    return res.json({ ok: true });
+  } catch (e) {
+    return res.status(500).json({ error: e.message });
   }
 });
 

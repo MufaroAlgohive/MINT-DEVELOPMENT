@@ -1,0 +1,101 @@
+import { supabaseAdmin, authenticateUser } from '../_lib/supabase.js';
+
+export default async function handler(req, res) {
+  if (req.method === 'OPTIONS') return res.status(200).end();
+
+  try {
+    const { user, error: authError } = await authenticateUser(req);
+    if (authError || !user) return res.status(401).json({ error: 'Unauthorized' });
+
+    const { id } = req.query;
+
+    // GET — full registry (owner view)
+    if (req.method === 'GET') {
+      const { data: registry, error } = await supabaseAdmin
+        .from('gift_events')
+        .select(`*, items:gift_registry_items(*)`)
+        .eq('id', id)
+        .eq('creator_user_id', user.id)
+        .single();
+
+      if (error || !registry) return res.status(404).json({ error: 'Registry not found' });
+
+      if (registry.items?.length) {
+        const shareItems = registry.items.filter(i => i.instrument_type !== 'BASKET');
+        const basketItems = registry.items.filter(i => i.instrument_type === 'BASKET');
+
+        // Look up SHARE items in securities_c
+        let secMap = {};
+        if (shareItems.length) {
+          const { data: securities } = await supabaseAdmin
+            .from('securities_c')
+            .select('isin, name, logo_url, last_price')
+            .in('isin', shareItems.map(i => i.isin));
+          secMap = Object.fromEntries((securities || []).map(s => [s.isin, s]));
+        }
+
+        // Look up BASKET items in strategies_c (isin stores the strategy UUID)
+        let stratMap = {};
+        if (basketItems.length) {
+          const { data: strategies } = await supabaseAdmin
+            .from('strategies_c')
+            .select('id, name, short_name')
+            .in('id', basketItems.map(i => i.isin));
+          stratMap = Object.fromEntries((strategies || []).map(s => [s.id, s]));
+        }
+
+        registry.items = registry.items.map(item => {
+          if (item.instrument_type === 'BASKET') {
+            const strat = stratMap[item.isin];
+            return {
+              ...item,
+              name: strat?.short_name || strat?.name || item.isin,
+              short_name: strat?.short_name || null,
+              logo_url: null,
+              price_snapshot_cents: item.price_snapshot_cents || 0,
+            };
+          }
+          return {
+            ...item,
+            name: secMap[item.isin]?.name || item.isin,
+            logo_url: secMap[item.isin]?.logo_url || null,
+            price_snapshot_cents: item.price_snapshot_cents || secMap[item.isin]?.last_price || 0,
+          };
+        });
+      }
+
+      return res.status(200).json({ registry });
+    }
+
+    // PUT — edit title/occasion/expiry/message
+    if (req.method === 'PUT') {
+      const { title, occasion, expiryAt, message } = req.body;
+      const { data, error } = await supabaseAdmin
+        .from('gift_events')
+        .update({ title, occasion, expiry_at: expiryAt, message, updated_at: new Date().toISOString() })
+        .eq('id', id)
+        .eq('creator_user_id', user.id)
+        .select()
+        .single();
+      if (error || !data) return res.status(404).json({ error: 'Registry not found' });
+      return res.status(200).json({ success: true, registry: data });
+    }
+
+    // DELETE — permanently delete a registry (owner only)
+    if (req.method === 'DELETE') {
+      const { data, error } = await supabaseAdmin
+        .from('gift_events')
+        .delete()
+        .eq('id', id)
+        .eq('creator_user_id', user.id)
+        .select()
+        .single();
+      if (error || !data) return res.status(404).json({ error: 'Registry not found' });
+      return res.status(200).json({ success: true });
+    }
+
+    return res.status(405).json({ error: 'Method not allowed' });
+  } catch (e) {
+    return res.status(500).json({ error: e.message });
+  }
+}

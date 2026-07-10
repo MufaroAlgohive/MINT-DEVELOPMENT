@@ -1,5 +1,7 @@
 import React, { useEffect, useId, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Gift, Search, Sparkles, TrendingUp, X } from "lucide-react";
+import { ArrowLeft, BookMarked, Bookmark, Gift, Heart, Search, Sparkles, TrendingUp, X } from "lucide-react";
+import GiftRegistryCreateSheet from "../components/GiftRegistryCreateSheet.jsx";
+import WishlistPickerSheet from "../components/WishlistPickerSheet.jsx";
 import { AreaChart, Area, LineChart, Line, ResponsiveContainer } from "recharts";
 import { motion, AnimatePresence } from "framer-motion";
 import { SparklesText } from "../components/ui/sparkles-text";
@@ -7,6 +9,7 @@ import { getPublicStrategies, formatChangePct } from "../lib/strategyData";
 import { calculateMinInvestmentSync, enrichSecuritiesWithIntradayPrices, buildHoldingsBySymbol } from "../lib/strategyUtils";
 import { supabase } from "../lib/supabase";
 import { formatCurrency } from "../lib/formatCurrency";
+import WishlistToast from "../components/WishlistToast.jsx";
 
 const HOME_BG = {
   backgroundColor: '#f8f6fa',
@@ -67,7 +70,7 @@ function MiniSparkline({ strategyId, positive }) {
   );
 }
 
-function StrategyCard({ strategy, ytd, holdingsBySymbol, onGift, featured }) {
+function StrategyCard({ strategy, ytd, holdingsBySymbol, onGift, featured, isWishlisted, isWatchlisted, onToggleWishlist, onToggleWatchlist }) {
   const currency = strategy.base_currency || "R";
   const calcMin = calculateMinInvestmentSync(strategy, holdingsBySymbol);
   const minInvest = calcMin ? formatCurrency(calcMin * 1.08, currency) : null;
@@ -103,6 +106,24 @@ function StrategyCard({ strategy, ytd, holdingsBySymbol, onGift, featured }) {
             </div>
           </div>
         )}
+
+        {/* Bookmark + Heart icons — bottom-right */}
+        <div className="absolute bottom-4 right-4 flex items-center gap-1.5 z-10">
+          <button
+            type="button"
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); onToggleWatchlist?.(e, strategy.id); }}
+            className="flex h-9 w-9 items-center justify-center rounded-full bg-white/80 backdrop-blur-sm shadow-sm active:scale-90 transition-transform"
+          >
+            <Bookmark className={`h-5 w-5 ${isWatchlisted ? "fill-yellow-400 text-yellow-400" : "text-slate-400"}`} />
+          </button>
+          <button
+            type="button"
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); onToggleWishlist?.(e, `gift:${strategy.id}`); }}
+            className="flex h-9 w-9 items-center justify-center rounded-full bg-white/80 backdrop-blur-sm shadow-sm active:scale-90 transition-transform"
+          >
+            <Heart className={`h-5 w-5 ${isWishlisted ? "fill-red-500 text-red-500" : "text-slate-400"}`} />
+          </button>
+        </div>
 
         <div className="p-4">
           {/* Top row: logos + chart */}
@@ -179,7 +200,7 @@ function CategoryPill({ label, active, onClick }) {
   );
 }
 
-export default function GiftStrategyPickerPage({ onBack, onNavigate }) {
+export default function GiftStrategyPickerPage({ onBack, onNavigate, autoOpenWishlist }) {
   const [strategies, setStrategies] = useState([]);
   const [ytdMap, setYtdMap] = useState({});
   const [securitiesMap, setSecuritiesMap] = useState(new Map());
@@ -187,7 +208,95 @@ export default function GiftStrategyPickerPage({ onBack, onNavigate }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeCategory, setActiveCategory] = useState("All");
   const [showSearch, setShowSearch] = useState(false);
+  const [showRegistrySheet, setShowRegistrySheet] = useState(false);
+  const [showWishlistMenu, setShowWishlistMenu] = useState(false);
+  // Wishlist (heart) state — loaded from Supabase user_metadata, not localStorage
+  const [wishlistedKeys, setWishlistedKeys] = useState(new Set());
+  const [giftStrategyWatchlist, setGiftStrategyWatchlist] = useState([]);
+  const [toastMsg, setToastMsg] = useState("");
+  const [toastVisible, setToastVisible] = useState(false);
+  const [toastRegistryId, setToastRegistryId] = useState(null);
+
   const searchRef = useRef(null);
+  const wishlistMenuRef = useRef(null);
+
+  // Load wishlisted keys + watchlist from Supabase user_metadata on mount
+  useEffect(() => {
+    async function loadPrefs() {
+      try {
+        const { data } = await supabase.auth.getSession();
+        const token = data?.session?.access_token;
+        if (!token) return;
+        const res = await fetch("/api/gift-wishlist-prefs", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const { wishlistedKeys: keys = [], watchlist = [] } = await res.json();
+          setWishlistedKeys(new Set(keys));
+          setGiftStrategyWatchlist(watchlist);
+        }
+      } catch (e) {
+        console.error("[GiftStrategyPicker] loadPrefs error:", e);
+      }
+    }
+    loadPrefs();
+  }, []);
+
+  async function updatePrefs(patch) {
+    try {
+      const { data } = await supabase.auth.getSession();
+      const token = data?.session?.access_token;
+      if (!token) return;
+      await fetch("/api/gift-wishlist-prefs", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify(patch),
+      });
+    } catch (e) {
+      console.error("[GiftStrategyPicker] updatePrefs error:", e);
+    }
+  }
+
+  const [wishlistPickerKey, setWishlistPickerKey] = useState(null); // itemKey awaiting picker
+  const [pendingRegistryItem, setPendingRegistryItem] = useState(null); // preserved when transitioning picker → create sheet
+  const [pendingRegistryTitle, setPendingRegistryTitle] = useState(null); // name entered in the empty-state Step-1 form
+
+  function toggleWishlistItem(e, key) {
+    e.preventDefault(); e.stopPropagation();
+    if (wishlistedKeys.has(key)) {
+      const next = new Set(wishlistedKeys);
+      next.delete(key);
+      setWishlistedKeys(next);
+      updatePrefs({ wishlistedKeys: [...next] });
+    } else {
+      // Show picker so the user can choose a wishlist category
+      setWishlistPickerKey(key);
+    }
+  }
+
+  function toggleGiftStrategyWatchlist(e, id) {
+    e.preventDefault(); e.stopPropagation();
+    setGiftStrategyWatchlist(prev => {
+      const next = prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id];
+      updatePrefs({ watchlist: next });
+      return next;
+    });
+  }
+
+  useEffect(() => {
+    if (!showWishlistMenu) return;
+    function handleClickOutside(e) {
+      if (wishlistMenuRef.current && !wishlistMenuRef.current.contains(e.target)) {
+        setShowWishlistMenu(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("touchstart", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("touchstart", handleClickOutside);
+    };
+  }, [showWishlistMenu]);
 
   useEffect(() => {
     let cancelled = false;
@@ -237,6 +346,10 @@ export default function GiftStrategyPickerPage({ onBack, onNavigate }) {
   useEffect(() => {
     if (showSearch && searchRef.current) searchRef.current.focus();
   }, [showSearch]);
+
+  useEffect(() => {
+    if (autoOpenWishlist) setShowRegistrySheet(true);
+  }, [autoOpenWishlist]);
 
   const sectors = ["All", ...new Set(strategies.map(s => s.sector || "General"))];
 
@@ -292,13 +405,61 @@ export default function GiftStrategyPickerPage({ onBack, onNavigate }) {
               sparklesCount={6}
               className="text-base tracking-wide text-white"
             />
-            <button
-              type="button"
-              onClick={() => setShowSearch(!showSearch)}
-              className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 backdrop-blur-sm"
-            >
-              {showSearch ? <X className="h-4 w-4" /> : <Search className="h-4 w-4" />}
-            </button>
+            <div className="flex items-center gap-2">
+              <div className="relative" ref={wishlistMenuRef}>
+                <button
+                  type="button"
+                  onClick={() => setShowWishlistMenu((v) => !v)}
+                  className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 backdrop-blur-sm"
+                  title="Wishlist"
+                >
+                  <BookMarked className="h-4 w-4" />
+                </button>
+
+                <AnimatePresence>
+                  {showWishlistMenu && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -8, scale: 0.95 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: -8, scale: 0.95 }}
+                      transition={{ duration: 0.15 }}
+                      className="absolute right-0 top-12 z-50 w-44 overflow-hidden rounded-2xl bg-white shadow-xl ring-1 ring-black/5"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowWishlistMenu(false);
+                          onNavigate?.("giftRegistryDashboard");
+                        }}
+                        className="flex w-full items-center gap-2.5 px-4 py-3 text-left text-sm font-medium text-slate-700 hover:bg-slate-50"
+                      >
+                        <BookMarked className="h-4 w-4 text-violet-600" />
+                        My Wishlist
+                      </button>
+                      <div className="h-px bg-slate-100" />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowWishlistMenu(false);
+                          setShowRegistrySheet(true);
+                        }}
+                        className="flex w-full items-center gap-2.5 px-4 py-3 text-left text-sm font-medium text-slate-700 hover:bg-slate-50"
+                      >
+                        <Sparkles className="h-4 w-4 text-violet-600" />
+                        New Wishlist
+                      </button>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowSearch(!showSearch)}
+                className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 backdrop-blur-sm"
+              >
+                {showSearch ? <X className="h-4 w-4" /> : <Search className="h-4 w-4" />}
+              </button>
+            </div>
           </div>
 
           {/* Search bar (collapsible) */}
@@ -421,6 +582,10 @@ export default function GiftStrategyPickerPage({ onBack, onNavigate }) {
                         holdingsBySymbol={securitiesMap}
                         onGift={handleGift}
                         featured
+                        isWishlisted={wishlistedKeys.has(`gift:${strategy.id}`)}
+                        isWatchlisted={giftStrategyWatchlist.includes(strategy.id)}
+                        onToggleWishlist={toggleWishlistItem}
+                        onToggleWatchlist={toggleGiftStrategyWatchlist}
                       />
                     </motion.div>
                   ))}
@@ -457,6 +622,10 @@ export default function GiftStrategyPickerPage({ onBack, onNavigate }) {
                         holdingsBySymbol={securitiesMap}
                         onGift={handleGift}
                         featured={false}
+                        isWishlisted={wishlistedKeys.has(`gift:${strategy.id}`)}
+                        isWatchlisted={giftStrategyWatchlist.includes(strategy.id)}
+                        onToggleWishlist={toggleWishlistItem}
+                        onToggleWatchlist={toggleGiftStrategyWatchlist}
                       />
                     </motion.div>
                   ))}
@@ -466,6 +635,71 @@ export default function GiftStrategyPickerPage({ onBack, onNavigate }) {
           )}
         </div>
       </main>
+
+      {/* Wishlist picker — Airbnb-style category selector */}
+      {wishlistPickerKey && (
+        <WishlistPickerSheet
+          itemKey={wishlistPickerKey}
+          onClose={() => setWishlistPickerKey(null)}
+          onSaved={(savedItemKey, listName, registryId) => {
+            const next = new Set([...wishlistedKeys, savedItemKey]);
+            setWishlistedKeys(next);
+            updatePrefs({ wishlistedKeys: [...next] });
+            setWishlistPickerKey(null);
+            setToastMsg(`Added to "${listName}"`);
+            setToastRegistryId(registryId || null);
+            setToastVisible(true);
+          }}
+          onCreateNew={(name) => {
+            const key = wishlistPickerKey;
+            setWishlistPickerKey(null);
+            setPendingRegistryItem(key);
+            setPendingRegistryTitle(name || null);
+            setShowRegistrySheet(true);
+          }}
+        />
+      )}
+
+      {/* Wishlist creation bottom sheet */}
+      <GiftRegistryCreateSheet
+        open={showRegistrySheet}
+        pendingItemKey={pendingRegistryItem}
+        initialTitle={pendingRegistryTitle}
+        initialStep={pendingRegistryTitle ? 2 : 1}
+        onClose={() => { setShowRegistrySheet(false); setPendingRegistryItem(null); setPendingRegistryTitle(null); }}
+        onSaved={(registry, title) => {
+          setShowRegistrySheet(false);
+          // Mark the pending item as wishlisted now that it's been saved to a new wishlist
+          if (pendingRegistryItem) {
+            const next = new Set([...wishlistedKeys, pendingRegistryItem]);
+            setWishlistedKeys(next);
+            updatePrefs({ wishlistedKeys: [...next] });
+          }
+          setPendingRegistryItem(null);
+          setToastMsg(`"${title}" created!`);
+          setToastVisible(true);
+          if (onNavigate && registry?.id) {
+            onNavigate("giftRegistryDashboard", { registryId: registry.id, registry, pendingItemKey: null });
+          }
+        }}
+        onNavigate={onNavigate}
+      />
+
+      {/* Wishlist saved toast */}
+      <WishlistToast
+        message={toastMsg}
+        visible={toastVisible}
+        onHide={() => setToastVisible(false)}
+        actionLabel="View →"
+        onAction={() => {
+          setToastVisible(false);
+          if (toastRegistryId) {
+            onNavigate?.("giftRegistryDashboard", { registryId: toastRegistryId });
+          } else {
+            onNavigate?.("giftRegistryDashboard");
+          }
+        }}
+      />
     </div>
   );
 }

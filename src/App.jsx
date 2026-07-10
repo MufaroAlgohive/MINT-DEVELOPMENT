@@ -10,6 +10,8 @@ import { StatusBar, Style } from '@capacitor/status-bar';
 import { SplashScreen } from '@capacitor/splash-screen';
 import { Keyboard } from '@capacitor/keyboard';
 import SwipeBackWrapper from "./components/SwipeBackWrapper.jsx";
+import GiftRegistryCreateSheet from "./components/GiftRegistryCreateSheet.jsx";
+import WishlistToast from "./components/WishlistToast.jsx";
 import AppLayout from "./layouts/AppLayout.jsx";
 import { useProfile } from "./lib/useProfile";
 import { NotificationsProvider, createWelcomeNotification, useNotificationsContext } from "./lib/NotificationsContext.jsx";
@@ -53,6 +55,12 @@ const GiftCodeEntryPage = lazy(() => import("./pages/GiftCodeEntryPage.jsx"));
 const GiftPreviewPage = lazy(() => import("./pages/GiftPreviewPage.jsx"));
 const SentGiftsPageV2 = lazy(() => import("./pages/SentGiftsPageV2.jsx"));
 const GiftStrategyPickerPage = lazy(() => import("./pages/GiftStrategyPickerPage.jsx"));
+const MyWishlistsPage = lazy(() => import("./pages/MyWishlistsPage.jsx"));
+const GiftRegistryCreatePage = lazy(() => import("./pages/GiftRegistryCreatePage.jsx"));
+const GiftRegistryPreviewPage = lazy(() => import("./pages/GiftRegistryPreviewPage.jsx"));
+const GiftRegistryDetailPage = lazy(() => import("./pages/GiftRegistryDetailPage.jsx"));
+const GiftRegistryPublicPage = lazy(() => import("./pages/GiftRegistryPublicPage.jsx"));
+const GiftRegistryMintNumberLookup = lazy(() => import("./pages/GiftRegistryMintNumberLookup.jsx"));
 const NewsArticlePage = lazy(() => import("./pages/NewsArticlePage.jsx"));
 const ActivityPage = lazy(() => import("./pages/ActivityPage.jsx"));
 const ActionsPage = lazy(() => import("./pages/ActionsPage.jsx"));
@@ -213,6 +221,7 @@ const App = () => {
   const [selectedStrategy, setSelectedStrategy] = useState(null);
   const [selectedArticleId, setSelectedArticleId] = useState(null);
   const [selectedFamilyChild, setSelectedFamilyChild] = useState(null);
+  const [giftWishlistAutoOpen, setGiftWishlistAutoOpen] = useState(false);
   const [withdrawChild, setWithdrawChild] = useState(null); // child whose holdings the Withdraw page is scoped to (null = parent)
   const [funeralCoverInitialDependents, setFuneralCoverInitialDependents] = useState([]);
   const [marketsInitialView, setMarketsInitialView] = useState(null);
@@ -240,6 +249,11 @@ const App = () => {
   const [showPinLock, setShowPinLock] = useState(false);
   const [showOpenStrategiesMaintenance, setShowOpenStrategiesMaintenance] = useState(false);
   const [appEnabled, setAppEnabled] = useState(true);
+  // Gift Registry navigation state
+  const [giftRegistryNavState, setGiftRegistryNavState] = useState({});  // { registryId, registry, token, pendingItemKey }
+  const [showRegistryCreateSheet, setShowRegistryCreateSheet] = useState(false);
+  const [registrySavedToastMsg, setRegistrySavedToastMsg] = useState("");
+  const [registrySavedToastVisible, setRegistrySavedToastVisible] = useState(false);
 
   const isAuthenticated = !['welcome', 'auth', 'linkExpired'].includes(currentPage);
 
@@ -563,11 +577,14 @@ const App = () => {
 
   useEffect(() => {
     const handleNavigationEvent = (e) => {
-      const { page, member, child } = e.detail || {};
+      const { page, member, child, openWishlistCreate } = e.detail || {};
       // Withdrawals temporarily disabled (CEO) — never route to the withdraw page.
       if (page === 'withdraw') return;
       if (page) {
         let normalizedPage = page === 'family' ? 'familyDashboard' : page;
+        if (page === 'giftStrategies') {
+          setGiftWishlistAutoOpen(!!openWishlistCreate);
+        }
         const selectedChild = child || member || null;
         if (selectedChild && (page === 'childDashboard' || page === 'memberPortfolio')) {
           setSelectedFamilyChild(selectedChild);
@@ -1483,6 +1500,8 @@ const App = () => {
                   childFilter={marketsChildFilter}
                   onNavigateToHome={() => { navigationHistory.current = []; setPreviousPageName(null); setCurrentPage("home"); }}
                   onNavigateToInvest={() => { navigationHistory.current = []; setPreviousPageName(null); setCurrentPage("markets"); }}
+                  onOpenMyWishlists={() => navigateTo("giftRegistryDashboard")}
+                  onContinueToRegistry={(itemKey, name) => { setGiftRegistryNavState(s => ({ ...s, pendingItemKey: itemKey, pendingTitle: name || null })); setShowRegistryCreateSheet(true); }}
                 />
               </AppLayout>
             )}
@@ -1579,6 +1598,29 @@ const App = () => {
             }}
             onGiftDone={() => { setShowAdultInvestModal(false); navigateTo("home"); }}
             onUpdateMandate={() => { setShowAdultInvestModal(false); navigateTo("updateMandate"); }}
+          />
+
+          {/* Gift Registry Create Sheet — shown as overlay on any tab */}
+          <GiftRegistryCreateSheet
+            open={showRegistryCreateSheet}
+            pendingItemKey={giftRegistryNavState.pendingItemKey}
+            initialTitle={giftRegistryNavState.pendingTitle}
+            initialStep={giftRegistryNavState.pendingTitle ? 2 : 1}
+            onClose={() => { setShowRegistryCreateSheet(false); setGiftRegistryNavState(s => ({ ...s, pendingTitle: null })); }}
+            onSaved={(registry, title) => {
+              setShowRegistryCreateSheet(false);
+              setGiftRegistryNavState(s => ({ ...s, pendingTitle: null, ...(registry?.id ? { registryId: registry.id, registry } : {}) }));
+              setRegistrySavedToastMsg(`"${title}" ${registry?.id ? "created" : "saved"}!`);
+              setRegistrySavedToastVisible(true);
+              if (registry?.id) {
+                navigateTo("giftRegistryDashboard");
+              }
+            }}
+          />
+          <WishlistToast
+            message={registrySavedToastMsg}
+            visible={registrySavedToastVisible}
+            onHide={() => setRegistrySavedToastVisible(false)}
           />
         </>
       </Suspense>
@@ -2116,6 +2158,29 @@ const App = () => {
           onGiftDone={() => { setShowAdultInvestModal(false); navigateTo("home"); }}
           onUpdateMandate={() => { setShowAdultInvestModal(false); navigateTo("updateMandate"); }}
         />
+
+        {/* Gift Registry Create Sheet — shown as overlay on any tab */}
+        <GiftRegistryCreateSheet
+          open={showRegistryCreateSheet}
+          pendingItemKey={giftRegistryNavState.pendingItemKey}
+          initialTitle={giftRegistryNavState.pendingTitle}
+          initialStep={giftRegistryNavState.pendingTitle ? 2 : 1}
+          onClose={() => { setShowRegistryCreateSheet(false); setGiftRegistryNavState(s => ({ ...s, pendingTitle: null })); }}
+          onSaved={(registry, title) => {
+            setShowRegistryCreateSheet(false);
+            setGiftRegistryNavState(s => ({ ...s, pendingTitle: null, ...(registry?.id ? { registryId: registry.id, registry } : {}) }));
+            setRegistrySavedToastMsg(`"${title}" ${registry?.id ? "created" : "saved"}!`);
+            setRegistrySavedToastVisible(true);
+            if (registry?.id) {
+              navigateTo("giftRegistryDashboard");
+            }
+          }}
+        />
+        <WishlistToast
+          message={registrySavedToastMsg}
+          visible={registrySavedToastVisible}
+          onHide={() => setRegistrySavedToastVisible(false)}
+        />
       </>
     );
   }
@@ -2535,7 +2600,10 @@ const App = () => {
         <NotificationsPage
           onBack={goBack}
           onOpenSettings={() => navigateTo("notificationSettings")}
-          onNavigate={navigateTo}
+          onNavigate={(page, params) => {
+            if (params) setGiftRegistryNavState(s => ({ ...s, ...params }));
+            navigateTo(page);
+          }}
         />
       </SwipeBackWrapper>
     );
@@ -2803,10 +2871,15 @@ const App = () => {
           <Suspense fallback={<div className="min-h-screen bg-slate-50" />}>
             <GiftStrategyPickerPage
               onBack={goBack}
+              autoOpenWishlist={giftWishlistAutoOpen}
               onNavigate={(page, params) => {
+                setGiftWishlistAutoOpen(false);
                 if (page === "giftStrategyInvest") {
                   setPageParams(params);
                   navigateTo("giftStrategyInvest");
+                } else if (page === "giftRegistryCreate" || page === "giftRegistryDetail" || page === "giftRegistryPreview" || page === "giftRegistryPublic" || page === "giftRegistryDashboard" || page === "giftRegistryLookup") {
+                  if (params) setGiftRegistryNavState(s => ({ ...s, ...params }));
+                  navigateTo(page);
                 } else {
                   navigateTo(page);
                 }
@@ -2834,6 +2907,98 @@ const App = () => {
       </SwipeBackWrapper>
     );
   }
+
+  // ── Gift Registry pages ──────────────────────────────────────────────────
+  if (currentPage === "giftRegistryDashboard") {
+    return (
+      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
+        <Suspense fallback={<div className="min-h-screen bg-slate-50" />}>
+          <MyWishlistsPage
+            onBack={goBack}
+            onNavigate={(page, state) => { if (state) setGiftRegistryNavState(s => ({ ...s, ...state })); navigateTo(page); }}
+          />
+        </Suspense>
+      </SwipeBackWrapper>
+    );
+  }
+
+  if (currentPage === "giftRegistryCreate") {
+    return (
+      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
+        <Suspense fallback={<div className="min-h-screen bg-[#f8f9fc]" />}>
+          <GiftRegistryCreatePage
+            onBack={goBack}
+            onNavigate={(page, state) => { if (state) setGiftRegistryNavState(s => ({ ...s, ...state })); navigateTo(page); }}
+            pendingItemKey={giftRegistryNavState.pendingItemKey}
+          />
+        </Suspense>
+      </SwipeBackWrapper>
+    );
+  }
+
+
+  if (currentPage === "giftRegistryPreview") {
+    return (
+      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
+        <Suspense fallback={<div className="min-h-screen bg-[#f8f9fc]" />}>
+          <GiftRegistryPreviewPage
+            registryId={giftRegistryNavState.registryId}
+            registry={giftRegistryNavState.registry}
+            onBack={goBack}
+            onNavigate={(page, state) => { if (state) setGiftRegistryNavState(s => ({ ...s, ...state })); navigateTo(page); }}
+          />
+        </Suspense>
+      </SwipeBackWrapper>
+    );
+  }
+
+  if (currentPage === "giftRegistryDetail") {
+    return (
+      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
+        <Suspense fallback={<div className="min-h-screen bg-[#f8f9fc]" />}>
+          <GiftRegistryDetailPage
+            registryId={giftRegistryNavState.registryId || giftRegistryNavState.registry?.id}
+            onBack={goBack}
+            onNavigate={(page, state) => { if (state) setGiftRegistryNavState(s => ({ ...s, ...state })); navigateTo(page); }}
+          />
+        </Suspense>
+      </SwipeBackWrapper>
+    );
+  }
+
+  if (currentPage === "giftRegistryPublic") {
+    return (
+      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
+        <Suspense fallback={<div className="min-h-screen bg-[#f8f9fc]" />}>
+          <GiftRegistryPublicPage
+            token={giftRegistryNavState.token}
+            context={giftRegistryNavState.context}
+            user={profile}
+            isKycComplete={onboardingComplete}
+            onBack={goBack}
+            onAuthPrompt={(type) => {
+              if (type === "kyc") { navigateTo("userOnboarding"); }
+              else { navigateTo("auth"); }
+            }}
+          />
+        </Suspense>
+      </SwipeBackWrapper>
+    );
+  }
+
+  if (currentPage === "giftRegistryLookup") {
+    return (
+      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
+        <Suspense fallback={<div className="min-h-screen bg-[#f8f9fc]" />}>
+          <GiftRegistryMintNumberLookup
+            onBack={goBack}
+            onNavigate={(page, state) => { if (state) setGiftRegistryNavState(s => ({ ...s, ...state })); navigateTo(page); }}
+          />
+        </Suspense>
+      </SwipeBackWrapper>
+    );
+  }
+  // ── End Gift Registry pages ───────────────────────────────────────────────
 
   if (isStaffLoginRoute) {
     return (
