@@ -12746,7 +12746,9 @@ async function computeAndSaveStrategyReturns() {
       }
     }
 
-    // 4. Latest intraday price per base-symbol (used for 5d / 1m / 6m current value)
+    // 4. Latest intraday price per base-symbol (used for 5d / 1m / 6m current value).
+    //    These prices are written by fetchYahooPrice() which has a 20% anomaly guard,
+    //    so they are safe to use for YTD calculations.
     const { data: latestRows } = await db
       .from('stock_intraday_c')
       .select('symbol, current_price')
@@ -12759,6 +12761,24 @@ async function computeAndSaveStrategyReturns() {
       if (!latestPriceMap[base] && row.current_price > 0)
         latestPriceMap[base] = row.current_price;
     }
+
+    // 4b. Previous EOD price per base-symbol from stock_returns_c.
+    //     Used as fallback for YTD when intraday is missing (e.g. symbol rejected by anomaly guard).
+    //     stock_returns_c is populated from stock_intraday_c so its prices are also guarded.
+    const { data: eodRows } = await db
+      .from('stock_returns_c')
+      .select('symbol, current_price')
+      .in('symbol', querySymbolList)
+      .lt('as_of_date', todayStr)
+      .order('as_of_date', { ascending: false });
+
+    const prevEodMap = {}; // base → cents (most recent EOD price before today)
+    for (const row of (eodRows || [])) {
+      const base = toBase(row.symbol);
+      if (!prevEodMap[base] && row.current_price > 0)
+        prevEodMap[base] = row.current_price;
+    }
+    console.log(`[strategy-returns] prevEodMap: ${Object.keys(prevEodMap).length} symbols resolved`);
 
     // 5. Period anchor prices (5d, 1m) from stock_intraday_c historical rows.
     //    We take the FIRST record on or after the anchor date so we get the opening
@@ -12834,17 +12854,21 @@ async function computeAndSaveStrategyReturns() {
     };
 
     // 6b. YTD basket return using real Dec-31-2025 closes from Yahoo Finance as anchor.
-    //    Formula: ytd = (Σ shares × last_price) / (Σ shares × dec31Price) − 1
+    //    Formula: ytd = (Σ shares × currentPrice) / (Σ shares × dec31Price) − 1
     //    Anchor prices are fetched once and cached in _ytdAnchorCache for the server lifetime.
-    //    Current prices come from securities_c.last_price (kept live by the price feed).
+    //    Current prices use latestPriceMap (stock_intraday_c, already 20%-guarded by fetchYahooPrice)
+    //    with prevEodMap (stock_returns_c) as fallback when intraday is unavailable.
+    //    securities_c.last_price is NOT used here — it has no anomaly guard and can carry
+    //    corrupt values from a bad external price feed.
     const basketYtdReturn = (holdings) => {
       let todayVal = 0, anchorVal = 0, matched = 0;
       for (const { symbol, shares } of holdings) {
-        const anchorPrice   = _ytdAnchorCache[symbol];
-        const sec           = securitiesMap[symbol];
-        if (!anchorPrice || !sec?.last_price) continue;
+        const anchorPrice = _ytdAnchorCache[symbol];
+        // Prefer guarded intraday price; fall back to previous EOD (also guarded at write time)
+        const currentPrice = latestPriceMap[symbol] || prevEodMap[symbol];
+        if (!anchorPrice || !currentPrice) continue;
         anchorVal += shares * anchorPrice;
-        todayVal  += shares * sec.last_price;
+        todayVal  += shares * currentPrice;
         matched++;
       }
       if (!anchorVal || !matched) return null;
@@ -12926,6 +12950,15 @@ setTimeout(() => {
   console.log('[strategy-returns-cron] Startup — seeding today\'s strategy returns');
   computeAndSaveStrategyReturns();
 }, 60 * 1000);
+
+// Manual trigger — POST /api/strategy-returns/refresh (admin key required)
+app.post('/api/strategy-returns/refresh', async (req, res) => {
+  const authErr = checkAdminKey(req);
+  if (authErr) return res.status(401).json({ error: authErr });
+  console.log('[strategy-returns] Manual refresh triggered via API');
+  computeAndSaveStrategyReturns(); // fire-and-forget; check logs for results
+  res.json({ ok: true, message: 'Strategy returns recompute triggered — check server logs for results' });
+});
 
 // ── IT Incident Register API ──────────────────────────────────────────────────
 // Uses pgPool directly to avoid Supabase PostgREST schema-cache delay on new tables.
