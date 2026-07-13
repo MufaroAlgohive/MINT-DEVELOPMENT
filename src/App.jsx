@@ -125,6 +125,16 @@ const initialGiftToken = (() => {
   return match ? match[1] : null;
 })();
 
+// Detect /registry/:token deep link — public wishlist shared via QR code or link
+const initialRegistryToken = (() => {
+  const match = window.location.pathname.match(/^\/registry\/([A-Za-z0-9_-]+)$/);
+  return match ? match[1] : null;
+})();
+// Persist so we can redirect back here after login/signup
+if (initialRegistryToken) {
+  localStorage.setItem('mint_pending_registry_token', initialRegistryToken);
+}
+
 // Detect secret staff login route
 const isStaffLoginRoute = window.location.pathname === '/staff-login';
 
@@ -198,6 +208,7 @@ const App = () => {
   const initialPage = hasError ? "linkExpired"
     : initialGiftToken ? "giftClaim"
     : isRecoveryMode ? "auth"
+    : initialRegistryToken ? "giftRegistryPublic"
     : initialOzowParam === "success" ? "paymentSuccess"
     : (initialOzowParam === "cancel" || initialOzowParam === "error" || initialOzowParam === "abandoned" || initialOzowParam === "pending" || initialOzowParam === "pendinginvestigation") ? "paymentCancelled"
     : storedSession ? "home"
@@ -213,7 +224,8 @@ const App = () => {
   const [pageParams, setPageParams] = useState(null);
   const [previousPageName, setPreviousPageName] = useState(null);
   const [authStep, setAuthStep] = useState(isRecoveryMode ? "newPassword" : "email");
-  const [isCheckingAuth, setIsCheckingAuth] = useState(!storedSession && !hasError && !initialOzowParam);
+  // Skip auth skeleton for public pages that don't require login
+  const [isCheckingAuth, setIsCheckingAuth] = useState(!storedSession && !hasError && !initialOzowParam && !initialRegistryToken);
   const [sessionReady, setSessionReady] = useState(false);
   const [notificationReturnPage, setNotificationReturnPage] = useState("home");
   const [modal, setModal] = useState(null);
@@ -249,8 +261,10 @@ const App = () => {
   const [showPinLock, setShowPinLock] = useState(false);
   const [showOpenStrategiesMaintenance, setShowOpenStrategiesMaintenance] = useState(false);
   const [appEnabled, setAppEnabled] = useState(true);
-  // Gift Registry navigation state
-  const [giftRegistryNavState, setGiftRegistryNavState] = useState({});  // { registryId, registry, token, pendingItemKey }
+  // Gift Registry navigation state — pre-seeded from /registry/:token deep link if present
+  const [giftRegistryNavState, setGiftRegistryNavState] = useState(
+    initialRegistryToken ? { token: initialRegistryToken, context: "shared_wishlist" } : {}
+  );  // { registryId, registry, token, context, pendingItemKey }
   const [showRegistryCreateSheet, setShowRegistryCreateSheet] = useState(false);
   const [registrySavedToastMsg, setRegistrySavedToastMsg] = useState("");
   const [registrySavedToastVisible, setRegistrySavedToastVisible] = useState(false);
@@ -692,6 +706,10 @@ const App = () => {
               setCurrentPage("paymentSuccess");
             } else if (["cancel", "error", "abandoned", "pending", "pendinginvestigation"].includes(ozowReturnParam.current)) {
               setCurrentPage("paymentCancelled");
+            } else if (initialRegistryToken) {
+              // User is logged in and scanned a wishlist QR code — keep them on the public page
+              // (giftRegistryNavState is already seeded with the token)
+              setCurrentPage("giftRegistryPublic");
             } else {
               setCurrentPage("home");
             }
@@ -2980,7 +2998,13 @@ const App = () => {
             onBack={goBack}
             onAuthPrompt={(type) => {
               if (type === "kyc") { navigateTo("userOnboarding"); }
-              else { navigateTo("auth"); }
+              else {
+                // Persist token so we return to this wishlist after login/signup
+                if (giftRegistryNavState.token) {
+                  localStorage.setItem('mint_pending_registry_token', giftRegistryNavState.token);
+                }
+                navigateTo("auth");
+              }
             }}
           />
         </Suspense>
@@ -3066,7 +3090,15 @@ const App = () => {
     justLoggedInRef.current = true;
     sessionCheckSkipUntilRef.current = Date.now() + 30000;
     localStorage.setItem('mint_last_activity', Date.now().toString());
-    setCurrentPage("home");
+    // Check if user came from a shared wishlist (QR code / shared link)
+    const pendingRegistryToken = localStorage.getItem('mint_pending_registry_token');
+    if (pendingRegistryToken) {
+      localStorage.removeItem('mint_pending_registry_token');
+      setGiftRegistryNavState({ token: pendingRegistryToken, context: "shared_wishlist" });
+      setCurrentPage("giftRegistryPublic");
+    } else {
+      setCurrentPage("home");
+    }
     try {
       await recordSession();
       if (supabase) {
@@ -3087,12 +3119,20 @@ const App = () => {
     sessionCheckSkipUntilRef.current = Date.now() + 30000;
     setShowSessionExpired(false);
     localStorage.setItem('mint_last_activity', Date.now().toString());
-    const returnPage = sessionExpiredPageRef.current;
-    if (returnPage && !['welcome', 'auth', 'linkExpired'].includes(returnPage)) {
-      setCurrentPage(returnPage);
-      sessionExpiredPageRef.current = null;
+    // Check if user came from a shared wishlist (QR code / shared link)
+    const pendingRegistryToken = localStorage.getItem('mint_pending_registry_token');
+    if (pendingRegistryToken) {
+      localStorage.removeItem('mint_pending_registry_token');
+      setGiftRegistryNavState({ token: pendingRegistryToken, context: "shared_wishlist" });
+      setCurrentPage("giftRegistryPublic");
     } else {
-      setCurrentPage("home");
+      const returnPage = sessionExpiredPageRef.current;
+      if (returnPage && !['welcome', 'auth', 'linkExpired'].includes(returnPage)) {
+        setCurrentPage(returnPage);
+        sessionExpiredPageRef.current = null;
+      } else {
+        setCurrentPage("home");
+      }
     }
     try {
       await recordSession();

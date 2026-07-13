@@ -83,15 +83,10 @@ export const REGISTRY_STATUS_META = {
 
 /**
  * Generate a registry share URL from a token.
- * Always produces an app.mymint.co.za URL in production,
- * and a mint-development.vercel.app URL in all other environments
- * (localhost, Replit dev, staging, etc.).
+ * Uses the current window origin so the QR code always points to whichever
+ * environment is running (Replit dev, staging, production, etc.).
  */
 export function registryShareUrl(token) {
-  const origin = typeof window !== "undefined" ? window.location.origin : "";
-  const isLive = origin === "https://app.mymint.co.za";
-  const base = isLive
-    ? "https://app.mymint.co.za"
-    : "https://mint-development.vercel.app";
-  return `${base}/registry/${token}`;
+  const origin = typeof window !== "undefined" ? window.location.origin : "https://app.mymint.co.za";
+  return `${origin}/registry/${token}`;
 }
