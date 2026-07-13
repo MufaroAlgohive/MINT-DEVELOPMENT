@@ -11796,7 +11796,25 @@ async function saveSecurityEODPrices() {
       return;
     }
 
-    let saved = 0, skipped = 0, failed = 0;
+    // Cross-day spike guard: fetch each security's most recent stored price
+    // in one bulk query so we can compare before writing.
+    const EOD_SPIKE_THRESHOLD_PCT = 13; // percent
+
+    const secIds = securities.map(s => s.id);
+    const { data: prevRows } = await db
+      .from("stock_returns_c")
+      .select("security_id, current_price")
+      .in("security_id", secIds)
+      .lt("as_of_date", todayStr)
+      .order("as_of_date", { ascending: false });
+
+    // Keep only the most-recent row per security
+    const prevPriceMap = {};
+    for (const r of (prevRows || [])) {
+      if (!prevPriceMap[r.security_id]) prevPriceMap[r.security_id] = r.current_price;
+    }
+
+    let saved = 0, skipped = 0, blocked = 0, failed = 0;
 
     for (let i = 0; i < securities.length; i += 10) {
       const batch = securities.slice(i, i + 10);
@@ -11811,6 +11829,21 @@ async function saveSecurityEODPrices() {
             .maybeSingle();
 
           if (!latest?.current_price) { skipped++; return; }
+
+          // Cross-day guard: if new price moves >13% vs the last stored close, skip.
+          const prevPrice = prevPriceMap[sec.id];
+          if (prevPrice) {
+            const changePct = Math.abs((latest.current_price - prevPrice) / prevPrice) * 100;
+            if (changePct > EOD_SPIKE_THRESHOLD_PCT) {
+              console.warn(
+                `[eod-returns] SPIKE BLOCKED ${sec.symbol}: ` +
+                `${prevPrice}c → ${latest.current_price}c (${changePct.toFixed(1)}% change, threshold ${EOD_SPIKE_THRESHOLD_PCT}%). ` +
+                `Keeping previous close.`
+              );
+              blocked++;
+              return;
+            }
+          }
 
           const { error: upsertErr } = await db.from("stock_returns_c").upsert(
             { security_id: sec.id, as_of_date: todayStr, current_price: latest.current_price },
@@ -11831,7 +11864,7 @@ async function saveSecurityEODPrices() {
       if (i + 10 < securities.length) await new Promise(r => setTimeout(r, 200));
     }
 
-    console.log(`[eod-returns] Done — saved: ${saved}, skipped: ${skipped}, failed: ${failed} / ${securities.length}`);
+    console.log(`[eod-returns] Done — saved: ${saved}, blocked: ${blocked}, skipped: ${skipped}, failed: ${failed} / ${securities.length}`);
   } catch (err) {
     console.error("[eod-returns] Unexpected error:", err.message);
   }
@@ -12954,7 +12987,7 @@ async function computeAndSaveStrategyReturns() {
         prevYtdMap[row.strategy_id] = { ytd_pct: row.ytd_pct, as_of_date: row.as_of_date };
     }
 
-    const YTD_SPIKE_THRESHOLD_PP = 15; // percentage points
+    const YTD_SPIKE_THRESHOLD_PP = 13; // percentage points
     let saved = 0, blocked = 0, failed = 0;
 
     for (const strategy of strategies) {
