@@ -1,0 +1,90 @@
+he CEO is right to question it: Mint’s stored +29.316% YTD is incorrect.
+
+Using the exact Famous Brands holdings, Dec-31 database anchors, and current Yahoo prices, I calculate:
+
+	•	Dec-31 basket: 277,072 cents = R2,770.72
+
+	•	Current Yahoo basket: 312,752 cents = R3,127.52
+
+	•	Capital gain: 35,680 cents = R356.80
+
+	•	Correct price YTD: +12.88%
+
+Holding-by-holding breakdown
+
+
+
+Small rounding differences in the contribution column are normal.
+
+What is driving the performance?
+
+MTN is doing most of the work:
+
+	•	MTN contributes +6.33 percentage points, almost half the entire strategy return.
+
+	•	Sun International contributes another +2.36 points.
+
+	•	OUTsurance contributes +1.67 points.
+
+	•	Dis-Chem is the only negative holding, subtracting 0.88 points.
+
+The strategy’s strong YTD is therefore believable, but +29.32% is not. The holding-level arithmetic supports approximately +12.88%.
+
+Database versus Yahoo
+
+Yahoo’s live prices and Mint’s latest intraday captures agree almost exactly:
+
+	•	MTN: 22,796c
+
+	•	MTM: 4,030c
+
+	•	DCP: 3,255c
+
+	•	BOX: 7,885c
+
+	•	SUI: 5,172c
+
+	•	CMH: 3,968c
+
+	•	OUT: 8,089c
+
+	•	REM: 19,004c
+
+Mint’s July 13 daily closes produce +12.83%, only about 0.05 percentage points below the live Yahoo calculation. That confirms the underlying daily and intraday price data is coherent.
+
+Why Mint shows +29.316%
+
+The July 13 strategies_returns_c record contains:
+
+	•	ytd_pct: 29.316
+
+	•	basket_value: null
+
+That null basket value is a major warning: the nightly calculation did not construct a valid portfolio basket, yet it still stored a YTD percentage.
+
+For comparison:
+
+	•	July 8 stored YTD: +10.4381%
+
+	•	July 10 stored YTD: +13.1193%
+
+	•	July 13 stored YTD: +29.3160%
+
+A jump from +13.12% to +29.32% is impossible given the actual holding movements. The correct July 13 result is around +12.83% at close or +12.88% live.
+
+I also found that securities_c.last_price is stale or corrupted for important legs—for example, it has MTN at 6,070c and Remgro at 9,395c. Using that table would incorrectly calculate the strategy at approximately −14.04%. The price spine and intraday table are correct; securities_c.last_price must not be used as the strategy’s current-price fallback.
+
+Final verdict
+
+Correct Famous Brands price YTD: approximately +12.88%.
+
+	•	Yahoo live calculation: +12.8775%
+
+	•	Mint July 13 close calculation: +12.8313%
+
+	•	Mint stored nightly result: +29.3160% — invalid
+
+	•	Confidence: high, because all eight live prices independently agree with Yahoo.
+
+This is a price-return calculation and does not add cash dividends. If the product intends to display total return, dividend cash flows would need to be incorporated separately.
+
