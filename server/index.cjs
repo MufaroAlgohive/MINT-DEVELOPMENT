@@ -12694,39 +12694,96 @@ async function computeAndSaveStrategyReturns() {
 
     const toBase = (sym) => sym.split('.')[0].toUpperCase();
 
-    // 2b. Populate Dec-31-2025 YTD anchor prices from Yahoo Finance (cached per server lifetime).
-    //     Walk back up to 7 calendar days to find the last JSE trading close on or before Dec 31.
+    // 2b. Populate Dec-31-2025 YTD anchor prices (cached per server lifetime).
+    //
+    //     Strategy: DB first, external provider as last resort.
+    //
+    //     STEP 1 — Read Dec-31-2025 closing prices from stock_returns_c.  These values
+    //     are already in ZAp (cents) and were written by the guarded EOD job, so they
+    //     are the most reliable source and avoid any unit ambiguity.
+    //
+    //     STEP 2 — For any symbol still missing after the DB pass, fall back to the
+    //     external price provider (currently Yahoo Finance).  After receiving any
+    //     external price, apply a provider-agnostic unit sanity check: if the value is
+    //     less than 5% of the DB's Dec-31 close for that symbol, the provider almost
+    //     certainly returned the price in Rand instead of ZAp (cents) — multiply by 100
+    //     and log a warning.  This guard fires regardless of which provider is in use.
+
     const missingAnchorSymbols = baseSymbolList.filter(s => !_ytdAnchorCache[s]);
     if (missingAnchorSymbols.length) {
-      console.log(`[strategy-returns] Fetching Dec-31-2025 anchor prices for ${missingAnchorSymbols.length} symbol(s)…`);
       const DEC31 = '2025-12-31';
-      const p1 = Math.floor(new Date('2025-12-24T00:00:00Z').getTime() / 1000);
-      const p2 = Math.floor(new Date('2026-01-02T23:59:59Z').getTime() / 1000);
-      await Promise.all(missingAnchorSymbols.map(async (base) => {
-        try {
-          const url = `https://query1.finance.yahoo.com/v8/finance/chart/${base}.JO?interval=1d&period1=${p1}&period2=${p2}`;
-          const res  = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(12000) });
-          const json = await res.json();
-          const result = json?.chart?.result?.[0];
-          if (!result) return;
-          const timestamps = result.timestamp || [];
-          const closes     = result.indicators?.quote?.[0]?.close || [];
-          // Find the last close on or before Dec 31 2025
-          let bestPrice = null;
-          for (let i = 0; i < timestamps.length; i++) {
-            const d = new Date(timestamps[i] * 1000).toISOString().split('T')[0];
-            if (d <= DEC31 && closes[i] > 0) bestPrice = Math.round(closes[i]);
-          }
-          if (bestPrice) {
-            _ytdAnchorCache[base] = bestPrice;
-            console.log(`[strategy-returns] Anchor ${base}: ${bestPrice}c`);
-          } else {
-            console.warn(`[strategy-returns] No Dec-31 anchor for ${base}`);
-          }
-        } catch (e) {
-          console.warn(`[strategy-returns] Anchor fetch failed for ${base}: ${e.message}`);
+
+      // ── STEP 1: DB anchors ────────────────────────────────────────────────────
+      const anchorQuerySymbols = [
+        ...missingAnchorSymbols,
+        ...missingAnchorSymbols.map(s => `${s}.JO`),
+      ];
+      const { data: dbAnchorRows } = await db
+        .from('stock_returns_c')
+        .select('symbol, current_price')
+        .in('symbol', anchorQuerySymbols)
+        .eq('as_of_date', DEC31);
+
+      // base → DB Dec-31 price (kept for the unit sanity check in step 2)
+      const dbAnchorRef = {};
+      for (const row of (dbAnchorRows || [])) {
+        const base = toBase(row.symbol);
+        if (!dbAnchorRef[base] && row.current_price > 0)
+          dbAnchorRef[base] = Number(row.current_price);
+      }
+
+      // Populate cache from DB
+      for (const base of missingAnchorSymbols) {
+        if (dbAnchorRef[base]) {
+          _ytdAnchorCache[base] = dbAnchorRef[base];
+          console.log(`[strategy-returns] Anchor ${base}: ${dbAnchorRef[base]}c (DB)`);
         }
-      }));
+      }
+
+      // ── STEP 2: External fallback for any still-missing symbols ──────────────
+      const stillMissing = missingAnchorSymbols.filter(s => !_ytdAnchorCache[s]);
+      if (stillMissing.length) {
+        console.log(`[strategy-returns] Fetching Dec-31-2025 anchor from external provider for ${stillMissing.length} symbol(s): ${stillMissing.join(', ')}`);
+        const p1 = Math.floor(new Date('2025-12-24T00:00:00Z').getTime() / 1000);
+        const p2 = Math.floor(new Date('2026-01-02T23:59:59Z').getTime() / 1000);
+        await Promise.all(stillMissing.map(async (base) => {
+          try {
+            const url = `https://query1.finance.yahoo.com/v8/finance/chart/${base}.JO?interval=1d&period1=${p1}&period2=${p2}`;
+            const res  = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(12000) });
+            const json = await res.json();
+            const result = json?.chart?.result?.[0];
+            if (!result) return;
+            const timestamps = result.timestamp || [];
+            const closes     = result.indicators?.quote?.[0]?.close || [];
+            let bestPrice = null;
+            for (let i = 0; i < timestamps.length; i++) {
+              const d = new Date(timestamps[i] * 1000).toISOString().split('T')[0];
+              if (d <= DEC31 && closes[i] > 0) bestPrice = Math.round(closes[i]);
+            }
+            if (!bestPrice) {
+              console.warn(`[strategy-returns] No Dec-31 anchor from external provider for ${base}`);
+              return;
+            }
+            // Provider-agnostic unit sanity check: if a DB reference exists and the
+            // external value is <5% of it, assume the provider returned Rand not cents.
+            const dbRef = dbAnchorRef[base];
+            if (dbRef && bestPrice < dbRef * 0.05) {
+              const corrected = bestPrice * 100;
+              console.warn(
+                `[strategy-returns] UNIT MISMATCH for ${base}: external anchor ${bestPrice} ` +
+                `is <5% of DB ref ${dbRef}c — assuming Rand instead of cents, correcting to ${corrected}c.`
+              );
+              bestPrice = corrected;
+            } else if (!dbRef) {
+              console.warn(`[strategy-returns] No DB ref for ${base} — using external anchor ${bestPrice}c unverified.`);
+            }
+            _ytdAnchorCache[base] = bestPrice;
+            console.log(`[strategy-returns] Anchor ${base}: ${bestPrice}c (external)`);
+          } catch (e) {
+            console.warn(`[strategy-returns] Anchor fetch failed for ${base}: ${e.message}`);
+          }
+        }));
+      }
     }
 
     // 3. Fetch securities_c for current last_price (used for YTD current value + period calcs)
@@ -12876,7 +12933,29 @@ async function computeAndSaveStrategyReturns() {
     };
 
     // 7. Compute + write per strategy
-    let saved = 0, failed = 0;
+    //
+    //    Cross-day sanity check: before writing any row, compare the new YTD against
+    //    the most recently stored YTD for that strategy.  If the change exceeds 15
+    //    percentage points in a single day, the value is almost certainly wrong — skip
+    //    the write and leave the previous good value in place.
+    //    Threshold is 15pp because even a strong market day moves <5pp for a basket.
+
+    // Fetch the most-recent stored YTD for every active strategy (before today)
+    const { data: prevYtdRows } = await db
+      .from('strategies_returns_c')
+      .select('strategy_id, ytd_pct, as_of_date')
+      .in('strategy_id', strategies.map(s => s.id))
+      .lt('as_of_date', todayStr)
+      .order('as_of_date', { ascending: false });
+
+    const prevYtdMap = {}; // strategy_id → { ytd_pct, as_of_date }
+    for (const row of (prevYtdRows || [])) {
+      if (!prevYtdMap[row.strategy_id])
+        prevYtdMap[row.strategy_id] = { ytd_pct: row.ytd_pct, as_of_date: row.as_of_date };
+    }
+
+    const YTD_SPIKE_THRESHOLD_PP = 15; // percentage points
+    let saved = 0, blocked = 0, failed = 0;
 
     for (const strategy of strategies) {
       try {
@@ -12889,6 +12968,22 @@ async function computeAndSaveStrategyReturns() {
         const r6m = basketReturn(holdings, periodAnchorMaps['6m']);
 
         const fmt = (v) => v !== null ? parseFloat(v.toFixed(4)) : null;
+
+        // Cross-day sanity check on YTD
+        const prev = prevYtdMap[strategy.id];
+        if (ytd !== null && prev?.ytd_pct !== null && prev?.ytd_pct !== undefined) {
+          const delta = Math.abs(ytd - Number(prev.ytd_pct));
+          if (delta > YTD_SPIKE_THRESHOLD_PP) {
+            console.warn(
+              `[strategy-returns] SPIKE BLOCKED for "${strategy.name}": ` +
+              `new YTD ${ytd.toFixed(2)}% vs prev ${Number(prev.ytd_pct).toFixed(2)}% ` +
+              `(${(ytd - Number(prev.ytd_pct)).toFixed(2)}pp change, threshold ±${YTD_SPIKE_THRESHOLD_PP}pp). ` +
+              `Keeping previous value from ${prev.as_of_date}.`
+            );
+            blocked++;
+            continue;
+          }
+        }
 
         // Delete any existing row for today first (avoids duplicates)
         await db
@@ -12927,7 +13022,7 @@ async function computeAndSaveStrategyReturns() {
       }
     }
 
-    console.log(`[strategy-returns] Done — saved: ${saved}, failed: ${failed} / ${strategies.length}`);
+    console.log(`[strategy-returns] Done — saved: ${saved}, blocked: ${blocked}, failed: ${failed} / ${strategies.length}`);
   } catch (err) {
     console.error('[strategy-returns] Unexpected error:', err.message);
   }
@@ -12958,6 +13053,64 @@ app.post('/api/strategy-returns/refresh', async (req, res) => {
   console.log('[strategy-returns] Manual refresh triggered via API');
   computeAndSaveStrategyReturns(); // fire-and-forget; check logs for results
   res.json({ ok: true, message: 'Strategy returns recompute triggered — check server logs for results' });
+});
+
+// Status — GET /api/strategy-returns/status (admin key required)
+// Returns each strategy's latest and previous-day YTD so anomalies are easy to spot.
+app.get('/api/strategy-returns/status', async (req, res) => {
+  const authErr = checkAdminKey(req);
+  if (authErr) return res.status(401).json({ error: authErr });
+  try {
+    const db = supabaseAdmin || supabase;
+    if (!db) return res.status(503).json({ error: 'No database connection' });
+
+    const { data: strategies } = await db
+      .from('strategies_c')
+      .select('id, name')
+      .eq('status', 'active');
+
+    const { data: rows } = await db
+      .from('strategies_returns_c')
+      .select('strategy_id, as_of_date, ytd_pct')
+      .in('strategy_id', (strategies || []).map(s => s.id))
+      .order('as_of_date', { ascending: false });
+
+    const nameMap = {};
+    for (const s of (strategies || [])) nameMap[s.id] = s.name;
+
+    // Build latest + prev per strategy
+    const seen = {};
+    const result = [];
+    for (const row of (rows || [])) {
+      const sid = row.strategy_id;
+      if (!seen[sid]) { seen[sid] = { latest: row }; }
+      else if (!seen[sid].prev) { seen[sid].prev = row; }
+    }
+
+    for (const [sid, entry] of Object.entries(seen)) {
+      const latest = entry.latest;
+      const prev   = entry.prev;
+      const delta  = (latest?.ytd_pct != null && prev?.ytd_pct != null)
+        ? parseFloat((Number(latest.ytd_pct) - Number(prev.ytd_pct)).toFixed(4))
+        : null;
+      result.push({
+        strategy:       nameMap[sid] || sid,
+        latest_date:    latest?.as_of_date,
+        latest_ytd_pct: latest?.ytd_pct,
+        prev_date:      prev?.as_of_date,
+        prev_ytd_pct:   prev?.ytd_pct,
+        delta_pp:       delta,
+        anchor_cached:  Object.keys(_ytdAnchorCache).length > 0
+          ? _ytdAnchorCache[nameMap[sid]?.split(' ')[0]] ?? '(check logs)'
+          : 'not yet loaded',
+      });
+    }
+
+    result.sort((a, b) => (a.strategy > b.strategy ? 1 : -1));
+    res.json({ ok: true, as_of: new Date().toISOString(), strategies: result });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // ── IT Incident Register API ──────────────────────────────────────────────────
