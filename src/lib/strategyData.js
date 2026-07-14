@@ -929,8 +929,14 @@ export const getStrategyMonthlyReturnsFromDB = async (userId, strategyId, startD
 
     if (error || !rows || rows.length < 2) return {};
 
-    // The very first row is the entry-day baseline
-    const entryBv = rows[0].basket_value;
+    // Inception baseline: use the SECOND row (rows[1]) if it falls in the same calendar
+    // month as rows[0]. The first row (investment day) can include unfilled positions
+    // valued at their expected-fill price — a phantom that disappears when the real
+    // holdings settle on day 2. Using rows[1] as the baseline avoids that distortion.
+    // If rows[1] is in a different month (rare edge case), fall back to rows[0].
+    const inceptionYm = rows[0].as_of_date.slice(0, 7);
+    const secondRowSameMonth = rows[1].as_of_date.slice(0, 7) === inceptionYm;
+    const entryBv = secondRowSameMonth ? rows[1].basket_value : rows[0].basket_value;
 
     // Keep last basket_value per calendar month (used for inception month only)
     const monthlyLastBv = {};
@@ -950,11 +956,10 @@ export const getStrategyMonthlyReturnsFromDB = async (userId, strategyId, startD
       let monthReturn;
 
       if (i === 0) {
-        // Inception month: basket_value start→end correctly captures the user's
-        // actual entry price vs month-end market value.
+        // Inception month: basket_value from first settled day (rows[1]) to month-end.
         const currBv = monthlyLastBv[currKey];
         if (!entryBv || entryBv === 0) return;
-        // Skip if month-end equals entry day (single row — no intra-month move to show)
+        // Skip if month-end equals the baseline (no move to show)
         if (currBv === entryBv) return;
         monthReturn = (currBv - entryBv) / entryBv;
       } else {
