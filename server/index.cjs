@@ -13002,20 +13002,57 @@ async function computeAndSaveStrategyReturns() {
     //    the write and leave the previous good value in place.
     //    Threshold is 15pp because even a strong market day moves <5pp for a basket.
 
-    // Fetch the most-recent stored row for every active strategy (before today)
-    // — used for the YTD spike guard AND for computing 1d_pct (basket chain)
-    const { data: prevYtdRows } = await db
-      .from('strategies_returns_c')
-      .select('strategy_id, ytd_pct, basket_value, as_of_date')
-      .in('strategy_id', strategies.map(s => s.id))
-      .lt('as_of_date', todayStr)
-      .order('as_of_date', { ascending: false });
+    // Fetch ALL stored rows for every active strategy for this calendar year (before today).
+    // Used for: (a) most-recent basket_value for 1d_pct calculation, (b) chain-linked ytd_pct.
+    // Supabase PostgREST hard-caps at 1000 rows per request regardless of .limit().
+    // With 9 strategies × ~130 rows each ≈ 1170 rows, a single bulk query is truncated.
+    // Fix: fetch each strategy independently in parallel — each returns ~130 rows, well
+    // under the cap, and all 9 run concurrently so there is no latency penalty.
+    const yearStart = `${todayStr.slice(0, 4)}-01-01`;
+    const perStrategyResults = await Promise.all(
+      strategies.map(s =>
+        db
+          .from('strategies_returns_c')
+          .select('strategy_id, ytd_pct, basket_value, as_of_date, "1d_pct"')
+          .eq('strategy_id', s.id)
+          .gte('as_of_date', yearStart)
+          .lt('as_of_date', todayStr)
+          .order('as_of_date', { ascending: false })
+      )
+    );
 
-    const prevYtdMap = {}; // strategy_id → { ytd_pct, basket_value, as_of_date }
-    for (const row of (prevYtdRows || [])) {
-      if (!prevYtdMap[row.strategy_id])
-        prevYtdMap[row.strategy_id] = { ytd_pct: row.ytd_pct, basket_value: row.basket_value, as_of_date: row.as_of_date };
+    const prevYtdMap  = {}; // strategy_id → most-recent { ytd_pct, basket_value, as_of_date }
+    const chainYtdMap = {}; // strategy_id → chain-linked ytd % through yesterday
+
+    for (const { data: rows } of perStrategyResults) {
+      if (!rows?.length) continue;
+      const sid = rows[0].strategy_id;
+
+      // Most-recent row (rows are DESC) — used for prevBasket
+      prevYtdMap[sid] = {
+        ytd_pct:    rows[0].ytd_pct,
+        basket_value: rows[0].basket_value,
+        as_of_date:   rows[0].as_of_date,
+      };
+
+      // Chain-linked YTD: multiply (1 + 1d_pct/100) ascending (reverse of DESC fetch).
+      // Null 1d_pct rows count as 0% (no change that day) — consistent with Factsheet.
+      let chain = 1;
+      for (let i = rows.length - 1; i >= 0; i--) {
+        const pct = rows[i]['1d_pct'];
+        if (pct != null) chain *= (1 + pct / 100);
+      }
+      chainYtdMap[sid] = parseFloat(((chain - 1) * 100).toFixed(6));
     }
+
+    console.log('[strategy-returns] Chain-linked YTD (prev close):',
+      Object.fromEntries(
+        Object.entries(chainYtdMap).map(([sid, v]) => [
+          strategies.find(s => s.id === sid)?.name ?? sid.slice(0,8),
+          v?.toFixed(2) + '%'
+        ])
+      )
+    );
 
     // Spike guard: block if a single trading day's basket move exceeds this threshold.
     // Applied to oneDayPct (not ytd delta) so it is formula-agnostic and catches bad
@@ -13030,9 +13067,14 @@ async function computeAndSaveStrategyReturns() {
         const holdings = strategyHoldingsMap[strategy.id];
         if (!holdings?.length) continue;
 
-        // ytd_pct — current template vs Dec-31 anchor (fast, reliable for non-rebalanced
-        // strategies; the Factsheet calendar uses the 1d_pct chain for rebalanced ones).
-        const ytd = basketYtdReturn(holdings);
+        // ytd_pct — derived from the stored 1d_pct chain (chain-linked from year start).
+        // Using the chain instead of current-template×Dec-31-anchor ensures rebalanced
+        // strategies (where composition changed mid-year) show correct values, and makes
+        // the listing-page cards match the Factsheet calendar exactly.
+        // Computation: chainYtdPrev × (1 + oneDayPct) — but oneDayPct is calculated below,
+        // so we defer the final ytd value until after oneDayPct is known (see further below).
+        // Placeholder — overwritten after oneDayPct is computed.
+        let ytd = null; // set after oneDayPct is computed
 
         // Period returns (5d, 1m, 6m) — use anchor price maps
         const r5d = basketReturn(holdings, periodAnchorMaps['5d']);
@@ -13072,6 +13114,22 @@ async function computeAndSaveStrategyReturns() {
           );
           blocked++;
           continue;
+        }
+
+        // Compute chain-linked ytd_pct now that oneDayPct is known.
+        // chainYtdMap[id] is the chain-multiplied value through yesterday.
+        // Compound it with today's basket move to get today's YTD.
+        {
+          const chainPrev = chainYtdMap[strategy.id] ?? null;
+          if (chainPrev !== null && oneDayPct !== null) {
+            ytd = parseFloat(((1 + chainPrev / 100) * (1 + oneDayPct / 100) - 1) * 100);
+          } else if (chainPrev !== null) {
+            // Prices unavailable today — carry forward yesterday's chain ytd
+            ytd = chainPrev;
+          } else {
+            // No prior rows this year — seed with current-template vs Dec-31 anchor
+            ytd = basketYtdReturn(holdings);
+          }
         }
 
         // Delete any existing row for today first (avoids duplicates)
