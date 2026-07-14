@@ -918,7 +918,7 @@ export const getStrategyMonthlyReturnsFromDB = async (userId, strategyId, startD
   try {
     let query = supabase
       .from("client_strategy_returns_c")
-      .select("as_of_date, basket_value")
+      .select("as_of_date, basket_value, 1d_pct")
       .eq("user_id", userId)
       .eq("strategy_id", strategyId);
     query = familyMemberId
@@ -931,37 +931,46 @@ export const getStrategyMonthlyReturnsFromDB = async (userId, strategyId, startD
 
     // The very first row is the entry-day baseline
     const entryBv = rows[0].basket_value;
-    const entryYm = rows[0].as_of_date.slice(0, 7);
 
-    // Keep last row per calendar month (month-end value)
-    const monthlyLast = {};
+    // Keep last basket_value per calendar month (used for inception month only)
+    const monthlyLastBv = {};
+    // Collect all 1d_pct values per calendar month (used for subsequent months)
+    const monthlyPcts = {};
     rows.forEach(row => {
       const ym = row.as_of_date.slice(0, 7);
-      monthlyLast[ym] = row.basket_value;
+      monthlyLastBv[ym] = row.basket_value;
+      if (!monthlyPcts[ym]) monthlyPcts[ym] = [];
+      monthlyPcts[ym].push(Number(row["1d_pct"] || 0));
     });
 
-    const sortedMonths = Object.keys(monthlyLast).sort();
+    const sortedMonths = Object.keys(monthlyLastBv).sort();
     const result = {};
 
     sortedMonths.forEach((currKey, i) => {
-      const currBv = monthlyLast[currKey];
-      let baseBv;
+      let monthReturn;
 
       if (i === 0) {
-        // First month: return from entry day to month-end
-        baseBv = entryBv;
+        // Inception month: basket_value start→end correctly captures the user's
+        // actual entry price vs month-end market value.
+        const currBv = monthlyLastBv[currKey];
+        if (!entryBv || entryBv === 0) return;
+        // Skip if month-end equals entry day (single row — no intra-month move to show)
+        if (currBv === entryBv) return;
+        monthReturn = (currBv - entryBv) / entryBv;
       } else {
-        // All subsequent months: MoM from previous month-end
-        baseBv = monthlyLast[sortedMonths[i - 1]];
+        // Subsequent months: chain-multiply daily 1d_pct values.
+        // This avoids rebalance distortion: when a position is sold and replaced,
+        // basket_value drops (proceeds are not credited back) making the month look
+        // far worse than reality. The 1d_pct column is written from market prices only
+        // and stays near-zero on rebalance days, so chaining it gives the true return.
+        const pcts = monthlyPcts[currKey];
+        if (!pcts || pcts.length === 0) return;
+        monthReturn = pcts.reduce((prod, pct) => prod * (1 + pct / 100), 1) - 1;
       }
-
-      if (!baseBv || baseBv === 0) return;
-      // Skip the entry month if month-end equals entry day (single row — no intra-month move to show)
-      if (i === 0 && currBv === entryBv) return;
 
       const [year, month] = currKey.split("-");
       if (!result[year]) result[year] = {};
-      result[year][month] = (currBv - baseBv) / baseBv;
+      result[year][month] = monthReturn;
     });
 
     return result;
@@ -1052,7 +1061,10 @@ export const getOverallPortfolioMonthlyReturns = async (strategyIds, stockSecuri
 
       if (totalWeight > 0) {
         if (!result[year]) result[year] = {};
-        result[year][month] = weightedReturn / totalWeight;
+        // weightedReturn is already the portfolio-weighted return (each strategy's
+        // return × its share of total value). Dividing by totalWeight again would
+        // re-normalise and inflate months where only a subset of strategies have data.
+        result[year][month] = weightedReturn;
       }
     });
 
