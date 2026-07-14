@@ -66,10 +66,6 @@ async function getUser(req, supabaseAdmin) {
 // as parseOnboardingFlags in src/lib/checkOnboardingComplete.js.
 async function isKycComplete(userId, supabaseAdmin) {
   try {
-    // Use the same query pattern as /api/onboarding/status — order by created_at
-    // descending so we always read the most-recent row. Without ordering,
-    // .maybeSingle() throws when a user has multiple onboarding rows (e.g. after
-    // a reset), causing the catch to silently return false and block gifting.
     const { data, error } = await supabaseAdmin
       .from('user_onboarding')
       .select('kyc_status')
@@ -77,9 +73,11 @@ async function isKycComplete(userId, supabaseAdmin) {
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle();
-    if (error || !data) return false;
-    return ['approved', 'onboarding_complete', 'verified'].includes(data.kyc_status);
-  } catch {
+    const result = !error && !!data && ['approved', 'onboarding_complete', 'verified'].includes(data.kyc_status);
+    console.log(`[gift-registry] isKycComplete userId=${userId} kyc_status=${data?.kyc_status} error=${error?.message} result=${result}`);
+    return result;
+  } catch (e) {
+    console.warn(`[gift-registry] isKycComplete THREW userId=${userId} err=${e.message}`);
     return false;
   }
 }
