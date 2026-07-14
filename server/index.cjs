@@ -6538,16 +6538,12 @@ app.get("/api/user/strategies", async (req, res) => {
         const totalHoldingsInvested = stratHoldings.reduce((sum, h) => sum + (Number(h.avg_fill || 0) * Number(h.quantity || 0)), 0);
         const performanceFactor = totalHoldingsInvested > 0 ? (totalHoldingsMarket / totalHoldingsInvested) : 1.0;
 
-        // Fetch metrics / dynamic YTD just like before
+        // Use chain-linked YTD from strategies_returns_c — correctly handles rebalances.
+        // calculateYtdReturn() was back-calculating Jan 1 prices per security which is wrong
+        // for rebalanced strategies (e.g. TBS added Jul 1 has no Jan 1 position).
         const metrics = strategy.strategy_metrics;
         const latestMetric = Array.isArray(metrics) ? metrics[0] : metrics;
-        let rytd = latestMetric?.r_ytd_pct ?? latestMetric?.r_ytd ?? 0;
-        if (calculateYtdReturn) {
-          const matchedHoldingsMap = new Map();
-          Object.entries(securitiesMap).forEach(([sym, sec]) => matchedHoldingsMap.set(sym, sec));
-          const dynamicYtd = calculateYtdReturn(strategy, matchedHoldingsMap);
-          if (dynamicYtd !== null) rytd = dynamicYtd;
-        }
+        const rytd = latestMetric?.r_ytd_pct ?? latestMetric?.r_ytd ?? 0;
 
         // Enrich holdings (same as before)
         const enrichedHoldings = (strategy.holdings || []).map(h => {
