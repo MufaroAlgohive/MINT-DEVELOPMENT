@@ -12,3 +12,4 @@
 - [pgPool optional-connection-string danger](pgpool-fallback-danger.md) — an unreachable SUPABASE_DB_URL is worse than none: null pgPool degrades gracefully, a broken one times out and breaks unrelated features.
 - [Gift registry DRAFT status removed](gift-registry-no-draft.md) — registries are now created directly ACTIVE with a share_token; no more publish step or "Draft" badge/button.
 - [Gift wishlist heart state must be DB-derived](gift-wishlist-heart-state.md) — compute wishlistedKeys solely from live registry-item status, don't just intersect the stored prefs cache.
+- [Strategy returns 1d_pct architecture](strategy-returns-1d-pct.md) — basket_value chain is source of truth; calendar chain-multiplies 1d_pct; ytd_pct column is wrong for rebalanced strategies; Jun 3 2026 rows nulled (template/bad-data corruption).

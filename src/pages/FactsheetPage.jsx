@@ -357,7 +357,14 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest, onNavigateToOnboarding,
           const bestDay = Math.max(...dailyPcts);
           const worstDay = Math.min(...dailyPcts);
           const avgDaily = dailyPcts.length > 0 ? dailyPcts.reduce((a, b) => a + b, 0) / dailyPcts.length : 0;
-          const ytdReturn = dailyReturns[dailyReturns.length - 1]?.ytd_pct || 0;
+
+          // YTD: chain-multiply all daily 1d_pct values for the year.
+          // This matches the calendar exactly and handles rebalances correctly —
+          // the basket_value column captures both price moves and rebalance effects,
+          // so 1d_pct on a rebalance day already includes the composition change.
+          const ytdReturn = (dailyReturns.reduce(
+            (prod, d) => prod * (1 + (d["1d_pct"] || 0) / 100), 1
+          ) - 1) * 100;
 
           setPerformanceData({
             bestDay,
@@ -367,25 +374,22 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest, onNavigateToOnboarding,
             threeMonthReturn,
           });
 
-          // Build calendar returns (monthly) - sum all daily returns for each month
-          const monthlyReturns = {};
+          // Build calendar returns (monthly) — chain-multiply daily 1d_pct per month.
+          // Summing daily returns overstates compounded returns; chain multiplication
+          // is the correct method for sub-period aggregation.
           const monthlyDailyReturns = {};
 
           dailyReturns.forEach((day) => {
             const date = day.as_of_date;
-            const yearMonth = date.slice(0, 7); // YYYY-MM
-            const month = parseInt(yearMonth.split("-")[1]);
-
-            if (!monthlyDailyReturns[month]) {
-              monthlyDailyReturns[month] = [];
-            }
+            const month = parseInt(date.slice(5, 7)); // YYYY-MM-DD → MM
+            if (!monthlyDailyReturns[month]) monthlyDailyReturns[month] = [];
             monthlyDailyReturns[month].push(day["1d_pct"] || 0);
           });
 
-          // Sum the daily returns for each month
-          Object.entries(monthlyDailyReturns).forEach(([month, dailyPcts]) => {
-            const monthlyReturn = dailyPcts.reduce((sum, pct) => sum + pct, 0);
-            monthlyReturns[month] = monthlyReturn;
+          // Chain-multiply daily returns into a single monthly return
+          const monthlyReturns = {};
+          Object.entries(monthlyDailyReturns).forEach(([month, pcts]) => {
+            monthlyReturns[month] = (pcts.reduce((prod, pct) => prod * (1 + pct / 100), 1) - 1) * 100;
           });
 
           setCalendarReturns(monthlyReturns);

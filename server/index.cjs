@@ -1133,6 +1133,35 @@ runFuneralCoverMigration(pgPool).catch(err => {
   console.warn("[funeral-cover] Migration skipped — DB unreachable:", err.message);
 });
 
+// ── Strategy composition log — tracks historical holdings for each strategy ───
+// Created once on startup; the Postgres trigger is added here so it's always
+// in sync even after a schema wipe.
+// NOTE: strategy_composition_log_c lives in Supabase (not local pgPool DB).
+// To create it, run server/scripts/supabase-composition-log.sql in the
+// Supabase SQL Editor. The server will write to it via the Supabase REST API
+// whenever a strategy's holdings change (see _logStrategyCompositionChange below).
+async function _logStrategyCompositionChange(db, strategyId, newHoldings) {
+  if (!db || !strategyId || !newHoldings) return;
+  try {
+    // Close any open entry for this strategy
+    const today = new Date().toISOString().split('T')[0];
+    const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+    await db
+      .from('strategy_composition_log_c')
+      .update({ effective_to: yesterday })
+      .eq('strategy_id', strategyId)
+      .is('effective_to', null);
+    // Open a new entry with today's holdings
+    await db
+      .from('strategy_composition_log_c')
+      .insert({ strategy_id: strategyId, effective_from: today, holdings: newHoldings });
+    console.log(`[strategy-composition-log] Logged new composition for strategy ${strategyId}`);
+  } catch (err) {
+    // Table may not exist yet — non-fatal; cc_audit_log retains full history
+    console.warn('[strategy-composition-log] Log write skipped:', err.message);
+  }
+}
+
 // ── Request a sell ────────────────────────────────────────────────────────────
 // Mirrors a buy in reverse: flips filled holding(s) to side='sell' so the order
 // book picks them up, and records a pending credit transaction as the instruction.
@@ -12973,18 +13002,19 @@ async function computeAndSaveStrategyReturns() {
     //    the write and leave the previous good value in place.
     //    Threshold is 15pp because even a strong market day moves <5pp for a basket.
 
-    // Fetch the most-recent stored YTD for every active strategy (before today)
+    // Fetch the most-recent stored row for every active strategy (before today)
+    // — used for the YTD spike guard AND for computing 1d_pct (basket chain)
     const { data: prevYtdRows } = await db
       .from('strategies_returns_c')
-      .select('strategy_id, ytd_pct, as_of_date')
+      .select('strategy_id, ytd_pct, basket_value, as_of_date')
       .in('strategy_id', strategies.map(s => s.id))
       .lt('as_of_date', todayStr)
       .order('as_of_date', { ascending: false });
 
-    const prevYtdMap = {}; // strategy_id → { ytd_pct, as_of_date }
+    const prevYtdMap = {}; // strategy_id → { ytd_pct, basket_value, as_of_date }
     for (const row of (prevYtdRows || [])) {
       if (!prevYtdMap[row.strategy_id])
-        prevYtdMap[row.strategy_id] = { ytd_pct: row.ytd_pct, as_of_date: row.as_of_date };
+        prevYtdMap[row.strategy_id] = { ytd_pct: row.ytd_pct, basket_value: row.basket_value, as_of_date: row.as_of_date };
     }
 
     const YTD_SPIKE_THRESHOLD_PP = 13; // percentage points
@@ -13000,10 +13030,29 @@ async function computeAndSaveStrategyReturns() {
         const r1m = basketReturn(holdings, periodAnchorMaps['1m']);
         const r6m = basketReturn(holdings, periodAnchorMaps['6m']);
 
+        // Basket value today (cents) — used for 1d_pct chain and stored for next day's calc
+        let basketValueToday = 0;
+        let basketMatched = 0;
+        for (const { symbol, shares } of holdings) {
+          const price = latestPriceMap[symbol] || prevEodMap[symbol];
+          if (!price) continue;
+          basketValueToday += shares * price;
+          basketMatched++;
+        }
+        const basketValueCents = basketMatched === holdings.length ? Math.round(basketValueToday) : null;
+
+        // 1d_pct — today's basket vs yesterday's stored basket_value (chain-linked)
+        // Using the STORED basket avoids rebalance-day artifacts: both sides reflect
+        // the actual portfolio value (old template yesterday, new template today).
+        const prev = prevYtdMap[strategy.id];
+        const prevBasket = prev?.basket_value ? Number(prev.basket_value) : null;
+        const oneDayPct = (basketValueCents && prevBasket)
+          ? parseFloat((((basketValueCents - prevBasket) / prevBasket) * 100).toFixed(6))
+          : null;
+
         const fmt = (v) => v !== null ? parseFloat(v.toFixed(4)) : null;
 
         // Cross-day sanity check on YTD
-        const prev = prevYtdMap[strategy.id];
         if (ytd !== null && prev?.ytd_pct !== null && prev?.ytd_pct !== undefined) {
           const delta = Math.abs(ytd - Number(prev.ytd_pct));
           if (delta > YTD_SPIKE_THRESHOLD_PP) {
@@ -13028,12 +13077,14 @@ async function computeAndSaveStrategyReturns() {
         const { error: insertErr } = await db
           .from('strategies_returns_c')
           .insert({
-            strategy_id: strategy.id,
-            as_of_date:  todayStr,
-            ytd_pct:     fmt(ytd),
-            '5d_pct':    fmt(r5d),
-            '1m_pct':    fmt(r1m),
-            '6m_pct':    fmt(r6m),
+            strategy_id:   strategy.id,
+            as_of_date:    todayStr,
+            basket_value:  basketValueCents,
+            '1d_pct':      oneDayPct,
+            ytd_pct:       fmt(ytd),
+            '5d_pct':      fmt(r5d),
+            '1m_pct':      fmt(r1m),
+            '6m_pct':      fmt(r6m),
           });
 
         if (insertErr) {
@@ -13042,6 +13093,8 @@ async function computeAndSaveStrategyReturns() {
         } else {
           console.log(
             `[strategy-returns] ${strategy.name}: ` +
+            `basket=${basketValueCents != null ? Math.round(basketValueCents/100)+'c' : 'n/a'} ` +
+            `1d=${oneDayPct != null ? oneDayPct.toFixed(3)+'%' : 'n/a'} ` +
             `YTD=${ytd != null ? ytd.toFixed(2)+'%' : 'n/a'} ` +
             `5d=${r5d != null ? r5d.toFixed(2)+'%' : 'n/a'} ` +
             `1m=${r1m != null ? r1m.toFixed(2)+'%' : 'n/a'} ` +
