@@ -272,13 +272,21 @@ export default function GiftRegistryPublicPage({
         )}
 
         {!user && !isClosed && (
-          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm px-5 py-4 text-center">
-            <button
-              onClick={onAuthPrompt}
-              className="w-full px-6 py-3 bg-slate-900 text-white text-sm font-semibold rounded-xl active:opacity-80"
-            >
-              Login
-            </button>
+          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm px-5 py-4">
+            <div className="flex gap-3">
+              <button
+                onClick={() => onAuthPrompt(undefined, "login")}
+                className="flex-1 px-4 py-3 bg-slate-900 text-white text-sm font-semibold rounded-xl active:opacity-80"
+              >
+                Log in
+              </button>
+              <button
+                onClick={() => onAuthPrompt(undefined, "signup")}
+                className="flex-1 px-4 py-3 border border-slate-900 text-slate-900 text-sm font-semibold rounded-xl active:opacity-80"
+              >
+                Create account
+              </button>
+            </div>
           </div>
         )}
 

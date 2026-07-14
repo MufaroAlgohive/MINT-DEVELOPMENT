@@ -68,7 +68,8 @@ export default function GiftRegistryItemCard({
 
   function handleGiftTap() {
     if (!canGift) {
-      if (typeof onAuthPrompt === "function") onAuthPrompt();
+      // Default to login intent — returning gifters are the common case
+      if (typeof onAuthPrompt === "function") onAuthPrompt(undefined, "login");
       return;
     }
     if (typeof onGift === "function") onGift(item);

@@ -2996,13 +2996,19 @@ const App = () => {
             user={profile}
             isKycComplete={onboardingComplete}
             onBack={goBack}
-            onAuthPrompt={(type) => {
+            onAuthPrompt={(type, intent) => {
               if (type === "kyc") { navigateTo("userOnboarding"); }
               else {
                 // Persist token so we return to this wishlist after login/signup
                 if (giftRegistryNavState.token) {
                   localStorage.setItem('mint_pending_registry_token', giftRegistryNavState.token);
                 }
+                // Persist intent so we can distinguish new vs returning gifters post-auth
+                if (intent === "signup" || intent === "login") {
+                  localStorage.setItem('mint_pending_registry_intent', intent);
+                }
+                // Seed the auth form to the right step immediately
+                setAuthStep(intent === "login" ? "loginEmail" : "email");
                 navigateTo("auth");
               }
             }}
@@ -3090,6 +3096,7 @@ const App = () => {
     justLoggedInRef.current = true;
     sessionCheckSkipUntilRef.current = Date.now() + 30000;
     localStorage.setItem('mint_last_activity', Date.now().toString());
+    localStorage.removeItem('mint_pending_registry_intent');
     // Check if user came from a shared wishlist (QR code / shared link)
     const pendingRegistryToken = localStorage.getItem('mint_pending_registry_token');
     if (pendingRegistryToken) {
@@ -3119,6 +3126,7 @@ const App = () => {
     sessionCheckSkipUntilRef.current = Date.now() + 30000;
     setShowSessionExpired(false);
     localStorage.setItem('mint_last_activity', Date.now().toString());
+    localStorage.removeItem('mint_pending_registry_intent');
     // Check if user came from a shared wishlist (QR code / shared link)
     const pendingRegistryToken = localStorage.getItem('mint_pending_registry_token');
     if (pendingRegistryToken) {
