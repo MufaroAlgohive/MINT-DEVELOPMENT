@@ -127,6 +127,10 @@ export default function GiftRegistryItemCheckoutSheet({ item, registryId, onSucc
     try {
       const session = await (await supabaseReady).auth.getSession();
       const token = session?.data?.session?.access_token;
+      if (!token) {
+        setError("Your session has expired. Please sign in again to gift.");
+        return;
+      }
       const res = await fetch("/api/gift-registry/reserve", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -136,6 +140,7 @@ export default function GiftRegistryItemCheckoutSheet({ item, registryId, onSucc
       if (!res.ok) {
         if (json.code === "SOLD_OUT") setError("This item is no longer available to gift.");
         else if (json.code === "KYC_INCOMPLETE") { setShowKycPrompt(true); return; }
+        else if (res.status === 401) setError("Your session has expired. Please sign in again to gift.");
         else setError(json.error || "Could not reserve. Please try again.");
         return;
       }
