@@ -126,18 +126,6 @@ function NewRecipientPanel({ onBack, onSelect }) {
       title: "Enter details",
       subtitle: "Manually enter their name and email",
     },
-    {
-      id: "email",
-      icon: (
-        <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-        </svg>
-      ),
-      iconBg: "#d1fae5",
-      iconColor: "#059669",
-      title: "Share by Email",
-      subtitle: "Share with someone using their email address",
-    },
   ];
 
   return (
@@ -505,7 +493,9 @@ export default function GiftRegistrySharePopup({ token, title, registryId, onClo
     setDetFirst(""); setDetLast(""); setDetEmail("");
     setEmailInput(""); setEmailResult(null); setEmailError(null);
     setInviteFirst(""); setInviteLast(""); setInviteSent(false);
-    setPanel("newRecipient");
+    // Go straight to beneficiary list — skipping "New recipient" avoids an
+    // unnecessary extra back-press for the user.
+    setPanel("beneficiary");
   }
 
   const filtered = beneficiaries.filter(b => {
