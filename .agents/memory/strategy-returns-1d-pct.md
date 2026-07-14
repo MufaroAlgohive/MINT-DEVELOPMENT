@@ -32,14 +32,24 @@ Historical compositions live in `cc_audit_log` (table=strategies_c, full old_row
 App-level logging hook: `_logStrategyCompositionChange(db, stratId, newHoldings)` in server/index.cjs — call whenever a strategy's holdings are updated via the API.
 pgPool = local PostgreSQL — cannot create Supabase tables via pgPool.
 
-## Chain-linked YTDs (as of Jul 14 2026, from stored basket_value chain)
-| Strategy | YTD |
-|---|---|
-| ETF Basket | +13.53% |
-| MINT Famous Brands | +12.96% |
-| Yield Basket | +18.66% |
-| MINT Diversified | +11.36% |
-| MyGrowthFund | (see live) |
-| UCT | +3.25% |
-| MINT Multi-sector | −1.94% |
-| Blended Focus | −3.11% |
+## Spike guard architecture (updated Jul 14 2026)
+**Old guard (wrong):** compared new `ytd_pct` vs stored `prev.ytd_pct`. Failed when a corrupt row was
+deleted or the formula changed — legitimate corrections got blocked (MINT Famous Brands stuck at 29.46%).
+
+**New guard:** compare `oneDayPct` (daily basket change) against ±15%. Formula-agnostic, won't fire
+on day-after-deletion scenarios, won't fire when corrupt prev rows are removed.
+
+**Why 15%:** A diversified equity basket cannot legitimately move 15% in one trading day.
+Bad prices that slip through the per-symbol 20% anomaly guard still cannot shift the whole basket 15%.
+
+## Corrupt Jul 13 2026 rows (resolved)
+MINT Famous Brands (UUID: 1afcd1ce-9a03-4b67-ae78-99fb69602ce3) and Test Strategy
+(UUID: 26daf728-8e95-4ff0-b9e7-69b382b0bb8c) had inflated ytd_pct (29.46% / 25.33%) from the
+BOX.JO unit bug on Jul 13. Deleted those rows → spike guard baseline reverted to Jul 10.
+After fix: MINT Famous Brands = 12.96%, Test Strategy = 10.58%, saved: 9, blocked: 0.
+
+## ytd_pct column vs 1d_pct chain
+- `ytd_pct` column: current template × Dec-31 anchor (fast; wrong for rebalanced strategies)
+- `1d_pct` chain: basket_value ratio day-over-day (correct across rebalances)
+- Factsheet calendar and YTD badge: use 1d_pct chain (frontend)
+- Strategy cards elsewhere: read ytd_pct column (consistent with historical data, acceptable)

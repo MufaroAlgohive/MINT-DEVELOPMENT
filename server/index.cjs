@@ -13017,7 +13017,12 @@ async function computeAndSaveStrategyReturns() {
         prevYtdMap[row.strategy_id] = { ytd_pct: row.ytd_pct, basket_value: row.basket_value, as_of_date: row.as_of_date };
     }
 
-    const YTD_SPIKE_THRESHOLD_PP = 13; // percentage points
+    // Spike guard: block if a single trading day's basket move exceeds this threshold.
+    // Applied to oneDayPct (not ytd delta) so it is formula-agnostic and catches bad
+    // intraday prices before they can corrupt the stored chain.
+    // 15% is extreme for any diversified basket — legitimate market days are well below this.
+    const DAILY_SPIKE_THRESHOLD_PCT = 15;
+
     let saved = 0, blocked = 0, failed = 0;
 
     for (const strategy of strategies) {
@@ -13025,7 +13030,11 @@ async function computeAndSaveStrategyReturns() {
         const holdings = strategyHoldingsMap[strategy.id];
         if (!holdings?.length) continue;
 
+        // ytd_pct — current template vs Dec-31 anchor (fast, reliable for non-rebalanced
+        // strategies; the Factsheet calendar uses the 1d_pct chain for rebalanced ones).
         const ytd = basketYtdReturn(holdings);
+
+        // Period returns (5d, 1m, 6m) — use anchor price maps
         const r5d = basketReturn(holdings, periodAnchorMaps['5d']);
         const r1m = basketReturn(holdings, periodAnchorMaps['1m']);
         const r6m = basketReturn(holdings, periodAnchorMaps['6m']);
@@ -13041,7 +13050,7 @@ async function computeAndSaveStrategyReturns() {
         }
         const basketValueCents = basketMatched === holdings.length ? Math.round(basketValueToday) : null;
 
-        // 1d_pct — today's basket vs yesterday's stored basket_value (chain-linked)
+        // 1d_pct — today's basket vs yesterday's stored basket_value (chain-linked).
         // Using the STORED basket avoids rebalance-day artifacts: both sides reflect
         // the actual portfolio value (old template yesterday, new template today).
         const prev = prevYtdMap[strategy.id];
@@ -13052,19 +13061,17 @@ async function computeAndSaveStrategyReturns() {
 
         const fmt = (v) => v !== null ? parseFloat(v.toFixed(4)) : null;
 
-        // Cross-day sanity check on YTD
-        if (ytd !== null && prev?.ytd_pct !== null && prev?.ytd_pct !== undefined) {
-          const delta = Math.abs(ytd - Number(prev.ytd_pct));
-          if (delta > YTD_SPIKE_THRESHOLD_PP) {
-            console.warn(
-              `[strategy-returns] SPIKE BLOCKED for "${strategy.name}": ` +
-              `new YTD ${ytd.toFixed(2)}% vs prev ${Number(prev.ytd_pct).toFixed(2)}% ` +
-              `(${(ytd - Number(prev.ytd_pct)).toFixed(2)}pp change, threshold ±${YTD_SPIKE_THRESHOLD_PP}pp). ` +
-              `Keeping previous value from ${prev.as_of_date}.`
-            );
-            blocked++;
-            continue;
-          }
+        // Cross-day sanity check: if a single day's basket moves by more than
+        // DAILY_SPIKE_THRESHOLD_PCT it almost certainly reflects a bad intraday price,
+        // not a real market move. Skip the write and keep the last good row visible.
+        if (oneDayPct !== null && Math.abs(oneDayPct) > DAILY_SPIKE_THRESHOLD_PCT) {
+          console.warn(
+            `[strategy-returns] SPIKE BLOCKED for "${strategy.name}": ` +
+            `1d basket change ${oneDayPct.toFixed(2)}% exceeds ±${DAILY_SPIKE_THRESHOLD_PCT}%. ` +
+            `Keeping previous value from ${prev?.as_of_date}.`
+          );
+          blocked++;
+          continue;
         }
 
         // Delete any existing row for today first (avoids duplicates)
