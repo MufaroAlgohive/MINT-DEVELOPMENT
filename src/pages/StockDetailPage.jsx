@@ -8,7 +8,7 @@ import { useOnboardingStatus } from "../lib/useOnboardingStatus";
 import GoalLinkModal from "../components/GoalLinkModal.jsx";
 import { useFees } from "../lib/useFees";
 
-const MIN_INVESTMENT = 1000;
+const MIN_INVESTMENT = 200;
 
 const fmt = (val, cur = "R") => `${cur} ${Number(val).toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 

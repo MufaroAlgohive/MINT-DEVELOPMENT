@@ -4,7 +4,7 @@ import { formatCurrency } from "../lib/formatCurrency";
 import GiftToggleV2 from "../components/GiftToggleV2";
 import { useFees } from "../lib/useFees";
 
-const MIN_INVESTMENT = 1000;
+const MIN_INVESTMENT = 200;
 
 const StockBuyPage = ({ security, onBack, onContinue, paymentMethod, onGiftDone }) => {
   const { ISIN_FEE_PER_ASSET, BROKER_FEE_RATE, TRANSACTION_FEE_RATE, CASH_BUFFER_RATE } = useFees();

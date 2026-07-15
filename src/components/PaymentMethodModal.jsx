@@ -382,7 +382,7 @@ const PaymentMethodModal = ({
                 <p className="text-xs text-slate-500">
                   Paying{" "}
                   <span className="font-semibold text-slate-700">
-                    {formatAmount(baseAmount ?? amount)}
+                    {formatAmount(bufferedBase)}
                   </span>{" "}
                   for{" "}
                   <span className="font-semibold text-slate-700">
