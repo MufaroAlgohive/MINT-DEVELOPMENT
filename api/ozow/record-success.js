@@ -154,6 +154,13 @@ export default async function handler(req, res) {
       });
     }
 
+    // Tag as Ozow so the CRM (EFT tab → Ozow Payments) can identify it.
+    // Best-effort: the payment is already recorded above; if the
+    // payment_method column doesn't exist yet this just no-ops.
+    try {
+      await db.from("transactions").update({ payment_method: "ozow" }).eq("store_reference", transactionRef);
+    } catch (e) { console.warn("[ozow/record-success] payment_method tag skipped:", e?.message); }
+
     console.log(`[ozow/record-success] Investment recorded user=${userId} strategy=${strategyId} amount=${amountZAR} ref=${transactionRef}`);
     return res.json({ success: true });
   } catch (err) {
