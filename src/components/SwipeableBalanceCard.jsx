@@ -333,12 +333,17 @@ const SwipeableBalanceCard = ({
     holdingsCount: 0,
   });
 
+  // When a specific strategy is selected from the dropdown, every basket-scoped
+  // calculation (5D/M snapshot anchor, YTD/ALL cost basis) must be scoped to ONLY
+  // that strategy's id — never fall back to the whole portfolio's ids/cost basis.
+  const selectedStrategyId = (selectedAsset?.isStrategy && (selectedAsset.strategyId || selectedAsset.strategy_id)) || null;
+
   // Stable key: only changes when the SET of strategy IDs changes, not on every live-price tick.
   // Prevents the parent snapshot effect from re-running on every price poll (which would flash R0).
-  const parentStrategyKey = useMemo(
-    () => [...new Set(dbData.holdings.map(h => h.strategyId || h.strategy_id).filter(Boolean))].sort().join(","),
-    [dbData.holdings]
-  );
+  const parentStrategyKey = useMemo(() => {
+    if (selectedStrategyId) return selectedStrategyId;
+    return [...new Set(dbData.holdings.map(h => h.strategyId || h.strategy_id).filter(Boolean))].sort().join(",");
+  }, [dbData.holdings, selectedStrategyId]);
 
   const [isVisible, setIsVisible] = useState(() => {
     try { return localStorage.getItem(VISIBILITY_STORAGE_KEY) !== "false"; } catch { return true; }
@@ -866,20 +871,30 @@ const SwipeableBalanceCard = ({
       const strategyIds = parentStrategyKey ? parentStrategyKey.split(",") : [];
       if (!strategyIds.length) return;
       try {
-        // ── YTD / ALL — use already-computed totalInvested from loadData ──────────────
-        // loadData computes: totalInvested = live_value − (unrealized + realized P&L).
+        // ── YTD / ALL — cost basis ──────────────────────────────────────────────────
+        // Default ("All Baskets", no selection): use already-computed totalInvested from
+        // loadData. loadData computes: totalInvested = live_value − (unrealized + realized P&L).
         // This is consistent with the live portfolio (same position set) and correctly
         // handles rebalances: realized gains from closed positions stay in P&L, and
         // replacement positions (transaction_id=null) are never double-counted as capital.
         // Avoids the previous bug where closed/sold positions (is_active=false) were
         // included in cost basis, making rebalanced portfolios show false losses.
+        //
+        // When ONE specific strategy is selected from the dropdown: must use THAT
+        // strategy's own cost basis (selectedAsset.maxOfCostBasis), never the whole
+        // portfolio's totalInvested — otherwise a freshly-bought basket gets compared
+        // against every other basket's combined cost basis, producing impossible
+        // numbers like -96.7% on a position bought yesterday.
         if (activeTab === "ytd" || activeTab === "all") {
-          const costBasisCents = Math.round((dbData.totalInvested || 0) * 100);
+          const costBasisRands = selectedStrategyId
+            ? Number(selectedAsset?.maxOfCostBasis || 0)
+            : (dbData.totalInvested || 0);
+          const costBasisCents = Math.round(costBasisRands * 100);
           setParentYearStartBasketCents(costBasisCents > 0 ? costBasisCents : null);
-          console.log("[PERIOD_DEBUG parent] YTD/ALL cost-basis (dbData.totalInvested):", {
+          console.log("[PERIOD_DEBUG parent] YTD/ALL cost-basis:", {
             activeTab,
-            totalInvestedRands: dbData.totalInvested,
-            costBasisRands: costBasisCents / 100,
+            selectedStrategyId,
+            costBasisRands,
           });
           return;
         }
@@ -1001,7 +1016,7 @@ const SwipeableBalanceCard = ({
 
     runParentSnapshots();
     return () => { cancelled = true; };
-  }, [childMode, userId, parentStrategyKey, activeTab, dbData.totalInvested]);
+  }, [childMode, userId, parentStrategyKey, activeTab, dbData.totalInvested, selectedStrategyId, selectedAsset]);
 
   // Live price poll for child mode — 15s, only runs when no shared prop from ChildDashboardPage
   useEffect(() => {
@@ -1724,7 +1739,7 @@ const SwipeableBalanceCard = ({
         >
           <LayoutGrid size={12} className="text-violet-400" />
           <span className="text-[11px] font-medium text-slate-200 whitespace-nowrap">
-            {selectedAsset ? selectedAsset.symbol : (dbData.holdings.find(h => h.isStrategy)?.symbol || dbData.holdings.find(h => !h.isStrategy)?.symbol || "Investments")}
+            {selectedAsset ? selectedAsset.symbol : (dbData.holdings.length > 0 ? "All Baskets" : "Investments")}
           </span>
           {isOpen ? <ChevronUp size={12} className="text-slate-300" /> : <ChevronDown size={12} className="text-slate-300" />}
         </button>
@@ -1738,38 +1753,56 @@ const SwipeableBalanceCard = ({
                   ...dbData.holdings.filter(h => h.isStrategy),
                   ...dbData.holdings.filter(h => !h.isStrategy && !strategyItemIds.has(h.strategy_id)),
                 ];
-                return dropdownItems.map((item, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => { setSelectedAsset(item); setIsOpen(false); scrollToHoldingIndex(idx); }}
-                  className={`w-full flex items-center gap-2 px-3 py-1.5 text-left ${selectedAsset?.symbol === item.symbol ? "bg-slate-100" : "hover:bg-slate-50"}`}
-                >
-                  <div className="w-4 h-4 rounded-full overflow-hidden bg-slate-100 shrink-0">
-                    {item.isStrategy && item.topLogos?.length > 0 ? (
-                      <div className="flex -space-x-1 h-full items-center justify-center">
-                        {item.topLogos.slice(0, 2).map((logo, li) => (
-                          <img key={li} src={logo} className="w-3 h-3 rounded-full object-cover border border-white/25" />
-                        ))}
-                      </div>
-                    ) : item.logo_url ? (
-                      <img src={item.logo_url} className="w-full h-full object-cover" />
-                    ) : (
-                      <span className="flex items-center justify-center w-full h-full text-[6px] text-slate-500">
-                        {item.symbol?.substring(0, 2)}
-                      </span>
+                // "All Baskets" aggregates every basket/holding the user owns — only worth
+                // showing once there's more than one thing to aggregate.
+                const showAllBasketsOption = dropdownItems.length > 1;
+                return (
+                  <>
+                    {showAllBasketsOption && (
+                      <button
+                        onClick={() => { setSelectedAsset(null); setIsOpen(false); }}
+                        className={`w-full flex items-center gap-2 px-3 py-1.5 text-left ${!selectedAsset ? "bg-slate-100" : "hover:bg-slate-50"}`}
+                      >
+                        <div className="w-4 h-4 rounded-full overflow-hidden bg-violet-100 shrink-0 flex items-center justify-center">
+                          <LayoutGrid size={10} className="text-violet-500" />
+                        </div>
+                        <span className="text-[9px] font-medium text-slate-700 truncate">All Baskets</span>
+                      </button>
                     )}
-                  </div>
-                  <span className="text-[9px] font-medium text-slate-700 truncate">{item.symbol}</span>
-                  {(() => {
-                    if (!item.isStrategy && Number(item.avg_fill || 0) === 0) return <SettlementBadge status="pending" size="xs" />;
-                    if (item.settlement_status && item.settlement_status !== "confirmed") return <SettlementBadge status={item.settlement_status} size="xs" />;
-                    const isSettlementActive = settlementCfg.brokerEnabled || settlementCfg.fullyIntegrated;
-                    if (!isSettlementActive) return null;
-                    const s = holdingSettlementStatus;
-                    return s && s !== "confirmed" ? <SettlementBadge status={s} size="xs" /> : null;
-                  })()}
-                </button>
-              ));
+                    {dropdownItems.map((item, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => { setSelectedAsset(item); setIsOpen(false); scrollToHoldingIndex(idx); }}
+                      className={`w-full flex items-center gap-2 px-3 py-1.5 text-left ${selectedAsset?.symbol === item.symbol ? "bg-slate-100" : "hover:bg-slate-50"}`}
+                    >
+                      <div className="w-4 h-4 rounded-full overflow-hidden bg-slate-100 shrink-0">
+                        {item.isStrategy && item.topLogos?.length > 0 ? (
+                          <div className="flex -space-x-1 h-full items-center justify-center">
+                            {item.topLogos.slice(0, 2).map((logo, li) => (
+                              <img key={li} src={logo} className="w-3 h-3 rounded-full object-cover border border-white/25" />
+                            ))}
+                          </div>
+                        ) : item.logo_url ? (
+                          <img src={item.logo_url} className="w-full h-full object-cover" />
+                        ) : (
+                          <span className="flex items-center justify-center w-full h-full text-[6px] text-slate-500">
+                            {item.symbol?.substring(0, 2)}
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-[9px] font-medium text-slate-700 truncate">{item.symbol}</span>
+                      {(() => {
+                        if (!item.isStrategy && Number(item.avg_fill || 0) === 0) return <SettlementBadge status="pending" size="xs" />;
+                        if (item.settlement_status && item.settlement_status !== "confirmed") return <SettlementBadge status={item.settlement_status} size="xs" />;
+                        const isSettlementActive = settlementCfg.brokerEnabled || settlementCfg.fullyIntegrated;
+                        if (!isSettlementActive) return null;
+                        const s = holdingSettlementStatus;
+                        return s && s !== "confirmed" ? <SettlementBadge status={s} size="xs" /> : null;
+                      })()}
+                    </button>
+                    ))}
+                  </>
+                );
               })()}
             </div>
           </div>

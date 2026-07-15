@@ -15,3 +15,4 @@
 - [Strategy returns 1d_pct architecture](strategy-returns-1d-pct.md) — basket_value chain is source of truth; calendar chain-multiplies 1d_pct; ytd_pct column is wrong for rebalanced strategies; Jun 3 2026 rows nulled (template/bad-data corruption).
 - [Strategy calendar monthly fix](strategy-calendar-monthly-fix.md) — inception month uses basket_value; all later months chain 1d_pct (basket_value drops on rebalance days, 1d_pct does not).
 - [Strategy YTD chain fix](strategy-ytd-chain-fix.md) — ytd_pct must be chain-linked (not anchor-formula); per-strategy parallel queries required to bypass Supabase 1000-row cap; Jun 3 nulls patched directly.
+- [Balance card per-strategy selection scoping](balance-card-strategy-selection-scoping.md) — dropdown-selected basket's 5D/M anchor and YTD/ALL cost basis must scope to that ONE strategy id, never the whole portfolio.
