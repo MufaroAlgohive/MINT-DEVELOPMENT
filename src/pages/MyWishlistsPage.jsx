@@ -177,9 +177,13 @@ function EmptyState({ onCreate }) {
 export default function MyWishlistsPage({ onBack, onNavigate, childFamilyMemberId }) {
   const { registries: allRegistries, loading, reload } = useMyRegistries();
 
-  // When opened from a child's context, show only that child's wishlists
+  // When opened from a child's context, show only that child's wishlists.
+  // Also match legacy records where beneficiary_ref was never stored (NULL).
   const registries = childFamilyMemberId
-    ? allRegistries.filter(r => r.beneficiary_ref === childFamilyMemberId)
+    ? allRegistries.filter(r =>
+        r.beneficiary_ref === childFamilyMemberId ||
+        (r.beneficiary_ref === null && r.beneficiary_type === 'CHILD')
+      )
     : allRegistries;
   const [deletingId, setDeletingId] = useState(null);
   const [error, setError] = useState(null);

@@ -49,14 +49,52 @@ async function ensureGiftRegistryTables(pgPool, supabaseAdmin) {
     console.error('[gift-registry] Health check threw:', e.message);
   }
 
-  // Ensure family_member_id column exists (added for child wishlist support)
-  if (pgPool) {
-    try {
-      await pgPool.query('ALTER TABLE gift_events ADD COLUMN IF NOT EXISTS family_member_id uuid');
-      console.log('[gift-registry] family_member_id column ensured on gift_events');
-    } catch (e) {
-      console.warn('[gift-registry] Could not ensure family_member_id column:', e.message);
+  // Auto-repair: fix orphaned child registries where beneficiary_ref was never set
+  // (these were created with old code that used a non-existent family_member_id column,
+  //  leaving beneficiary_ref = NULL and making them invisible on the child's dashboard)
+  try {
+    const { data: orphaned } = await supabaseAdmin
+      .from('gift_events')
+      .select('id, creator_user_id, beneficiary_display_name')
+      .eq('beneficiary_type', 'CHILD')
+      .is('beneficiary_ref', null);
+
+    if (orphaned?.length) {
+      console.log(`[gift-registry] Found ${orphaned.length} orphaned child registries — attempting auto-repair`);
+      for (const reg of orphaned) {
+        const { data: members } = await supabaseAdmin
+          .from('family_members')
+          .select('id, first_name, last_name')
+          .eq('primary_user_id', reg.creator_user_id)
+          .eq('relationship', 'child');
+
+        if (!members?.length) continue;
+
+        const displayName = (reg.beneficiary_display_name || '').toLowerCase().trim();
+        const match = members.find(m => {
+          const fn = (m.first_name || '').toLowerCase().trim();
+          const full = `${m.first_name || ''} ${m.last_name || ''}`.toLowerCase().trim();
+          return displayName === fn || displayName === full ||
+            displayName.startsWith(fn) || fn.startsWith(displayName.split(' ')[0]);
+        });
+
+        if (match) {
+          const { error: upErr } = await supabaseAdmin
+            .from('gift_events')
+            .update({ beneficiary_ref: match.id })
+            .eq('id', reg.id);
+          if (!upErr) {
+            console.log(`[gift-registry] Repaired registry ${reg.id} → beneficiary_ref=${match.id} (${match.first_name})`);
+          } else {
+            console.warn(`[gift-registry] Could not repair registry ${reg.id}:`, upErr.message);
+          }
+        }
+      }
+    } else {
+      console.log('[gift-registry] No orphaned child registries found — data is clean');
     }
+  } catch (e) {
+    console.warn('[gift-registry] Auto-repair threw:', e.message);
   }
 }
 

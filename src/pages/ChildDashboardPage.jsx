@@ -2004,7 +2004,16 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
         });
         const json = await res.json();
         const all = json.registries || [];
-        setChildWishlists(all.filter(r => r.beneficiary_ref === child.id));
+        const childFirstNameLower = (child.first_name || '').toLowerCase().trim();
+        setChildWishlists(all.filter(r =>
+          r.beneficiary_ref === child.id ||
+          // Fallback for legacy records created before beneficiary_ref was stored:
+          // match by display name when beneficiary_ref was never set
+          (r.beneficiary_ref === null &&
+            r.beneficiary_type === 'CHILD' &&
+            childFirstNameLower &&
+            (r.beneficiary_display_name || '').toLowerCase().trim().startsWith(childFirstNameLower))
+        ));
       } catch (e) {
         console.error("[ChildDashboard] Failed to fetch child wishlists:", e.message);
       } finally {
