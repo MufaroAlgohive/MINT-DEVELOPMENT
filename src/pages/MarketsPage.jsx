@@ -1983,9 +1983,19 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                   }),
               ]
                 .map((sector) => {
-                const sectorStrategies = sector === '__WATCHLIST__'
+                const sectorStrategies = (sector === '__WATCHLIST__'
                   ? filteredStrategies.filter(s => strategyWatchlist.includes(s.id))
-                  : filteredStrategies.filter(s => (s.sector || 'General') === sector);
+                  : filteredStrategies.filter(s => (s.sector || 'General') === sector)
+                ).slice().sort((a, b) => {
+                  // Sort by YTD performance highest → lowest within each category.
+                  // Null/undefined YTD values fall to the end.
+                  const ytdA = a.r_ytd ?? null;
+                  const ytdB = b.r_ytd ?? null;
+                  if (ytdA === null && ytdB === null) return 0;
+                  if (ytdA === null) return 1;
+                  if (ytdB === null) return -1;
+                  return ytdB - ytdA;
+                });
                 
                 if (sectorStrategies.length === 0) return null;
               
