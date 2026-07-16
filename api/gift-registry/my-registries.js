@@ -22,7 +22,7 @@ export default async function handler(req, res) {
 
     if (familyRow?.id) {
       // Child: own registries OR ones the parent created for them — nothing else
-      query = query.or(`creator_user_id.eq.${user.id},family_member_id.eq.${familyRow.id}`);
+      query = query.or(`creator_user_id.eq.${user.id},beneficiary_ref.eq.${familyRow.id}`);
     } else {
       // Parent / regular user: all registries they created
       query = query.eq('creator_user_id', user.id);

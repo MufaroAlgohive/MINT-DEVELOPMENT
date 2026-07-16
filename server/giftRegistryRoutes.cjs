@@ -328,7 +328,7 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
           custom_occasion: customOccasion || null,
           beneficiary_type: beneficiaryType,
           beneficiary_display_name: beneficiaryDisplayName,
-          family_member_id: familyMemberId || null,
+          beneficiary_ref: familyMemberId || null,
           title,
           event_date: eventDate,
           expiry_at: expiryAt,
@@ -371,7 +371,7 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
 
       if (familyRow?.id) {
         // Child: own registries OR ones the parent created for them — nothing else
-        query = query.or(`creator_user_id.eq.${user.id},family_member_id.eq.${familyRow.id}`);
+        query = query.or(`creator_user_id.eq.${user.id},beneficiary_ref.eq.${familyRow.id}`);
       } else {
         // Parent / regular user: all registries they created
         query = query.eq('creator_user_id', user.id);

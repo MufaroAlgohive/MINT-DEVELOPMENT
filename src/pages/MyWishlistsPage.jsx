@@ -179,7 +179,7 @@ export default function MyWishlistsPage({ onBack, onNavigate, childFamilyMemberI
 
   // When opened from a child's context, show only that child's wishlists
   const registries = childFamilyMemberId
-    ? allRegistries.filter(r => r.family_member_id === childFamilyMemberId)
+    ? allRegistries.filter(r => r.beneficiary_ref === childFamilyMemberId)
     : allRegistries;
   const [deletingId, setDeletingId] = useState(null);
   const [error, setError] = useState(null);

@@ -2004,7 +2004,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
         });
         const json = await res.json();
         const all = json.registries || [];
-        setChildWishlists(all.filter(r => r.family_member_id === child.id));
+        setChildWishlists(all.filter(r => r.beneficiary_ref === child.id));
       } catch (e) {
         console.error("[ChildDashboard] Failed to fetch child wishlists:", e.message);
       } finally {

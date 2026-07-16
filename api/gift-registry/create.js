@@ -22,7 +22,7 @@ export default async function handler(req, res) {
         custom_occasion: customOccasion || null,
         beneficiary_type: beneficiaryType,
         beneficiary_display_name: beneficiaryDisplayName,
-        family_member_id: familyMemberId || null,
+        beneficiary_ref: familyMemberId || null,
         title,
         event_date: eventDate,
         expiry_at: expiryAt,
