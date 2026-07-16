@@ -278,14 +278,19 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
   const [wishlistToastVisible, setWishlistToastVisible] = useState(false);
   const [wishlistToastRegistryId, setWishlistToastRegistryId] = useState(null);
 
-  // Load wishlisted keys + strategy watchlist from API on mount
+  // Load wishlisted keys + strategy watchlist from API on mount.
+  // When in a child's dashboard context, scope hearts to that child's registries only
+  // so that sibling children's liked items don't bleed into each other's heart state.
   useEffect(() => {
     async function loadPrefs() {
       try {
         const { data } = await supabase.auth.getSession();
         const token = data?.session?.access_token;
         if (!token) return;
-        const res = await fetch("/api/gift-wishlist-prefs", {
+        const url = childData?.id
+          ? `/api/gift-wishlist-prefs?childFamilyMemberId=${encodeURIComponent(childData.id)}`
+          : "/api/gift-wishlist-prefs";
+        const res = await fetch(url, {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (res.ok) {
@@ -298,7 +303,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
       }
     }
     loadPrefs();
-  }, []);
+  }, [childData?.id]);
 
   async function updateWishlistPrefs(patch) {
     try {
