@@ -2890,7 +2890,7 @@ const App = () => {
         >
           <Suspense fallback={<div className="min-h-screen bg-slate-50" />}>
             <GiftStrategyPickerPage
-              onBack={goBack}
+              onBack={() => { navigationHistory.current = []; setPreviousPageName(null); startTransition(() => setCurrentPage("home")); }}
               autoOpenWishlist={giftWishlistAutoOpen}
               onOpenStockDetail={(security) => { setSelectedSecurity(security); navigateTo("stockDetail"); }}
               onNavigate={(page, params) => {
