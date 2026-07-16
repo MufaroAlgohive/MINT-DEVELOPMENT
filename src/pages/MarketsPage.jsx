@@ -402,12 +402,10 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
   ); // "openstrategies", "invest", "news"
 
   useEffect(() => {
-    if (childFilter) {
-      setViewMode("openstrategies");
-    } else if (initialViewMode) {
+    if (initialViewMode) {
       setViewMode(initialViewMode);
     }
-  }, [childFilter, initialViewMode]);
+  }, [initialViewMode]);
 
   useEffect(() => {
     onViewModeChange?.(viewMode);
@@ -1624,7 +1622,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
           </header>
 
           {/* Toggle between Mint Baskets and Markets */}
-          {viewMode !== "news" && !childFilter && (
+          {viewMode !== "news" && (
             <div className="flex gap-1.5 rounded-2xl bg-black/20 p-1 backdrop-blur-sm ring-1 ring-white/10">
               <button
                 ref={basketsTabRef}
@@ -1656,7 +1654,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
             </div>
           )}
 
-          {viewMode === "openstrategies" && !childFilter && (
+          {viewMode === "openstrategies" && (
             <div className="flex items-start justify-between gap-3 -mt-2">
               <p className="text-[11px] text-white/70 leading-relaxed flex-1">
                 A MINT Basket is a professionally managed selection of assets, built and managed by MINT's investment team. The assets are held directly in your name, not pooled.

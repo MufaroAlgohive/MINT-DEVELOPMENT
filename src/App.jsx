@@ -2892,6 +2892,7 @@ const App = () => {
             <GiftStrategyPickerPage
               onBack={goBack}
               autoOpenWishlist={giftWishlistAutoOpen}
+              onOpenStockDetail={(security) => { setSelectedSecurity(security); navigateTo("stockDetail"); }}
               onNavigate={(page, params) => {
                 setGiftWishlistAutoOpen(false);
                 if (page === "giftStrategyInvest") {
