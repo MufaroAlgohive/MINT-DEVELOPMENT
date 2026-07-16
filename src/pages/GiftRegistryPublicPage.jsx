@@ -29,6 +29,7 @@ export default function GiftRegistryPublicPage({
   context,
   user,
   isKycComplete,
+  isAuthLoading = false,
   onAuthPrompt,
   onBack,
 }) {
@@ -271,22 +272,36 @@ export default function GiftRegistryPublicPage({
           </div>
         )}
 
+        {/* Auth prompt — shown when not logged in, or loading (cross-tab session check) */}
         {!user && !isClosed && (
           <div className="bg-white rounded-2xl border border-slate-100 shadow-sm px-5 py-4">
-            <div className="flex gap-3">
-              <button
-                onClick={() => onAuthPrompt(undefined, "login")}
-                className="flex-1 px-4 py-3 bg-slate-900 text-white text-sm font-semibold rounded-xl active:opacity-80"
-              >
-                Log in
-              </button>
-              <button
-                onClick={() => onAuthPrompt(undefined, "signup")}
-                className="flex-1 px-4 py-3 border border-slate-900 text-slate-900 text-sm font-semibold rounded-xl active:opacity-80"
-              >
-                Create account
-              </button>
-            </div>
+            {isAuthLoading ? (
+              /* Checking if you're signed in on another tab — show a soft pulse */
+              <div className="flex items-center justify-center gap-2.5 py-2">
+                <div className="w-4 h-4 border-2 border-slate-300 border-t-violet-600 rounded-full animate-spin" />
+                <span className="text-sm text-slate-400">Checking your session…</span>
+              </div>
+            ) : (
+              <>
+                <p className="text-xs text-slate-500 text-center mb-3">
+                  Sign in to gift shares from this wishlist
+                </p>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => onAuthPrompt(undefined, "login")}
+                    className="flex-1 px-4 py-3 bg-slate-900 text-white text-sm font-semibold rounded-xl active:opacity-80"
+                  >
+                    Log in
+                  </button>
+                  <button
+                    onClick={() => onAuthPrompt(undefined, "signup")}
+                    className="flex-1 px-4 py-3 border border-slate-900 text-slate-900 text-sm font-semibold rounded-xl active:opacity-80"
+                  >
+                    Create account
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         )}
 

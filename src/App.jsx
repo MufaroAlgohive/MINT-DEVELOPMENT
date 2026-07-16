@@ -2830,7 +2830,17 @@ const App = () => {
   }
 
   if (currentPage === "userOnboarding") {
-    return <UserOnboardingPage onComplete={() => setCurrentPage("home")} />;
+    return <UserOnboardingPage onComplete={() => {
+      // After onboarding, return to the registry if the user came from a shared wishlist
+      const pendingRegistryToken = localStorage.getItem('mint_pending_registry_token');
+      if (pendingRegistryToken) {
+        localStorage.removeItem('mint_pending_registry_token');
+        setGiftRegistryNavState({ token: pendingRegistryToken, context: "shared_wishlist" });
+        setCurrentPage("giftRegistryPublic");
+      } else {
+        setCurrentPage("home");
+      }
+    }} />;
   }
 
   if (currentPage === "updateMandate") {
@@ -2999,11 +3009,18 @@ const App = () => {
           <GiftRegistryPublicPage
             token={giftRegistryNavState.token}
             context={giftRegistryNavState.context}
-            user={profile}
+            user={profile?.id ? profile : null}
             isKycComplete={onboardingComplete}
+            isAuthLoading={profileLoading || onboardingLoading}
             onBack={goBack}
             onAuthPrompt={(type, intent) => {
-              if (type === "kyc") { navigateTo("userOnboarding"); }
+              if (type === "kyc") {
+                // Save the registry token so we return here after onboarding completes
+                if (giftRegistryNavState.token) {
+                  localStorage.setItem('mint_pending_registry_token', giftRegistryNavState.token);
+                }
+                navigateTo("userOnboarding");
+              }
               else {
                 // Persist token so we return to this wishlist after login/signup
                 if (giftRegistryNavState.token) {
