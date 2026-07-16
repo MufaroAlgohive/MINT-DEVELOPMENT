@@ -23,6 +23,7 @@ import { formatCurrency } from "../lib/formatCurrency";
 import { normalizeSymbol, getHoldingsArray, getHoldingSymbol, buildHoldingsBySymbol, getStrategyHoldingsSnapshot, calculateMinInvestment, calculateMinInvestmentSync, getAdjustedShares, enrichSecuritiesWithIntradayPrices } from "../lib/strategyUtils";
 import MintBasketsExplainer, { BASKETS_EXPLAINER_KEY } from "../components/MintBasketsExplainer.jsx";
 import { symbolToHue, generateSparkline, CompactSecurityRow, SecuritySparklineCard, CollapsibleSection } from "../components/SecurityCards.jsx";
+import { hasSeenAnimation } from "../lib/animationSeen.js";
 
 const sortOptions = ["Market Cap", "Dividend Yield", "P/E Ratio", "1M Performance", "YTD Performance"];
 
@@ -187,8 +188,14 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
   const basketsTabRef = useRef(null);
   useEffect(() => {
     if (viewMode === "openstrategies" && !childFilter) {
-      const alreadySeen = localStorage.getItem(BASKETS_EXPLAINER_KEY) === "true";
-      setShowBasketsExplainer(!alreadySeen);
+      // Source of truth is the DB (`animation` table); localStorage is only a
+      // fast cache inside hasSeenAnimation. Once seen (on any device), the
+      // explainer never auto-plays again.
+      let cancelled = false;
+      hasSeenAnimation("home_baskets_explainer", BASKETS_EXPLAINER_KEY).then((seen) => {
+        if (!cancelled) setShowBasketsExplainer(!seen);
+      });
+      return () => { cancelled = true; };
     } else {
       setShowBasketsExplainer(false);
     }

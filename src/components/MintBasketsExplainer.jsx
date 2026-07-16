@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import PaymentSuccessPage from "../pages/PaymentSuccessPage.jsx";
 import { DotLottieReact } from "@lottiefiles/dotlottie-react";
+import { markAnimationSeen } from "../lib/animationSeen.js";
 
 export const BASKETS_EXPLAINER_KEY = "mint_baskets_explainer_seen";
 
@@ -1184,7 +1185,7 @@ export default function MintBasketsExplainer({
   // This ensures it won't replay even if the user navigates away before
   // the animation fully completes (handleDone never fires in that case).
   useEffect(() => {
-    localStorage.setItem(BASKETS_EXPLAINER_KEY, "true");
+    markAnimationSeen("home_baskets_explainer", BASKETS_EXPLAINER_KEY);
   }, []);
 
   // ── Lock scroll + hide bottom nav for the duration of the explainer ──────
@@ -1572,8 +1573,8 @@ export default function MintBasketsExplainer({
   }, []);
 
   const handleDone = useCallback(() => {
-    // Mark the explainer as seen so it won't auto-play again
-    localStorage.setItem(BASKETS_EXPLAINER_KEY, "true");
+    // Mark the explainer as seen so it won't auto-play again (DB + local cache)
+    markAnimationSeen("home_baskets_explainer", BASKETS_EXPLAINER_KEY);
 
     // Clear any simulated pending order from the coach tour
     sessionStorage.removeItem('mint_coach_pending_sim');
