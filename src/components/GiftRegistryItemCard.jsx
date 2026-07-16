@@ -92,7 +92,7 @@ export default function GiftRegistryItemCard({
       })}`
     : null;
 
-  const displayName = item.short_name || item.name || item.isin;
+  const displayName = item.short_name || item.name || (isBasket ? 'Investment Basket' : item.isin);
   const ytdPositive = (item.r_ytd || 0) >= 0;
   const holdingsSnapshot = item.holdings_snapshot || [];
 
