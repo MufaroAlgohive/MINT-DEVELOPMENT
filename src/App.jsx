@@ -3159,7 +3159,6 @@ const App = () => {
       setGiftRegistryNavState({ token: pendingRegistryToken, context: "shared_wishlist" });
       setCurrentPage("giftRegistryPublic");
     } else {
-      setLoginTransition({ show: true, label: "back" });
       const returnPage = sessionExpiredPageRef.current;
       if (returnPage && !['welcome', 'auth', 'linkExpired'].includes(returnPage)) {
         setCurrentPage(returnPage);
