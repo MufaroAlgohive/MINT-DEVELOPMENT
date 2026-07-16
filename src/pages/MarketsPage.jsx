@@ -12,6 +12,7 @@ import WishlistModal from "../components/WishlistModal.jsx";
 import WishlistPickerSheet from "../components/WishlistPickerSheet.jsx";
 import WishlistToast from "../components/WishlistToast.jsx";
 import ChildInvestModal from "../components/ChildInvestModal.jsx";
+import GiftRegistryCreateSheet from "../components/GiftRegistryCreateSheet.jsx";
 import { saveMarketsInvestFilters, loadMarketsInvestFilters, saveMarketsStrategyFilters, loadMarketsStrategyFilters, buildInvestChips, buildChipsFromFilters } from "../lib/usePersistedFilters.js";
 import NotificationBell from "../components/NotificationBell";
 import FamilyDropdown from "../components/FamilyDropdown";
@@ -266,6 +267,8 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
   const [watchlist, setWatchlist] = useState([]);
   const [showWishlistMenu, setShowWishlistMenu] = useState(false);
   const wishlistMenuRef = useRef(null);
+  const [showChildWishlistCreate, setShowChildWishlistCreate] = useState(false);
+  const childData = childFilter && typeof childFilter === "object" ? childFilter : null;
 
   // Wishlist (heart) state — loaded from Supabase user_metadata, not localStorage
   const [wishlistedKeys, setWishlistedKeys] = useState(new Set());
@@ -1378,7 +1381,11 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                         type="button"
                         onClick={() => {
                           setShowWishlistMenu(false);
-                          window.dispatchEvent(new CustomEvent("navigate-within-app", { detail: { page: "giftStrategies", openWishlistCreate: true } }));
+                          if (childData) {
+                            setShowChildWishlistCreate(true);
+                          } else {
+                            window.dispatchEvent(new CustomEvent("navigate-within-app", { detail: { page: "giftStrategies", openWishlistCreate: true } }));
+                          }
                         }}
                         className="flex w-full items-center gap-2.5 px-4 py-3 text-left text-sm font-medium text-slate-700 hover:bg-slate-50"
                       >
@@ -3132,6 +3139,16 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
           }));
         }}
       />
+
+      {/* Child wishlist create sheet — only used when childFilter is a child object */}
+      {childData && (
+        <GiftRegistryCreateSheet
+          open={showChildWishlistCreate}
+          onClose={() => setShowChildWishlistCreate(false)}
+          preselectedChild={childData}
+          onSaved={() => setShowChildWishlistCreate(false)}
+        />
+      )}
     </div>
   );
 };

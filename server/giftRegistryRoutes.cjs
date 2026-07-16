@@ -48,6 +48,16 @@ async function ensureGiftRegistryTables(pgPool, supabaseAdmin) {
   } catch (e) {
     console.error('[gift-registry] Health check threw:', e.message);
   }
+
+  // Ensure family_member_id column exists (added for child wishlist support)
+  if (pgPool) {
+    try {
+      await pgPool.query('ALTER TABLE gift_events ADD COLUMN IF NOT EXISTS family_member_id uuid');
+      console.log('[gift-registry] family_member_id column ensured on gift_events');
+    } catch (e) {
+      console.warn('[gift-registry] Could not ensure family_member_id column:', e.message);
+    }
+  }
 }
 
 // ─── Auth helper ─────────────────────────────────────────────────────────────
@@ -301,7 +311,7 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
       const user = await getUser(req, supabaseAdmin);
       if (!user) return res.status(401).json({ error: 'Unauthorized' });
 
-      const { occasion, customOccasion, beneficiaryType, beneficiaryDisplayName, title, eventDate, expiryAt, message } = req.body;
+      const { occasion, customOccasion, beneficiaryType, beneficiaryDisplayName, title, eventDate, expiryAt, message, familyMemberId } = req.body;
       console.log(`[gift-registry] CREATE start: user=${user.id} occasion=${occasion} beneficiaryType=${beneficiaryType} title=${title} eventDate=${eventDate} expiryAt=${expiryAt}`);
 
       if (!occasion || !beneficiaryType || !beneficiaryDisplayName || !title || !eventDate || !expiryAt) {
@@ -318,6 +328,7 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
           custom_occasion: customOccasion || null,
           beneficiary_type: beneficiaryType,
           beneficiary_display_name: beneficiaryDisplayName,
+          family_member_id: familyMemberId || null,
           title,
           event_date: eventDate,
           expiry_at: expiryAt,

@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   X, Heart,
-  ChevronLeft, ChevronRight, User, Users, UserPlus,
+  ChevronLeft, ChevronRight, User, Users, UserPlus, Check,
 } from "lucide-react";
 import { supabaseReady } from "../lib/supabase.js";
 
@@ -120,12 +120,22 @@ function addDays(isoDate, n) {
   return d.toISOString().split("T")[0];
 }
 
-export default function GiftRegistryCreateSheet({ open, onClose, onSaved, pendingItemKey, initialTitle, initialStep }) {
+function ChildAvatar({ child }) {
+  const initials = [child.first_name?.[0], child.last_name?.[0]].filter(Boolean).join("").toUpperCase() || "?";
+  return (
+    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-violet-100 text-violet-700 font-bold text-sm flex-shrink-0">
+      {initials}
+    </div>
+  );
+}
+
+export default function GiftRegistryCreateSheet({ open, onClose, onSaved, pendingItemKey, initialTitle, initialStep, preselectedChild }) {
   const year = new Date().getFullYear();
   const [step, setStep]   = useState(initialStep || 1);
   const [form, setForm]   = useState({
     title: initialTitle?.trim() || `My Wishlist ${year}`,
-    beneficiaryType: "SELF", beneficiaryDisplayName: "",
+    beneficiaryType: preselectedChild ? "CHILD" : "SELF",
+    beneficiaryDisplayName: preselectedChild ? (preselectedChild.first_name || "") : "",
     eventDate: "", expiryAt: "", closeDuration: null,
     message: "",
   });
@@ -133,18 +143,67 @@ export default function GiftRegistryCreateSheet({ open, onClose, onSaved, pendin
   const [saving, setSaving]                   = useState(false);
   const [error, setError]                     = useState(null);
 
-  // Re-sync when the sheet is opened fresh with a pre-filled name (e.g. from the
-  // wishlist Step-1 form), so it lands directly on the beneficiary step.
+  // Children state (for CHILD beneficiary selection)
+  const [children, setChildren]           = useState([]);
+  const [childrenLoading, setChildrenLoading] = useState(false);
+  const [selectedFamilyMemberId, setSelectedFamilyMemberId] = useState(
+    preselectedChild ? preselectedChild.id : null
+  );
+
+  // Re-sync when the sheet is opened fresh
   const prevOpen = useRef(false);
   useEffect(() => {
     if (open && !prevOpen.current) {
       setStep(initialStep || 1);
-      setForm(f => ({ ...f, title: initialTitle?.trim() || f.title || `My Wishlist ${year}` }));
+      setForm(f => ({
+        ...f,
+        title: initialTitle?.trim() || f.title || `My Wishlist ${year}`,
+        beneficiaryType: preselectedChild ? "CHILD" : "SELF",
+        beneficiaryDisplayName: preselectedChild ? (preselectedChild.first_name || "") : "",
+      }));
+      setSelectedFamilyMemberId(preselectedChild ? preselectedChild.id : null);
     }
     prevOpen.current = open;
-  }, [open, initialTitle, initialStep, year]);
+  }, [open, initialTitle, initialStep, year, preselectedChild]);
+
+  // Fetch children when CHILD type is active and no preselected child
+  useEffect(() => {
+    if (!open || form.beneficiaryType !== "CHILD" || preselectedChild) return;
+    if (children.length > 0) return; // already loaded
+    setChildrenLoading(true);
+    (async () => {
+      try {
+        const session = await (await supabaseReady).auth.getSession();
+        const token = session?.data?.session?.access_token;
+        const res = await fetch("/api/family-members", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const json = await res.json();
+        const kids = (json.members || json || []).filter(m => m.relationship === "child");
+        setChildren(kids);
+      } catch (e) {
+        console.error("[GiftRegistryCreateSheet] Failed to fetch children:", e.message);
+      } finally {
+        setChildrenLoading(false);
+      }
+    })();
+  }, [open, form.beneficiaryType, preselectedChild, children.length]);
 
   const set = useCallback((k, v) => setForm(f => ({ ...f, [k]: v })), []);
+
+  function selectBeneficiaryType(k) {
+    set("beneficiaryType", k);
+    // Reset child selection when switching away from CHILD
+    if (k !== "CHILD") {
+      setSelectedFamilyMemberId(null);
+    }
+    set("beneficiaryDisplayName", "");
+  }
+
+  function selectChild(child) {
+    setSelectedFamilyMemberId(child.id);
+    set("beneficiaryDisplayName", child.first_name || "");
+  }
 
   function handleDuration(days) {
     set("closeDuration", days);
@@ -157,7 +216,9 @@ export default function GiftRegistryCreateSheet({ open, onClose, onSaved, pendin
   }
 
   const canStep1 = form.title.trim().length >= 2;
-  const canStep2 = form.beneficiaryDisplayName.trim().length >= 2;
+  const canStep2 = form.beneficiaryType === "CHILD"
+    ? !!selectedFamilyMemberId
+    : form.beneficiaryDisplayName.trim().length >= 2;
   const canStep3 =
     !!form.eventDate &&
     !!form.expiryAt &&
@@ -177,6 +238,7 @@ export default function GiftRegistryCreateSheet({ open, onClose, onSaved, pendin
           customOccasion:          "",
           beneficiaryType:         form.beneficiaryType,
           beneficiaryDisplayName:  form.beneficiaryDisplayName.trim(),
+          familyMemberId:          selectedFamilyMemberId || null,
           title:                   form.title.trim(),
           eventDate:               form.eventDate,
           expiryAt:                form.expiryAt,
@@ -186,9 +248,6 @@ export default function GiftRegistryCreateSheet({ open, onClose, onSaved, pendin
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Could not create wishlist");
 
-      // If the user got here by liking an item and choosing "create a new
-      // wishlist", carry that item over into the freshly created registry
-      // instead of leaving it empty and forcing them to re-like it.
       if (pendingItemKey && json.registry?.id) {
         try {
           const addRes = await fetch("/api/gift-registry/items/by-key", {
@@ -198,10 +257,10 @@ export default function GiftRegistryCreateSheet({ open, onClose, onSaved, pendin
           });
           if (!addRes.ok) {
             const addJson = await addRes.json().catch(() => ({}));
-            console.error("[GiftRegistryCreateSheet] Failed to add pending item to new registry:", addJson.error);
+            console.error("[GiftRegistryCreateSheet] Failed to add pending item:", addJson.error);
           }
         } catch (addErr) {
-          console.error("[GiftRegistryCreateSheet] Failed to add pending item to new registry:", addErr.message);
+          console.error("[GiftRegistryCreateSheet] Failed to add pending item:", addErr.message);
         }
       }
 
@@ -221,7 +280,13 @@ export default function GiftRegistryCreateSheet({ open, onClose, onSaved, pendin
 
   function handleClose() {
     setStep(initialStep || 1);
-    setForm({ title: initialTitle?.trim() || `My Wishlist ${year}`, beneficiaryType: "SELF", beneficiaryDisplayName: "", eventDate: "", expiryAt: "", closeDuration: null, message: "" });
+    setForm({
+      title: initialTitle?.trim() || `My Wishlist ${year}`,
+      beneficiaryType: preselectedChild ? "CHILD" : "SELF",
+      beneficiaryDisplayName: preselectedChild ? (preselectedChild.first_name || "") : "",
+      eventDate: "", expiryAt: "", closeDuration: null, message: "",
+    });
+    setSelectedFamilyMemberId(preselectedChild ? preselectedChild.id : null);
     setError(null);
     onClose?.();
   }
@@ -323,49 +388,123 @@ export default function GiftRegistryCreateSheet({ open, onClose, onSaved, pendin
                 <div className="space-y-4 pt-1">
                   <p className="text-[13px] font-semibold text-slate-700">Who is this wishlist for?</p>
 
-                  <div className="flex gap-2">
-                    {[
-                      { k: "SELF",  label: "Myself",       Icon: User },
-                      { k: "CHILD", label: "My child",     Icon: Users },
-                      { k: "OTHER", label: "Someone else", Icon: UserPlus },
-                    ].map(({ k, label, Icon }) => {
-                      const active = form.beneficiaryType === k;
-                      return (
-                        <button
-                          key={k}
-                          type="button"
-                          onClick={() => set("beneficiaryType", k)}
-                          className={[
-                            "flex-1 flex flex-col items-center gap-1.5 py-3 rounded-2xl border-2 transition-all",
-                            active
-                              ? "border-[#6B21A8] bg-violet-50"
-                              : "border-slate-200 bg-white hover:border-violet-200",
-                          ].join(" ")}
-                        >
-                          <Icon size={16} className={active ? "text-[#6B21A8]" : "text-slate-400"} />
-                          <span className={[
-                            "text-[11px] font-medium",
-                            active ? "text-[#6B21A8]" : "text-slate-600",
-                          ].join(" ")}>
-                            {label}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
+                  {/* If a child is pre-selected (locked), show read-only display */}
+                  {preselectedChild ? (
+                    <div className="rounded-2xl border-2 border-[#6B21A8] bg-violet-50 p-4 flex items-center gap-3">
+                      <ChildAvatar child={preselectedChild} />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-bold text-slate-900">
+                          {[preselectedChild.first_name, preselectedChild.last_name].filter(Boolean).join(" ")}
+                        </p>
+                        <p className="text-[11px] text-violet-600 font-medium">Creating wishlist for this child</p>
+                      </div>
+                      <Check size={18} className="text-[#6B21A8] flex-shrink-0" />
+                    </div>
+                  ) : (
+                    <>
+                      {/* Beneficiary type selector */}
+                      <div className="flex gap-2">
+                        {[
+                          { k: "SELF",  label: "Myself",       Icon: User },
+                          { k: "CHILD", label: "My child",     Icon: Users },
+                          { k: "OTHER", label: "Someone else", Icon: UserPlus },
+                        ].map(({ k, label, Icon }) => {
+                          const active = form.beneficiaryType === k;
+                          return (
+                            <button
+                              key={k}
+                              type="button"
+                              onClick={() => selectBeneficiaryType(k)}
+                              className={[
+                                "flex-1 flex flex-col items-center gap-1.5 py-3 rounded-2xl border-2 transition-all",
+                                active
+                                  ? "border-[#6B21A8] bg-violet-50"
+                                  : "border-slate-200 bg-white hover:border-violet-200",
+                              ].join(" ")}
+                            >
+                              <Icon size={16} className={active ? "text-[#6B21A8]" : "text-slate-400"} />
+                              <span className={[
+                                "text-[11px] font-medium",
+                                active ? "text-[#6B21A8]" : "text-slate-600",
+                              ].join(" ")}>
+                                {label}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
 
-                  <div>
-                    <label className="text-[11px] font-medium text-slate-500 block mb-1.5">
-                      {form.beneficiaryType === "SELF" ? "Your first name" : "Their first name"}
-                      <span className="text-slate-400 font-normal ml-1">— shown on the public wishlist</span>
-                    </label>
-                    <input
-                      className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-300 focus:border-transparent"
-                      placeholder="First name only"
-                      value={form.beneficiaryDisplayName}
-                      onChange={e => set("beneficiaryDisplayName", e.target.value)}
-                    />
-                  </div>
+                      {/* CHILD: show children picker */}
+                      {form.beneficiaryType === "CHILD" && (
+                        <div>
+                          <p className="text-[11px] font-medium text-slate-500 mb-2">Select a child</p>
+                          {childrenLoading ? (
+                            <div className="space-y-2">
+                              {[0, 1].map(i => (
+                                <div key={i} className="h-14 rounded-2xl bg-slate-100 animate-pulse" />
+                              ))}
+                            </div>
+                          ) : children.length === 0 ? (
+                            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-center">
+                              <p className="text-xs text-slate-500">No children found on your account.</p>
+                              <p className="text-[11px] text-slate-400 mt-1">Add a child account from the Family section.</p>
+                            </div>
+                          ) : (
+                            <div className="space-y-2">
+                              {children.map(child => {
+                                const isSelected = selectedFamilyMemberId === child.id;
+                                const initials = [child.first_name?.[0], child.last_name?.[0]].filter(Boolean).join("").toUpperCase() || "?";
+                                return (
+                                  <button
+                                    key={child.id}
+                                    type="button"
+                                    onClick={() => selectChild(child)}
+                                    className={[
+                                      "w-full flex items-center gap-3 p-3 rounded-2xl border-2 transition-all text-left",
+                                      isSelected
+                                        ? "border-[#6B21A8] bg-violet-50"
+                                        : "border-slate-200 bg-white hover:border-violet-200",
+                                    ].join(" ")}
+                                  >
+                                    <div className={`flex h-10 w-10 items-center justify-center rounded-full font-bold text-sm flex-shrink-0 ${isSelected ? "bg-[#6B21A8] text-white" : "bg-violet-100 text-violet-700"}`}>
+                                      {initials}
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                      <p className={`text-sm font-semibold ${isSelected ? "text-[#6B21A8]" : "text-slate-800"}`}>
+                                        {[child.first_name, child.last_name].filter(Boolean).join(" ")}
+                                      </p>
+                                      {child.date_of_birth && (
+                                        <p className="text-[11px] text-slate-400">
+                                          {new Date().getFullYear() - new Date(child.date_of_birth).getFullYear()} years old
+                                        </p>
+                                      )}
+                                    </div>
+                                    {isSelected && <Check size={16} className="text-[#6B21A8] flex-shrink-0" />}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* SELF / OTHER: text input for name */}
+                      {form.beneficiaryType !== "CHILD" && (
+                        <div>
+                          <label className="text-[11px] font-medium text-slate-500 block mb-1.5">
+                            {form.beneficiaryType === "SELF" ? "Your first name" : "Their first name"}
+                            <span className="text-slate-400 font-normal ml-1">— shown on the public wishlist</span>
+                          </label>
+                          <input
+                            className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-300 focus:border-transparent"
+                            placeholder="First name only"
+                            value={form.beneficiaryDisplayName}
+                            onChange={e => set("beneficiaryDisplayName", e.target.value)}
+                          />
+                        </div>
+                      )}
+                    </>
+                  )}
 
                   <button
                     type="button"
