@@ -16,6 +16,11 @@
       "schedule": "30 21 * * *"
     }
   ],
+  "functions": {
+    "api/og-preview.js": {
+      "includeFiles": "dist/index.html"
+    }
+  },
   "rewrites": [
     {
       "source": "/api/:path*",
