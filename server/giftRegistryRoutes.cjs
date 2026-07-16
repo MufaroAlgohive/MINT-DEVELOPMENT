@@ -357,11 +357,27 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
       const user = await getUser(req, supabaseAdmin);
       if (!user) return res.status(401).json({ error: 'Unauthorized' });
 
-      const { data, error } = await supabaseAdmin
+      // Check if this user is a linked child account
+      const { data: familyRow } = await supabaseAdmin
+        .from('family_members')
+        .select('id')
+        .eq('linked_user_id', user.id)
+        .eq('relationship', 'child')
+        .maybeSingle();
+
+      let query = supabaseAdmin
         .from('gift_events')
-        .select(`*, items:gift_registry_items(*)`)
-        .eq('creator_user_id', user.id)
-        .order('created_at', { ascending: false });
+        .select(`*, items:gift_registry_items(*)`);
+
+      if (familyRow?.id) {
+        // Child: own registries OR ones the parent created for them — nothing else
+        query = query.or(`creator_user_id.eq.${user.id},family_member_id.eq.${familyRow.id}`);
+      } else {
+        // Parent / regular user: all registries they created
+        query = query.eq('creator_user_id', user.id);
+      }
+
+      const { data, error } = await query.order('created_at', { ascending: false });
 
       if (error) {
         console.error(`[gift-registry] my-registries: Supabase error code=${error.code} msg=${error.message}`);
