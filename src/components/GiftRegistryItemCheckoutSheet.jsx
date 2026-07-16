@@ -125,8 +125,14 @@ export default function GiftRegistryItemCheckoutSheet({ item, registryId, onSucc
     setLoading(true);
     setError(null);
     try {
-      const session = await (await supabaseReady).auth.getSession();
-      const token = session?.data?.session?.access_token;
+      const sb = await supabaseReady;
+      let sessionData = (await sb.auth.getSession()).data?.session;
+      // If no active session, try to refresh the token before giving up
+      if (!sessionData?.access_token) {
+        const { data: refreshed } = await sb.auth.refreshSession();
+        sessionData = refreshed?.session;
+      }
+      const token = sessionData?.access_token;
       if (!token) {
         setError("Your session has expired. Please sign in again to gift.");
         return;
@@ -168,8 +174,13 @@ export default function GiftRegistryItemCheckoutSheet({ item, registryId, onSucc
     setLoading(true);
     setError(null);
     try {
-      const session = await (await supabaseReady).auth.getSession();
-      const token = session?.data?.session?.access_token;
+      const sb = await supabaseReady;
+      let sessionData = (await sb.auth.getSession()).data?.session;
+      if (!sessionData?.access_token) {
+        const { data: refreshed } = await sb.auth.refreshSession();
+        sessionData = refreshed?.session;
+      }
+      const token = sessionData?.access_token;
       const res = await fetch("/api/gift-registry/contribute", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -198,8 +209,13 @@ export default function GiftRegistryItemCheckoutSheet({ item, registryId, onSucc
     setLoading(true);
     setError(null);
     try {
-      const session = await (await supabaseReady).auth.getSession();
-      const token = session?.data?.session?.access_token;
+      const sb = await supabaseReady;
+      let sessionData = (await sb.auth.getSession()).data?.session;
+      if (!sessionData?.access_token) {
+        const { data: refreshed } = await sb.auth.refreshSession();
+        sessionData = refreshed?.session;
+      }
+      const token = sessionData?.access_token;
       const res = await fetch("/api/gift-registry/contribute", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },

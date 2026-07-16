@@ -35,9 +35,14 @@ export default async function handler(req, res) {
     }
 
     // Live price (Decision 8)
-    const { data: intraday } = await supabaseAdmin
-      .from('stock_intraday_c').select('current_price').eq('isin', item.isin).order('timestamp', { ascending: false }).limit(1).single();
-    const livePriceCents = intraday?.current_price || item.price_snapshot_cents || 0;
+    // For BASKET items, item.isin is a strategy UUID — not an intraday ISIN.
+    // Use the stored snapshot price (set from strategies_c.min_investment at creation time).
+    let livePriceCents = item.price_snapshot_cents || 0;
+    if (item.instrument_type !== 'BASKET') {
+      const { data: intraday } = await supabaseAdmin
+        .from('stock_intraday_c').select('current_price').eq('isin', item.isin).order('timestamp', { ascending: false }).limit(1).single();
+      if (intraday?.current_price) livePriceCents = intraday.current_price;
+    }
 
     // Atomic reserve via pgPool
     const pool = createPool();

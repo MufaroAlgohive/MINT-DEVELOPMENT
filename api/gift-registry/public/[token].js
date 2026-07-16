@@ -55,8 +55,61 @@ export default async function handler(req, res) {
       let stratMap = {};
       if (basketItems.length) {
         const { data: strategies } = await supabaseAdmin
-          .from('strategies_c').select('id, name, short_name').in('id', basketItems.map(i => i.isin));
-        stratMap = Object.fromEntries((strategies || []).map(s => [s.id, s]));
+          .from('strategies_c')
+          .select('id, name, short_name, holdings, risk_level, objective, tags, total_holdings, min_investment')
+          .in('id', basketItems.map(i => i.isin));
+
+        // Collect all holding symbols so we can batch-fetch logos
+        const allSymbols = [];
+        (strategies || []).forEach(s => {
+          if (Array.isArray(s.holdings)) {
+            s.holdings.forEach(h => {
+              const sym = h.ticker || h.symbol || h;
+              if (sym) allSymbols.push(sym);
+            });
+          }
+        });
+
+        // Batch logo lookup
+        let logoBySymbol = {};
+        if (allSymbols.length) {
+          const { data: secRows } = await supabaseAdmin
+            .from('securities_c')
+            .select('symbol, logo_url, name')
+            .in('symbol', [...new Set(allSymbols)]);
+          (secRows || []).forEach(s => { logoBySymbol[s.symbol] = { logo_url: s.logo_url, name: s.name }; });
+        }
+
+        // Fetch the most recent YTD return for each strategy
+        let ytdByStratId = {};
+        if (strategies?.length) {
+          const { data: returnRows } = await supabaseAdmin
+            .from('strategies_returns_c')
+            .select('strategy_id, ytd_pct, as_of_date')
+            .in('strategy_id', strategies.map(s => s.id))
+            .order('as_of_date', { ascending: false })
+            .limit(strategies.length * 5);
+          // Pick the most recent row per strategy
+          (returnRows || []).forEach(r => {
+            if (!ytdByStratId[r.strategy_id]) ytdByStratId[r.strategy_id] = r;
+          });
+        }
+
+        stratMap = Object.fromEntries((strategies || []).map(s => {
+          const holdings = Array.isArray(s.holdings) ? s.holdings : [];
+          const holdingsSnapshot = holdings.slice(0, 6).map(h => {
+            const sym = h.ticker || h.symbol || h;
+            return { symbol: sym, name: logoBySymbol[sym]?.name || h.name || sym, logo_url: logoBySymbol[sym]?.logo_url || null };
+          });
+          const ytdRow = ytdByStratId[s.id];
+          return [s.id, {
+            ...s,
+            holdings_snapshot: holdingsSnapshot,
+            total_holdings: s.total_holdings || holdings.length,
+            r_ytd: ytdRow ? ytdRow.ytd_pct / 100 : null,
+            ytd_as_of_date: ytdRow?.as_of_date || null,
+          }];
+        }));
       }
 
       registry.items = activeItems
@@ -64,12 +117,21 @@ export default async function handler(req, res) {
         .map(item => {
           if (item.instrument_type === 'BASKET') {
             const strat = stratMap[item.isin];
+            // Use stored price_snapshot_cents first; fall back to strategy min_investment (also in cents)
+            const priceCents = item.price_snapshot_cents || strat?.min_investment || 0;
             return {
               ...item,
               name: strat?.short_name || strat?.name || item.isin,
               short_name: strat?.short_name || null,
               logo_url: null,
-              price_snapshot_cents: item.price_snapshot_cents || 0,
+              price_snapshot_cents: priceCents,
+              risk_level: strat?.risk_level || null,
+              objective: strat?.objective || null,
+              tags: strat?.tags || [],
+              holdings_snapshot: strat?.holdings_snapshot || [],
+              total_holdings: strat?.total_holdings || 0,
+              r_ytd: strat?.r_ytd ?? null,
+              ytd_as_of_date: strat?.ytd_as_of_date || null,
             };
           }
           return {
