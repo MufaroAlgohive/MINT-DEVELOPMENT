@@ -173,13 +173,16 @@ export default function GiftRegistryCreateSheet({ open, onClose, onSaved, pendin
     setChildrenLoading(true);
     (async () => {
       try {
-        const session = await (await supabaseReady).auth.getSession();
+        const supabase = await supabaseReady;
+        const session = await supabase.auth.getSession();
         const token = session?.data?.session?.access_token;
-        const res = await fetch("/api/family-members", {
+        const userId = session?.data?.session?.user?.id;
+        if (!userId) return;
+        const res = await fetch(`/api/family-members?user_id=${userId}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         const json = await res.json();
-        const kids = (json.members || json || []).filter(m => m.relationship === "child");
+        const kids = (json.members || []).filter(m => m.relationship === "child");
         setChildren(kids);
       } catch (e) {
         console.error("[GiftRegistryCreateSheet] Failed to fetch children:", e.message);
