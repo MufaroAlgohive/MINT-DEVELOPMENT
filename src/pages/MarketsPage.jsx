@@ -3114,6 +3114,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
       {wishlistPickerKey && (
         <WishlistPickerSheet
           itemKey={wishlistPickerKey}
+          childFamilyMemberId={childData?.id || null}
           onClose={() => setWishlistPickerKey(null)}
           onSaved={(savedItemKey, listName, registryId) => {
             const next = new Set([...wishlistedKeys, savedItemKey]);
