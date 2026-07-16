@@ -1,16 +1,17 @@
 import React, { useEffect, useId, useMemo, useRef, useState } from "react";
-import { ArrowLeft, BookMarked, Bookmark, Gift, Heart, Search, Sparkles, TrendingUp, X } from "lucide-react";
+import { ArrowLeft, BookMarked, Bookmark, Gift, Heart, Search, SlidersHorizontal, Sparkles, TrendingUp, X } from "lucide-react";
 import GiftRegistryCreateSheet from "../components/GiftRegistryCreateSheet.jsx";
 import WishlistPickerSheet from "../components/WishlistPickerSheet.jsx";
 import { AreaChart, Area, LineChart, Line, ResponsiveContainer } from "recharts";
 import { motion, AnimatePresence } from "framer-motion";
 import { SparklesText } from "../components/ui/sparkles-text";
 import { getPublicStrategies, formatChangePct } from "../lib/strategyData";
-import { getMarketsSecuritiesWithMetrics } from "../lib/marketData";
+import { getMarketsSecuritiesWithMetrics, getSecurityPrices } from "../lib/marketData";
 import { calculateMinInvestmentSync, enrichSecuritiesWithIntradayPrices, buildHoldingsBySymbol } from "../lib/strategyUtils";
 import { supabase } from "../lib/supabase";
 import { formatCurrency } from "../lib/formatCurrency";
 import WishlistToast from "../components/WishlistToast.jsx";
+import { CollapsibleSection } from "../components/SecurityCards.jsx";
 
 const HOME_BG = {
   backgroundColor: '#f8f6fa',
@@ -224,6 +225,14 @@ export default function GiftStrategyPickerPage({ onBack, onNavigate, autoOpenWis
   const [securitiesLoading, setSecuritiesLoading] = useState(false);
   const [securitiesLoaded, setSecuritiesLoaded] = useState(false);
   const [marketsSearchQuery, setMarketsSearchQuery] = useState("");
+  const [sparklineData, setSparklineData] = useState({});
+  const [giftSecurityWatchlist, setGiftSecurityWatchlist] = useState([]);
+  const [expandedSections] = useState(() => new Set(["largest", "dividend", "gainers"]));
+
+  // Section refs for CollapsibleSection
+  const secRefLargest  = useRef(null);
+  const secRefDividend = useRef(null);
+  const secRefGainers  = useRef(null);
 
   const searchRef = useRef(null);
   const wishlistMenuRef = useRef(null);
@@ -417,6 +426,59 @@ export default function GiftStrategyPickerPage({ onBack, onNavigate, autoOpenWis
     );
   }, [giftSecurities, marketsSearchQuery]);
 
+  // Derived grouped sections (same logic as MarketsPage)
+  const largestGiftCompanies = useMemo(() =>
+    filteredGiftSecurities.filter(s => s.market_cap).sort((a, b) => b.market_cap - a.market_cap).slice(0, 10),
+    [filteredGiftSecurities]);
+
+  const highestGiftDividendYield = useMemo(() =>
+    filteredGiftSecurities.filter(s => s.dividend_yield && s.dividend_yield > 0).sort((a, b) => b.dividend_yield - a.dividend_yield).slice(0, 10),
+    [filteredGiftSecurities]);
+
+  const giftGainers = useMemo(() =>
+    filteredGiftSecurities.filter(s => s.changePct != null).sort((a, b) => (b.changePct || 0) - (a.changePct || 0)).slice(0, 10),
+    [filteredGiftSecurities]);
+
+  // Load sparklines for grouped section cards once securities arrive
+  useEffect(() => {
+    if (!giftSecurities.length) return;
+    let cancelled = false;
+    const fetchSparklines = async () => {
+      const byMarketCap = [...giftSecurities].filter(s => s.market_cap).sort((a, b) => b.market_cap - a.market_cap).slice(0, 10);
+      const byDividend  = [...giftSecurities].filter(s => s.dividend_yield && s.dividend_yield > 0).sort((a, b) => b.dividend_yield - a.dividend_yield).slice(0, 10);
+      const byGain      = [...giftSecurities].filter(s => s.changePct != null).sort((a, b) => (b.changePct || 0) - (a.changePct || 0)).slice(0, 10);
+      const seen = new Set(); const toFetch = [];
+      for (const s of [...byMarketCap, ...byDividend, ...byGain]) {
+        if (s.id && !seen.has(s.id)) { seen.add(s.id); toFetch.push(s); }
+      }
+      const results = await Promise.allSettled(
+        toFetch.map(s => getSecurityPrices(s.id, "1M").then(pts => ({ id: s.id, pts: pts.slice(-14) })))
+      );
+      if (cancelled) return;
+      const map = {};
+      for (const r of results) {
+        if (r.status === "fulfilled" && r.value.pts && r.value.pts.length >= 2) {
+          const pts = r.value.pts;
+          const closes = pts.map(p => p.close).filter(c => c != null);
+          const min = Math.min(...closes); const max = Math.max(...closes); const range = max - min || 1;
+          map[r.value.id] = pts.filter(p => p.close != null).map((p, i) => ({ i, v: ((p.close - min) / range) * 90 + 5 }));
+        }
+      }
+      setSparklineData(map);
+    };
+    fetchSparklines();
+    return () => { cancelled = true; };
+  }, [giftSecurities.length]);
+
+  function toggleGiftSecurityWatchlist(e, symbol) {
+    e.preventDefault(); e.stopPropagation();
+    setGiftSecurityWatchlist(prev => {
+      const next = prev.includes(symbol) ? prev.filter(s => s !== symbol) : [...prev, symbol];
+      updatePrefs({ securityWatchlist: next });
+      return next;
+    });
+  }
+
   function handleGift(strategy) {
     onNavigate?.("giftStrategyInvest", {
       strategy: { ...strategy, calculatedMinInvestment: calculateMinInvestmentSync(strategy, securitiesMap) },
@@ -608,9 +670,6 @@ export default function GiftStrategyPickerPage({ onBack, onNavigate, autoOpenWis
                       <div className="flex-1 space-y-2">
                         <div className="h-3 w-2/3 rounded bg-slate-100" />
                         <div className="h-2.5 w-1/3 rounded bg-slate-50" />
-                        <div className="flex gap-2 mt-1">
-                          <div className="h-5 w-16 rounded-full bg-slate-100" />
-                        </div>
                       </div>
                       <div className="space-y-1.5 text-right flex-shrink-0">
                         <div className="h-3.5 w-16 rounded bg-slate-100" />
@@ -620,78 +679,162 @@ export default function GiftStrategyPickerPage({ onBack, onNavigate, autoOpenWis
                   </div>
                 ))}
               </>
-            ) : filteredGiftSecurities.length === 0 ? (
-              <div className="flex flex-col items-center justify-center pt-16 gap-3">
-                <div className="w-14 h-14 rounded-2xl bg-white shadow-sm flex items-center justify-center">
-                  <Search size={22} className="text-slate-300" />
-                </div>
-                <p className="text-slate-400 text-sm text-center">
-                  {marketsSearchQuery ? "No securities match your search." : "No securities available."}
-                </p>
-              </div>
             ) : (
-              filteredGiftSecurities.map((security) => (
-                <button
-                  key={security.id}
-                  onClick={() => onOpenStockDetail?.(security)}
-                  className="relative w-full rounded-3xl border border-slate-100/80 bg-white/90 backdrop-blur-sm p-4 text-left shadow-[0_2px_16px_-2px_rgba(0,0,0,0.08)] transition-all hover:shadow-[0_4px_24px_-4px_rgba(0,0,0,0.12)] active:scale-[0.97]"
-                >
-                  <div className="flex items-start gap-3">
-                    {security.logo_url ? (
-                      <img
-                        src={security.logo_url}
-                        alt={security.symbol}
-                        className="h-12 w-12 rounded-full border border-slate-100 object-cover flex-shrink-0"
-                      />
-                    ) : (
-                      <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-purple-500 to-purple-600 text-sm font-bold text-white">
-                        {security.symbol?.substring(0, 2) || "—"}
-                      </div>
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex-1 min-w-0">
-                          <p className="truncate text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-900">
-                            {security.short_name || security.name}
-                          </p>
-                          <p className="text-xs text-slate-500">
-                            {security.symbol}{security.exchange ? ` · ${security.exchange}` : ""}
-                          </p>
-                        </div>
-                        <div className="text-right flex-shrink-0">
-                          {security.currentPrice != null ? (
-                            <>
-                              <p className="text-sm font-semibold text-slate-900">
-                                <span className="text-xs text-slate-400 font-normal">R </span>
-                                {Number(security.currentPrice).toFixed(2)}
-                              </p>
-                              {security.changePct != null && (
-                                <p className={`text-xs font-semibold ${security.changePct >= 0 ? "text-emerald-600" : "text-red-600"}`}>
-                                  {security.changePct >= 0 ? "+" : ""}{security.changePct.toFixed(2)}%
-                                </p>
-                              )}
-                            </>
-                          ) : (
-                            <p className="text-xs text-slate-400">—</p>
-                          )}
-                        </div>
-                      </div>
-                      <div className="mt-2 flex items-center gap-2 flex-wrap">
-                        {security.sector && (
-                          <span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-medium text-slate-600">
-                            {security.sector}
-                          </span>
-                        )}
-                        {security.returns?.ytd != null && (
-                          <span className={`rounded-full px-2 py-1 text-[10px] font-bold ${security.returns.ytd >= 0 ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"}`}>
-                            YTD {formatChangePct(security.returns.ytd)}
-                          </span>
-                        )}
-                      </div>
+              <>
+                {/* Stock count bar */}
+                <div className="flex items-center justify-between gap-3">
+                  <button
+                    className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 shadow-sm transition-all active:scale-95"
+                    disabled
+                  >
+                    <SlidersHorizontal className="h-4 w-4 text-slate-600" />
+                    <span className="text-sm font-semibold text-slate-700">Filter & Sort</span>
+                  </button>
+                  <span className="text-sm font-medium text-slate-500">{filteredGiftSecurities.length} stocks</span>
+                </div>
+
+                {/* Grouped sections — only when not searching */}
+                {!marketsSearchQuery && (
+                  <>
+                    <CollapsibleSection
+                      title="Largest companies"
+                      securities={largestGiftCompanies}
+                      onOpenStockDetail={s => onOpenStockDetail?.(s)}
+                      onToggleWatchlist={toggleGiftSecurityWatchlist}
+                      onToggleWishlist={toggleWishlistItem}
+                      watchlist={giftSecurityWatchlist}
+                      wishlistedKeys={wishlistedKeys}
+                      sparklineData={sparklineData}
+                      isExpanded={expandedSections.has("largest")}
+                      sectionRef={secRefLargest}
+                    />
+                    <CollapsibleSection
+                      title="Highest dividend yield"
+                      securities={highestGiftDividendYield}
+                      onOpenStockDetail={s => onOpenStockDetail?.(s)}
+                      onToggleWatchlist={toggleGiftSecurityWatchlist}
+                      onToggleWishlist={toggleWishlistItem}
+                      watchlist={giftSecurityWatchlist}
+                      wishlistedKeys={wishlistedKeys}
+                      sparklineData={sparklineData}
+                      isExpanded={expandedSections.has("dividend")}
+                      sectionRef={secRefDividend}
+                    />
+                    <CollapsibleSection
+                      title="Gainers"
+                      securities={giftGainers}
+                      onOpenStockDetail={s => onOpenStockDetail?.(s)}
+                      onToggleWatchlist={toggleGiftSecurityWatchlist}
+                      onToggleWishlist={toggleWishlistItem}
+                      watchlist={giftSecurityWatchlist}
+                      wishlistedKeys={wishlistedKeys}
+                      sparklineData={sparklineData}
+                      isExpanded={expandedSections.has("gainers")}
+                      sectionRef={secRefGainers}
+                    />
+                  </>
+                )}
+
+                {/* All / Search-results section */}
+                <section>
+                  {!marketsSearchQuery && (
+                    <div className="mb-4 flex items-center justify-between">
+                      <h2 className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">All</h2>
                     </div>
-                  </div>
-                </button>
-              ))
+                  )}
+                  {filteredGiftSecurities.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center pt-16 gap-3">
+                      <div className="w-14 h-14 rounded-2xl bg-white shadow-sm flex items-center justify-center">
+                        <Search size={22} className="text-slate-300" />
+                      </div>
+                      <p className="text-slate-400 text-sm text-center">No securities match your search.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {filteredGiftSecurities.map((security) => (
+                        <button
+                          key={security.id}
+                          onClick={() => onOpenStockDetail?.(security)}
+                          className="relative w-full rounded-3xl border border-slate-100/80 bg-white/90 backdrop-blur-sm p-4 text-left shadow-[0_2px_16px_-2px_rgba(0,0,0,0.08)] transition-all hover:shadow-[0_4px_24px_-4px_rgba(0,0,0,0.12)] active:scale-[0.97]"
+                        >
+                          <div className="flex items-start gap-3">
+                            {security.logo_url ? (
+                              <img src={security.logo_url} alt={security.symbol} className="h-12 w-12 rounded-full border border-slate-100 object-cover" />
+                            ) : (
+                              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-purple-500 to-purple-600 text-sm font-bold text-white">
+                                {security.symbol?.substring(0, 2) || "—"}
+                              </div>
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="flex-1 min-w-0">
+                                  <p className="truncate text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-900">
+                                    {security.short_name || security.name}
+                                  </p>
+                                  <p className="text-xs text-slate-500">
+                                    {security.symbol}{security.exchange ? ` · ${security.exchange}` : ""}
+                                  </p>
+                                </div>
+                                <div className="text-right">
+                                  {security.currentPrice != null ? (
+                                    <>
+                                      <p className="text-sm font-semibold text-slate-900">
+                                        <span className="text-xs text-slate-400 font-normal">R </span>
+                                        {Number(security.currentPrice).toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                      </p>
+                                      {security.changePct != null && (
+                                        <p className={`text-xs font-semibold ${security.changePct >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                                          {security.changePct >= 0 ? "+" : ""}{security.changePct.toFixed(2)}%
+                                        </p>
+                                      )}
+                                    </>
+                                  ) : (
+                                    <p className="text-xs text-slate-500">No pricing data</p>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="mt-3 flex items-center gap-2 flex-wrap">
+                                {security.sector && (
+                                  <span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-medium text-slate-600">
+                                    {security.sector}
+                                  </span>
+                                )}
+                                {security.pe && (
+                                  <span className="rounded-full bg-blue-50 px-2 py-1 text-[10px] font-medium text-blue-700">
+                                    P/E {Number(security.pe).toFixed(2)}
+                                  </span>
+                                )}
+                                {security.returns?.ytd != null && (
+                                  <span className={`rounded-full px-2 py-1 text-[10px] font-bold ${security.returns.ytd >= 0 ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"}`}>
+                                    YTD {formatChangePct(security.returns.ytd)}
+                                  </span>
+                                )}
+                              </div>
+                              {/* Bookmark + Heart */}
+                              <div className="absolute bottom-3 right-3 flex items-center gap-1.5 z-10">
+                                <button
+                                  type="button"
+                                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleGiftSecurityWatchlist(e, security.symbol); }}
+                                  className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 shadow-sm active:scale-90 transition-transform"
+                                >
+                                  <Bookmark className={`h-5 w-5 ${giftSecurityWatchlist.includes(security.symbol) ? "fill-yellow-400 text-yellow-400" : "text-slate-400"}`} />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleWishlistItem(e, security.symbol); }}
+                                  className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 shadow-sm active:scale-90 transition-transform"
+                                >
+                                  <Heart className={`h-5 w-5 ${wishlistedKeys.has(security.symbol) ? "fill-red-500 text-red-500" : "text-slate-400"}`} />
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </section>
+              </>
             )
           ) : loading ? (
             <>
