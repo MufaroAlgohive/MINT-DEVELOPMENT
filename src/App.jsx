@@ -10,6 +10,7 @@ import { StatusBar, Style } from '@capacitor/status-bar';
 import { SplashScreen } from '@capacitor/splash-screen';
 import { Keyboard } from '@capacitor/keyboard';
 import SwipeBackWrapper from "./components/SwipeBackWrapper.jsx";
+import LoginTransitionOverlay from "./components/LoginTransitionOverlay.jsx";
 import GiftRegistryCreateSheet from "./components/GiftRegistryCreateSheet.jsx";
 import WishlistToast from "./components/WishlistToast.jsx";
 import AppLayout from "./layouts/AppLayout.jsx";
@@ -269,6 +270,7 @@ const App = () => {
   const [showRegistryCreateSheet, setShowRegistryCreateSheet] = useState(false);
   const [registrySavedToastMsg, setRegistrySavedToastMsg] = useState("");
   const [registrySavedToastVisible, setRegistrySavedToastVisible] = useState(false);
+  const [loginTransition, setLoginTransition] = useState({ show: false, label: "welcome" });
 
   const isAuthenticated = !['welcome', 'auth', 'linkExpired'].includes(currentPage);
 
@@ -1436,6 +1438,11 @@ const App = () => {
     return (
       <Suspense fallback={<HomeSkeleton />}>
         <>
+          <LoginTransitionOverlay
+            show={loginTransition.show}
+            label={loginTransition.label}
+            onDone={() => setLoginTransition({ show: false, label: "welcome" })}
+          />
           {showOpenStrategiesMaintenance && <MaintenanceModal onClose={() => setShowOpenStrategiesMaintenance(false)} />}
 
           {/* Home tab – mount on first visit */}
@@ -3004,7 +3011,13 @@ const App = () => {
 
   if (currentPage === "giftRegistryPublic") {
     return (
-      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
+      <>
+        <LoginTransitionOverlay
+          show={loginTransition.show}
+          label={loginTransition.label}
+          onDone={() => setLoginTransition({ show: false, label: "welcome" })}
+        />
+        <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
         <Suspense fallback={<div className="min-h-screen bg-[#f8f9fc]" />}>
           <GiftRegistryPublicPage
             token={giftRegistryNavState.token}
@@ -3038,6 +3051,7 @@ const App = () => {
           />
         </Suspense>
       </SwipeBackWrapper>
+      </>
     );
   }
 
@@ -3124,9 +3138,11 @@ const App = () => {
     const pendingRegistryToken = localStorage.getItem('mint_pending_registry_token');
     if (pendingRegistryToken) {
       localStorage.removeItem('mint_pending_registry_token');
+      setLoginTransition({ show: true, label: "returning" });
       setGiftRegistryNavState({ token: pendingRegistryToken, context: "shared_wishlist" });
       setCurrentPage("giftRegistryPublic");
     } else {
+      setLoginTransition({ show: true, label: "welcome" });
       setCurrentPage("home");
     }
     try {
@@ -3154,9 +3170,11 @@ const App = () => {
     const pendingRegistryToken = localStorage.getItem('mint_pending_registry_token');
     if (pendingRegistryToken) {
       localStorage.removeItem('mint_pending_registry_token');
+      setLoginTransition({ show: true, label: "returning" });
       setGiftRegistryNavState({ token: pendingRegistryToken, context: "shared_wishlist" });
       setCurrentPage("giftRegistryPublic");
     } else {
+      setLoginTransition({ show: true, label: "back" });
       const returnPage = sessionExpiredPageRef.current;
       if (returnPage && !['welcome', 'auth', 'linkExpired'].includes(returnPage)) {
         setCurrentPage(returnPage);
