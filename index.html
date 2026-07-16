@@ -20,7 +20,15 @@
     </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div style="display:flex;align-items:center;justify-content:center;height:100vh;background:#f8fafc;">
+        <div style="text-align:center;font-family:Inter,sans-serif;color:#6b7280;">
+          <div style="width:40px;height:40px;border:3px solid #e5e7eb;border-top-color:#7c3aed;border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto 16px;"></div>
+          <style>@keyframes spin{to{transform:rotate(360deg)}}</style>
+          <p style="margin:0;font-size:14px;">Loading Mint…</p>
+        </div>
+      </div>
+    </div>
     <!-- Auto-refresh on deployment updates (Disabled for now) -->
     <!-- <script src="/auto-refresh.js"></script> -->
     <script type="module" src="/src/main.jsx"></script>

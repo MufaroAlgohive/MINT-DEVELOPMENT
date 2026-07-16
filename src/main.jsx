@@ -8,6 +8,13 @@ import './styles/auth.css';
 import { supabaseReady } from './lib/supabase.js';
 
 window.addEventListener('vite:preloadError', () => {
+  // In dev, Vite intentionally returns 504 while bundling deps for the first
+  // time (dep optimisation). Keep retrying every 2 s until it's done.
+  if (import.meta.env.DEV) {
+    setTimeout(() => window.location.reload(), 2000);
+    return;
+  }
+  // In production, use a cooldown to avoid reload loops on genuine errors.
   const KEY = 'mint:chunk-reloaded-at';
   const last = Number(sessionStorage.getItem(KEY) || 0);
   if (Date.now() - last > 10000) {
