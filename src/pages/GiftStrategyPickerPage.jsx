@@ -227,7 +227,8 @@ export default function GiftStrategyPickerPage({ onBack, onNavigate, autoOpenWis
   const [marketsSearchQuery, setMarketsSearchQuery] = useState("");
   const [sparklineData, setSparklineData] = useState({});
   const [giftSecurityWatchlist, setGiftSecurityWatchlist] = useState([]);
-  const [expandedSections] = useState(() => new Set(["largest", "dividend", "gainers"]));
+  const [expandedSections, setExpandedSections] = useState(() => new Set(["largest"]));
+  const expandedRef = useRef(new Set(["largest"]));
 
   // Section refs for CollapsibleSection
   const secRefLargest  = useRef(null);
@@ -438,6 +439,50 @@ export default function GiftStrategyPickerPage({ onBack, onNavigate, autoOpenWis
   const giftGainers = useMemo(() =>
     filteredGiftSecurities.filter(s => s.changePct != null).sort((a, b) => (b.changePct || 0) - (a.changePct || 0)).slice(0, 10),
     [filteredGiftSecurities]);
+
+  // Scroll-based section expansion — mirrors MarketsPage behaviour
+  useEffect(() => {
+    if (!giftSecurities.length) return;
+
+    // Reset: only "largest" pinned on initial load
+    const initial = new Set(["largest"]);
+    expandedRef.current = initial;
+    setExpandedSections(new Set(initial));
+
+    const sectionMap = { largest: secRefLargest, dividend: secRefDividend, gainers: secRefGainers };
+
+    const check = () => {
+      const threshold = window.innerHeight * 0.3;
+      let changed = false;
+      for (const [key, ref] of Object.entries(sectionMap)) {
+        if (!ref.current) continue;
+        const isPinned = key === "largest";
+        if (isPinned) {
+          if (!expandedRef.current.has(key)) {
+            expandedRef.current = new Set([...expandedRef.current, key]);
+            changed = true;
+          }
+          continue;
+        }
+        const { top } = ref.current.getBoundingClientRect();
+        const shouldBeExpanded = top < threshold;
+        const isExpanded = expandedRef.current.has(key);
+        if (shouldBeExpanded && !isExpanded) {
+          expandedRef.current = new Set([...expandedRef.current, key]);
+          changed = true;
+        } else if (!shouldBeExpanded && isExpanded) {
+          const next = new Set(expandedRef.current);
+          next.delete(key);
+          expandedRef.current = next;
+          changed = true;
+        }
+      }
+      if (changed) setExpandedSections(new Set(expandedRef.current));
+    };
+
+    window.addEventListener("scroll", check, { passive: true });
+    return () => window.removeEventListener("scroll", check);
+  }, [giftSecurities.length]);
 
   // Load sparklines for grouped section cards once securities arrive
   useEffect(() => {
