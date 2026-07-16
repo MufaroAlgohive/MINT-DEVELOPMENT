@@ -58,7 +58,6 @@ const SentGiftsPageV2 = lazy(() => import("./pages/SentGiftsPageV2.jsx"));
 const GiftStrategyPickerPage = lazy(() => import("./pages/GiftStrategyPickerPage.jsx"));
 const MyWishlistsPage = lazy(() => import("./pages/MyWishlistsPage.jsx"));
 const GiftRegistryCreatePage = lazy(() => import("./pages/GiftRegistryCreatePage.jsx"));
-const GiftRegistryPreviewPage = lazy(() => import("./pages/GiftRegistryPreviewPage.jsx"));
 const GiftRegistryDetailPage = lazy(() => import("./pages/GiftRegistryDetailPage.jsx"));
 const GiftRegistryPublicPage = lazy(() => import("./pages/GiftRegistryPublicPage.jsx"));
 const GiftRegistryMintNumberLookup = lazy(() => import("./pages/GiftRegistryMintNumberLookup.jsx"));
@@ -2919,7 +2918,7 @@ const App = () => {
                 if (page === "giftStrategyInvest") {
                   setPageParams(params);
                   navigateTo("giftStrategyInvest");
-                } else if (page === "giftRegistryCreate" || page === "giftRegistryDetail" || page === "giftRegistryPreview" || page === "giftRegistryPublic" || page === "giftRegistryDashboard" || page === "giftRegistryLookup") {
+                } else if (page === "giftRegistryCreate" || page === "giftRegistryDetail" || page === "giftRegistryPublic" || page === "giftRegistryDashboard" || page === "giftRegistryLookup") {
                   if (params) setGiftRegistryNavState(s => ({ ...s, ...params }));
                   navigateTo(page);
                 } else {
@@ -2980,20 +2979,6 @@ const App = () => {
   }
 
 
-  if (currentPage === "giftRegistryPreview") {
-    return (
-      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
-        <Suspense fallback={<div className="min-h-screen bg-[#f8f9fc]" />}>
-          <GiftRegistryPreviewPage
-            registryId={giftRegistryNavState.registryId}
-            registry={giftRegistryNavState.registry}
-            onBack={goBack}
-            onNavigate={(page, state) => { if (state) setGiftRegistryNavState(s => ({ ...s, ...state })); navigateTo(page); }}
-          />
-        </Suspense>
-      </SwipeBackWrapper>
-    );
-  }
 
   if (currentPage === "giftRegistryDetail") {
     return (
