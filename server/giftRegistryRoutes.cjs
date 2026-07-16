@@ -212,7 +212,7 @@ async function enrichItems(items, supabaseAdmin) {
 
     basketItems.forEach(item => {
       const strategy = stratMap[item.isin];
-      if (!strategy) { enrichedMap[item.id] = { ...item, name: item.isin }; return; }
+      if (!strategy) { enrichedMap[item.id] = { ...item, name: 'Investment Basket' }; return; }
       const holdings = Array.isArray(strategy.holdings) ? strategy.holdings : [];
       const holdingsSnapshot = holdings
         .map(h => { const t = h.ticker || h.symbol || String(h); return { symbol: t, name: secBySymbol[t]?.name || t, logo_url: secBySymbol[t]?.logo_url || null }; })
@@ -526,7 +526,7 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
             if (item.instrument_type === 'BASKET') {
               return {
                 ...item,
-                name: strategyMap[item.isin]?.name || item.isin,
+                name: strategyMap[item.isin]?.name || 'Investment Basket',
                 logo_url: null,
                 holdings_snapshot: strategyMap[item.isin]?.holdingsSnap || [],
               };
@@ -548,6 +548,35 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
   });
 
   // ── Specific-path GET routes BEFORE wildcard GET /:id ──────────────────────
+
+  // GET /api/gift-registry/public/:token/my-contributions — item IDs gifted by the authed user for this registry
+  // MUST be registered before /public/:token to avoid route shadowing in Express 5.
+  app.get('/api/gift-registry/public/:token/my-contributions', async (req, res) => {
+    try {
+      const user = await getUser(req, supabaseAdmin);
+      if (!user) return res.json({ itemIds: [] }); // unauthenticated — return empty, not error
+
+      const { data: registry, error: regErr } = await supabaseAdmin
+        .from('gift_events')
+        .select('id')
+        .eq('share_token', req.params.token)
+        .single();
+
+      if (regErr || !registry) return res.json({ itemIds: [] });
+
+      const { data: contribs } = await supabaseAdmin
+        .from('gift_contributions')
+        .select('registry_item_id')
+        .eq('gifter_user_id', user.id)
+        .eq('gift_event_id', registry.id)
+        .eq('status', 'PAID');
+
+      const itemIds = [...new Set((contribs || []).map(c => c.registry_item_id).filter(Boolean))];
+      return res.json({ itemIds });
+    } catch (e) {
+      return res.json({ itemIds: [] });
+    }
+  });
 
   // GET /api/gift-registry/public/:token — public view (no auth required)
   app.get('/api/gift-registry/public/:token', async (req, res) => {
@@ -634,34 +663,6 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
       return res.json({ registry });
     } catch (e) {
       return res.status(500).json({ error: e.message });
-    }
-  });
-
-  // GET /api/gift-registry/public/:token/my-contributions — item IDs gifted by the authed user for this registry
-  app.get('/api/gift-registry/public/:token/my-contributions', async (req, res) => {
-    try {
-      const user = await getUser(req, supabaseAdmin);
-      if (!user) return res.json({ itemIds: [] }); // unauthenticated — return empty, not error
-
-      const { data: registry, error: regErr } = await supabaseAdmin
-        .from('gift_events')
-        .select('id')
-        .eq('share_token', req.params.token)
-        .single();
-
-      if (regErr || !registry) return res.json({ itemIds: [] });
-
-      const { data: contribs } = await supabaseAdmin
-        .from('gift_contributions')
-        .select('registry_item_id')
-        .eq('gifter_user_id', user.id)
-        .eq('gift_event_id', registry.id)
-        .eq('status', 'PAID');
-
-      const itemIds = [...new Set((contribs || []).map(c => c.registry_item_id).filter(Boolean))];
-      return res.json({ itemIds });
-    } catch (e) {
-      return res.json({ itemIds: [] });
     }
   });
 

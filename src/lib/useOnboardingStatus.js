@@ -38,7 +38,7 @@ async function fetchOnboardingStatus() {
       });
       if (res.ok) {
         const json = await res.json();
-        console.log("[useOnboardingStatus] Total Onboarding Status:", json.is_fully_onboarded ? "COMPLETE ✅" : "INCOMPLETE ❌", json);
+        console.log("[useOnboardingStatus] Total Onboarding Status:", json.is_fully_onboarded ? "COMPLETE ✅" : "INCOMPLETE ❌");
         singleton.isComplete = json.is_fully_onboarded === true;
         singleton.isLoading = false;
         notifyListeners();
@@ -59,7 +59,7 @@ async function fetchOnboardingStatus() {
 
     if (data && data.length > 0) {
       const flags = parseOnboardingFlags(data[0]);
-      console.log("[useOnboardingStatus] DB Fallback Flags:", flags.allComplete ? "COMPLETE ✅" : "INCOMPLETE ❌", flags);
+      console.log("[useOnboardingStatus] DB Fallback Flags:", flags.allComplete ? "COMPLETE ✅" : "INCOMPLETE ❌");
       singleton.isComplete = flags.allComplete;
     } else {
       singleton.isComplete = false;
