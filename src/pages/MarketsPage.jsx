@@ -1369,7 +1369,12 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                         type="button"
                         onClick={() => {
                           setShowWishlistMenu(false);
-                          window.dispatchEvent(new CustomEvent("navigate-within-app", { detail: { page: "giftRegistryDashboard" } }));
+                          window.dispatchEvent(new CustomEvent("navigate-within-app", {
+                            detail: {
+                              page: "giftRegistryDashboard",
+                              ...(childData ? { childFamilyMemberId: childData.id } : {}),
+                            }
+                          }));
                         }}
                         className="flex w-full items-center gap-2.5 px-4 py-3 text-left text-sm font-medium text-slate-700 hover:bg-slate-50"
                       >
