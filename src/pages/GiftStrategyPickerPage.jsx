@@ -480,8 +480,11 @@ export default function GiftStrategyPickerPage({ onBack, onNavigate, autoOpenWis
       if (changed) setExpandedSections(new Set(expandedRef.current));
     };
 
-    window.addEventListener("scroll", check, { passive: true });
-    return () => window.removeEventListener("scroll", check);
+    // GiftStrategyPickerPage lives inside AppLayout's .app-content overflow-y-auto
+    // container, not the window — attach scroll listener there.
+    const scrollEl = document.querySelector(".app-content") || window;
+    scrollEl.addEventListener("scroll", check, { passive: true });
+    return () => scrollEl.removeEventListener("scroll", check);
   }, [giftSecurities.length]);
 
   // Load sparklines for grouped section cards once securities arrive
