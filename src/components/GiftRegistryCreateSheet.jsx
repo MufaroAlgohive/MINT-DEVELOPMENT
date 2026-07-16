@@ -150,6 +150,9 @@ export default function GiftRegistryCreateSheet({ open, onClose, onSaved, pendin
     preselectedChild ? preselectedChild.id : null
   );
 
+  // Auto-resolved name for SELF
+  const [selfDisplayName, setSelfDisplayName] = useState("");
+
   // Re-sync when the sheet is opened fresh
   const prevOpen = useRef(false);
   useEffect(() => {
@@ -165,6 +168,32 @@ export default function GiftRegistryCreateSheet({ open, onClose, onSaved, pendin
     }
     prevOpen.current = open;
   }, [open, initialTitle, initialStep, year, preselectedChild]);
+
+  // Auto-fetch the current user's first name for the SELF option
+  useEffect(() => {
+    if (!open) return;
+    (async () => {
+      try {
+        const supabase = await supabaseReady;
+        const { data: { user } } = await supabase.auth.getUser();
+        const meta = user?.user_metadata || {};
+        const name = meta.first_name || meta.name?.split(" ")[0] || "";
+        if (name) {
+          setSelfDisplayName(name);
+        } else {
+          // Fall back to profile table
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("first_name")
+            .eq("id", user?.id)
+            .maybeSingle();
+          setSelfDisplayName(profile?.first_name || "");
+        }
+      } catch (e) {
+        console.error("[GiftRegistryCreateSheet] Failed to resolve self name:", e.message);
+      }
+    })();
+  }, [open]);
 
   // Fetch children when CHILD type is active and no preselected child
   useEffect(() => {
@@ -221,6 +250,8 @@ export default function GiftRegistryCreateSheet({ open, onClose, onSaved, pendin
   const canStep1 = form.title.trim().length >= 2;
   const canStep2 = form.beneficiaryType === "CHILD"
     ? !!selectedFamilyMemberId
+    : form.beneficiaryType === "SELF"
+    ? true
     : form.beneficiaryDisplayName.trim().length >= 2;
   const canStep3 =
     !!form.eventDate &&
@@ -240,7 +271,9 @@ export default function GiftRegistryCreateSheet({ open, onClose, onSaved, pendin
           occasion:                "CUSTOM",
           customOccasion:          "",
           beneficiaryType:         form.beneficiaryType,
-          beneficiaryDisplayName:  form.beneficiaryDisplayName.trim(),
+          beneficiaryDisplayName:  form.beneficiaryType === "SELF"
+            ? selfDisplayName || "Me"
+            : form.beneficiaryDisplayName.trim(),
           familyMemberId:          selectedFamilyMemberId || null,
           title:                   form.title.trim(),
           eventDate:               form.eventDate,
@@ -405,12 +438,11 @@ export default function GiftRegistryCreateSheet({ open, onClose, onSaved, pendin
                     </div>
                   ) : (
                     <>
-                      {/* Beneficiary type selector */}
+                      {/* Beneficiary type selector — only Myself / My child */}
                       <div className="flex gap-2">
                         {[
-                          { k: "SELF",  label: "Myself",       Icon: User },
-                          { k: "CHILD", label: "My child",     Icon: Users },
-                          { k: "OTHER", label: "Someone else", Icon: UserPlus },
+                          { k: "SELF",  label: "Myself",   Icon: User },
+                          { k: "CHILD", label: "My child", Icon: Users },
                         ].map(({ k, label, Icon }) => {
                           const active = form.beneficiaryType === k;
                           return (
@@ -436,6 +468,22 @@ export default function GiftRegistryCreateSheet({ open, onClose, onSaved, pendin
                           );
                         })}
                       </div>
+
+                      {/* SELF: locked card showing the user's own name */}
+                      {form.beneficiaryType === "SELF" && (
+                        <div className="rounded-2xl border-2 border-[#6B21A8] bg-violet-50 p-4 flex items-center gap-3">
+                          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#6B21A8] text-white font-bold text-sm flex-shrink-0">
+                            {selfDisplayName?.[0]?.toUpperCase() || <User size={16} />}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-bold text-slate-900">
+                              {selfDisplayName || "Me"}
+                            </p>
+                            <p className="text-[11px] text-violet-600 font-medium">Creating wishlist for yourself</p>
+                          </div>
+                          <Check size={18} className="text-[#6B21A8] flex-shrink-0" />
+                        </div>
+                      )}
 
                       {/* CHILD: show children picker */}
                       {form.beneficiaryType === "CHILD" && (
