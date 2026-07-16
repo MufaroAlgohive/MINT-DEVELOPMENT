@@ -48,6 +48,54 @@ async function ensureGiftRegistryTables(pgPool, supabaseAdmin) {
   } catch (e) {
     console.error('[gift-registry] Health check threw:', e.message);
   }
+
+  // Auto-repair: fix orphaned child registries where beneficiary_ref was never set
+  // (these were created with old code that used a non-existent family_member_id column,
+  //  leaving beneficiary_ref = NULL and making them invisible on the child's dashboard)
+  try {
+    const { data: orphaned } = await supabaseAdmin
+      .from('gift_events')
+      .select('id, creator_user_id, beneficiary_display_name')
+      .eq('beneficiary_type', 'CHILD')
+      .is('beneficiary_ref', null);
+
+    if (orphaned?.length) {
+      console.log(`[gift-registry] Found ${orphaned.length} orphaned child registries — attempting auto-repair`);
+      for (const reg of orphaned) {
+        const { data: members } = await supabaseAdmin
+          .from('family_members')
+          .select('id, first_name, last_name')
+          .eq('primary_user_id', reg.creator_user_id)
+          .eq('relationship', 'child');
+
+        if (!members?.length) continue;
+
+        const displayName = (reg.beneficiary_display_name || '').toLowerCase().trim();
+        const match = members.find(m => {
+          const fn = (m.first_name || '').toLowerCase().trim();
+          const full = `${m.first_name || ''} ${m.last_name || ''}`.toLowerCase().trim();
+          return displayName === fn || displayName === full ||
+            displayName.startsWith(fn) || fn.startsWith(displayName.split(' ')[0]);
+        });
+
+        if (match) {
+          const { error: upErr } = await supabaseAdmin
+            .from('gift_events')
+            .update({ beneficiary_ref: match.id })
+            .eq('id', reg.id);
+          if (!upErr) {
+            console.log(`[gift-registry] Repaired registry ${reg.id} → beneficiary_ref=${match.id} (${match.first_name})`);
+          } else {
+            console.warn(`[gift-registry] Could not repair registry ${reg.id}:`, upErr.message);
+          }
+        }
+      }
+    } else {
+      console.log('[gift-registry] No orphaned child registries found — data is clean');
+    }
+  } catch (e) {
+    console.warn('[gift-registry] Auto-repair threw:', e.message);
+  }
 }
 
 // ─── Auth helper ─────────────────────────────────────────────────────────────
@@ -224,6 +272,45 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
     try {
       const user = await getUser(req, supabaseAdmin);
       if (!user) return res.status(401).json({ error: 'Unauthorized' });
+
+      // When a childFamilyMemberId is provided the caller is rendering a specific
+      // child's dashboard.  Hearts must only reflect items in THAT child's registries
+      // so that Amara's liked items don't bleed into Will Smith's heart state.
+      // In child-context mode we skip reading/writing parent metadata entirely.
+      const childFamilyMemberId = req.query.childFamilyMemberId || null;
+
+      if (childFamilyMemberId) {
+        // Build confirmed set scoped to this child's registries only
+        let registryQuery = supabaseAdmin
+          .from('gift_events')
+          .select('id')
+          .eq('creator_user_id', user.id)
+          .eq('beneficiary_ref', childFamilyMemberId)
+          .not('status', 'in', '(CANCELLED,EXPIRED)');
+        const { data: childRegistries } = await registryQuery;
+        const childRegistryIds = (childRegistries || []).map(r => r.id);
+
+        const childSet = new Set();
+        if (childRegistryIds.length) {
+          const { data: items } = await supabaseAdmin
+            .from('gift_registry_items')
+            .select('isin, instrument_type')
+            .in('gift_event_id', childRegistryIds)
+            .in('status', ['OPEN', 'PARTIALLY_FILLED']);
+          for (const it of items || []) {
+            if (it.instrument_type === 'BASKET') {
+              childSet.add(`strategy:${it.isin}`);
+              childSet.add(`gift:${it.isin}`);
+            } else {
+              childSet.add(it.isin);
+            }
+          }
+        }
+        // Return child-scoped keys; watchlist is always global (parent pref)
+        const prefs = user.user_metadata?.gift_wishlist_prefs || {};
+        return res.json({ wishlistedKeys: Array.from(childSet), watchlist: prefs.watchlist || [] });
+      }
+
       const prefs = user.user_metadata?.gift_wishlist_prefs || {};
       const storedKeys = prefs.keys || [];
 
@@ -231,10 +318,13 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
       // storage — items can be added to a registry through flows that never touch
       // storage (e.g. "like it, then create a new wishlist"). So we always compute
       // the confirmed set directly from the DB rather than filtering storedKeys.
+      // For the parent's own view, exclude child-owned registries so a child's
+      // liked items don't show as hearted on the parent's own markets page.
       const { data: myRegistries } = await supabaseAdmin
         .from('gift_events')
         .select('id')
         .eq('creator_user_id', user.id)
+        .is('beneficiary_ref', null)
         .not('status', 'in', '(CANCELLED,EXPIRED)');
       const registryIds = (myRegistries || []).map(r => r.id);
 
@@ -301,7 +391,7 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
       const user = await getUser(req, supabaseAdmin);
       if (!user) return res.status(401).json({ error: 'Unauthorized' });
 
-      const { occasion, customOccasion, beneficiaryType, beneficiaryDisplayName, title, eventDate, expiryAt, message } = req.body;
+      const { occasion, customOccasion, beneficiaryType, beneficiaryDisplayName, title, eventDate, expiryAt, message, familyMemberId } = req.body;
       console.log(`[gift-registry] CREATE start: user=${user.id} occasion=${occasion} beneficiaryType=${beneficiaryType} title=${title} eventDate=${eventDate} expiryAt=${expiryAt}`);
 
       if (!occasion || !beneficiaryType || !beneficiaryDisplayName || !title || !eventDate || !expiryAt) {
@@ -318,6 +408,7 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
           custom_occasion: customOccasion || null,
           beneficiary_type: beneficiaryType,
           beneficiary_display_name: beneficiaryDisplayName,
+          beneficiary_ref: familyMemberId || null,
           title,
           event_date: eventDate,
           expiry_at: expiryAt,
@@ -346,11 +437,27 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
       const user = await getUser(req, supabaseAdmin);
       if (!user) return res.status(401).json({ error: 'Unauthorized' });
 
-      const { data, error } = await supabaseAdmin
+      // Check if this user is a linked child account
+      const { data: familyRow } = await supabaseAdmin
+        .from('family_members')
+        .select('id')
+        .eq('linked_user_id', user.id)
+        .eq('relationship', 'child')
+        .maybeSingle();
+
+      let query = supabaseAdmin
         .from('gift_events')
-        .select(`*, items:gift_registry_items(*)`)
-        .eq('creator_user_id', user.id)
-        .order('created_at', { ascending: false });
+        .select(`*, items:gift_registry_items(*)`);
+
+      if (familyRow?.id) {
+        // Child: own registries OR ones the parent created for them — nothing else
+        query = query.or(`creator_user_id.eq.${user.id},beneficiary_ref.eq.${familyRow.id}`);
+      } else {
+        // Parent / regular user: all registries they created
+        query = query.eq('creator_user_id', user.id);
+      }
+
+      const { data, error } = await query.order('created_at', { ascending: false });
 
       if (error) {
         console.error(`[gift-registry] my-registries: Supabase error code=${error.code} msg=${error.message}`);

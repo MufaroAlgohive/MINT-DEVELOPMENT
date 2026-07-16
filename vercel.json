@@ -22,6 +22,14 @@
       "destination": "/api/:path*"
     },
     {
+      "source": "/registry/:token",
+      "destination": "/api/og-preview?token=:token"
+    },
+    {
+      "source": "/gift/:token",
+      "destination": "/api/og-preview?token=:token"
+    },
+    {
       "source": "/((?!api/).*)",
       "destination": "/index.html"
     }

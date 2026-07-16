@@ -12,6 +12,7 @@ import WishlistModal from "../components/WishlistModal.jsx";
 import WishlistPickerSheet from "../components/WishlistPickerSheet.jsx";
 import WishlistToast from "../components/WishlistToast.jsx";
 import ChildInvestModal from "../components/ChildInvestModal.jsx";
+import GiftRegistryCreateSheet from "../components/GiftRegistryCreateSheet.jsx";
 import { saveMarketsInvestFilters, loadMarketsInvestFilters, saveMarketsStrategyFilters, loadMarketsStrategyFilters, buildInvestChips, buildChipsFromFilters } from "../lib/usePersistedFilters.js";
 import NotificationBell from "../components/NotificationBell";
 import FamilyDropdown from "../components/FamilyDropdown";
@@ -266,6 +267,8 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
   const [watchlist, setWatchlist] = useState([]);
   const [showWishlistMenu, setShowWishlistMenu] = useState(false);
   const wishlistMenuRef = useRef(null);
+  const [showChildWishlistCreate, setShowChildWishlistCreate] = useState(false);
+  const childData = childFilter && typeof childFilter === "object" ? childFilter : null;
 
   // Wishlist (heart) state — loaded from Supabase user_metadata, not localStorage
   const [wishlistedKeys, setWishlistedKeys] = useState(new Set());
@@ -275,14 +278,19 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
   const [wishlistToastVisible, setWishlistToastVisible] = useState(false);
   const [wishlistToastRegistryId, setWishlistToastRegistryId] = useState(null);
 
-  // Load wishlisted keys + strategy watchlist from API on mount
+  // Load wishlisted keys + strategy watchlist from API on mount.
+  // When in a child's dashboard context, scope hearts to that child's registries only
+  // so that sibling children's liked items don't bleed into each other's heart state.
   useEffect(() => {
     async function loadPrefs() {
       try {
         const { data } = await supabase.auth.getSession();
         const token = data?.session?.access_token;
         if (!token) return;
-        const res = await fetch("/api/gift-wishlist-prefs", {
+        const url = childData?.id
+          ? `/api/gift-wishlist-prefs?childFamilyMemberId=${encodeURIComponent(childData.id)}`
+          : "/api/gift-wishlist-prefs";
+        const res = await fetch(url, {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (res.ok) {
@@ -295,7 +303,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
       }
     }
     loadPrefs();
-  }, []);
+  }, [childData?.id]);
 
   async function updateWishlistPrefs(patch) {
     try {
@@ -1366,7 +1374,12 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                         type="button"
                         onClick={() => {
                           setShowWishlistMenu(false);
-                          window.dispatchEvent(new CustomEvent("navigate-within-app", { detail: { page: "giftRegistryDashboard" } }));
+                          window.dispatchEvent(new CustomEvent("navigate-within-app", {
+                            detail: {
+                              page: "giftRegistryDashboard",
+                              ...(childData ? { childFamilyMemberId: childData.id } : {}),
+                            }
+                          }));
                         }}
                         className="flex w-full items-center gap-2.5 px-4 py-3 text-left text-sm font-medium text-slate-700 hover:bg-slate-50"
                       >
@@ -1378,7 +1391,11 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                         type="button"
                         onClick={() => {
                           setShowWishlistMenu(false);
-                          window.dispatchEvent(new CustomEvent("navigate-within-app", { detail: { page: "giftStrategies", openWishlistCreate: true } }));
+                          if (childData) {
+                            setShowChildWishlistCreate(true);
+                          } else {
+                            window.dispatchEvent(new CustomEvent("navigate-within-app", { detail: { page: "giftStrategies", openWishlistCreate: true } }));
+                          }
                         }}
                         className="flex w-full items-center gap-2.5 px-4 py-3 text-left text-sm font-medium text-slate-700 hover:bg-slate-50"
                       >
@@ -1966,9 +1983,19 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                   }),
               ]
                 .map((sector) => {
-                const sectorStrategies = sector === '__WATCHLIST__'
+                const sectorStrategies = (sector === '__WATCHLIST__'
                   ? filteredStrategies.filter(s => strategyWatchlist.includes(s.id))
-                  : filteredStrategies.filter(s => (s.sector || 'General') === sector);
+                  : filteredStrategies.filter(s => (s.sector || 'General') === sector)
+                ).slice().sort((a, b) => {
+                  // Sort by YTD performance highest → lowest within each category.
+                  // Null/undefined YTD values fall to the end.
+                  const ytdA = a.r_ytd ?? null;
+                  const ytdB = b.r_ytd ?? null;
+                  if (ytdA === null && ytdB === null) return 0;
+                  if (ytdA === null) return 1;
+                  if (ytdB === null) return -1;
+                  return ytdB - ytdA;
+                });
                 
                 if (sectorStrategies.length === 0) return null;
               
@@ -2054,13 +2081,13 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                           {(strategy.tags && strategy.tags.length > 0 ? strategy.tags.slice(0, 2) : [strategy.risk_level || 'Balanced']).map((tag) => (
                             <span
                               key={tag}
-                              className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600"
+                              className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600 uppercase"
                             >
                               {tag}
                             </span>
                           ))}
                           {strategy.is_featured && (
-                            <span className="rounded-full border border-violet-200 bg-violet-50 px-3 py-1 text-xs font-semibold text-violet-600">
+                            <span className="rounded-full border border-violet-200 bg-violet-50 px-3 py-1 text-xs font-semibold text-violet-600 uppercase">
                               Featured
                             </span>
                           )}
@@ -3102,6 +3129,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
       {wishlistPickerKey && (
         <WishlistPickerSheet
           itemKey={wishlistPickerKey}
+          childFamilyMemberId={childData?.id || null}
           onClose={() => setWishlistPickerKey(null)}
           onSaved={(savedItemKey, listName, registryId) => {
             const next = new Set([...wishlistedKeys, savedItemKey]);
@@ -3132,6 +3160,16 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
           }));
         }}
       />
+
+      {/* Child wishlist create sheet — only used when childFilter is a child object */}
+      {childData && (
+        <GiftRegistryCreateSheet
+          open={showChildWishlistCreate}
+          onClose={() => setShowChildWishlistCreate(false)}
+          preselectedChild={childData}
+          onSaved={() => setShowChildWishlistCreate(false)}
+        />
+      )}
     </div>
   );
 };

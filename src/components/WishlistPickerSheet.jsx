@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Heart, Plus, Check, ArrowRight, Lock } from "lucide-react";
+import { X, Heart, Plus, Check, ArrowRight, Lock, Baby } from "lucide-react";
 import WishlistPreviewGrid from "./WishlistPreviewGrid.jsx";
 
 const CARD_GRADIENTS = [
@@ -15,7 +15,7 @@ const CARD_GRADIENTS = [
 
 const year = new Date().getFullYear();
 
-export default function WishlistPickerSheet({ itemKey, onClose, onSaved, onCreateNew }) {
+export default function WishlistPickerSheet({ itemKey, onClose, onSaved, onCreateNew, childFamilyMemberId }) {
   const [wishlists, setWishlists] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(null);
@@ -45,18 +45,31 @@ export default function WishlistPickerSheet({ itemKey, onClose, onSaved, onCreat
             if (res.ok) {
               const { registries } = await res.json();
               if (Array.isArray(registries)) {
-                const registryLists = registries.map((r) => ({
+                let registryLists = registries.map((r) => ({
                   id: r.id,
                   name: r.title,
                   status: r.status,
                   isClosed: ['CANCELLED', 'EXPIRED'].includes(r.status),
                   preview_logos: Array.isArray(r.preview_logos) ? r.preview_logos : null,
+                  beneficiaryType: r.beneficiary_type || null,
+                  beneficiaryRef: r.beneficiary_ref || null,
+                  beneficiaryName: r.beneficiary_display_name || null,
                   items: (r.items || []).filter((i) => i.isin && i.status !== 'REMOVED').map((i) => ({
                     isin: i.isin,
                     name: i.name || i.isin,
                     logo_url: i.logo_url || null,
                   })),
                 }));
+
+                // When opened from a child's dashboard, only show that child's wishlists
+                if (childFamilyMemberId) {
+                  registryLists = registryLists.filter((r) =>
+                    r.beneficiaryRef === childFamilyMemberId ||
+                    // Fallback for legacy records with NULL beneficiary_ref
+                    (r.beneficiaryRef === null && r.beneficiaryType === 'CHILD')
+                  );
+                }
+
                 setWishlists(registryLists);
                 setLoading(false);
                 return;
@@ -73,7 +86,7 @@ export default function WishlistPickerSheet({ itemKey, onClose, onSaved, onCreat
       setLoading(false);
     }
     load();
-  }, []);
+  }, [childFamilyMemberId]);
 
   // Auto-focus input when empty-state form is shown
   useEffect(() => {
@@ -272,9 +285,18 @@ export default function WishlistPickerSheet({ itemKey, onClose, onSaved, onCreat
                             ) : (
                               <Heart size={16} className="fill-white/70 text-white/70 drop-shadow" />
                             )}
-                            {isSaving && !isSaved && (
-                              <div className="h-4 w-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />
-                            )}
+                            <div className="flex items-center gap-1">
+                              {/* Child badge — shown in parent view for child-owned registries */}
+                              {!childFamilyMemberId && list.beneficiaryType === 'CHILD' && list.beneficiaryName && (
+                                <span className="flex items-center gap-0.5 rounded-full bg-white/20 backdrop-blur-sm px-1.5 py-0.5 text-[9px] font-bold text-white/90 drop-shadow leading-none">
+                                  <Baby size={8} className="flex-shrink-0" />
+                                  {list.beneficiaryName.split(' ')[0]}
+                                </span>
+                              )}
+                              {isSaving && !isSaved && (
+                                <div className="h-4 w-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />
+                              )}
+                            </div>
                           </div>
                           <div>
                             <p className="text-[13px] font-bold text-white leading-tight line-clamp-2 pr-1 drop-shadow">{list.name}</p>

@@ -234,6 +234,7 @@ const App = () => {
   const [selectedArticleId, setSelectedArticleId] = useState(null);
   const [selectedFamilyChild, setSelectedFamilyChild] = useState(null);
   const [giftWishlistAutoOpen, setGiftWishlistAutoOpen] = useState(false);
+  const [giftRegistryChildFilter, setGiftRegistryChildFilter] = useState(null); // family_member_id to scope MyWishlistsPage to one child
   const [withdrawChild, setWithdrawChild] = useState(null); // child whose holdings the Withdraw page is scoped to (null = parent)
   const [funeralCoverInitialDependents, setFuneralCoverInitialDependents] = useState([]);
   const [marketsInitialView, setMarketsInitialView] = useState(null);
@@ -591,13 +592,16 @@ const App = () => {
 
   useEffect(() => {
     const handleNavigationEvent = (e) => {
-      const { page, member, child, openWishlistCreate } = e.detail || {};
+      const { page, member, child, openWishlistCreate, childFamilyMemberId } = e.detail || {};
       // Withdrawals temporarily disabled (CEO) — never route to the withdraw page.
       if (page === 'withdraw') return;
       if (page) {
         let normalizedPage = page === 'family' ? 'familyDashboard' : page;
         if (page === 'giftStrategies') {
           setGiftWishlistAutoOpen(!!openWishlistCreate);
+        }
+        if (page === 'giftRegistryDashboard') {
+          setGiftRegistryChildFilter(childFamilyMemberId || null);
         }
         const selectedChild = child || member || null;
         if (selectedChild && (page === 'childDashboard' || page === 'memberPortfolio')) {
@@ -2890,7 +2894,7 @@ const App = () => {
         >
           <Suspense fallback={<div className="min-h-screen bg-slate-50" />}>
             <GiftStrategyPickerPage
-              onBack={goBack}
+              onBack={() => { navigationHistory.current = []; setPreviousPageName(null); startTransition(() => setCurrentPage("home")); }}
               autoOpenWishlist={giftWishlistAutoOpen}
               onOpenStockDetail={(security) => { setSelectedSecurity(security); navigateTo("stockDetail"); }}
               onNavigate={(page, params) => {
@@ -2936,6 +2940,7 @@ const App = () => {
         <Suspense fallback={<div className="min-h-screen bg-slate-50" />}>
           <MyWishlistsPage
             onBack={goBack}
+            childFamilyMemberId={giftRegistryChildFilter}
             onNavigate={(page, state) => { if (state) setGiftRegistryNavState(s => ({ ...s, ...state })); navigateTo(page); }}
           />
         </Suspense>

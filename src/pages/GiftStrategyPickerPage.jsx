@@ -560,7 +560,7 @@ export default function GiftStrategyPickerPage({ onBack, onNavigate, autoOpenWis
               <ArrowLeft className="h-5 w-5" />
             </button>
             <SparklesText
-              text="Gift a Basket"
+              text="GIFT A BASKET"
               colors={{ first: "#c4b5fd", second: "#f0abfc" }}
               sparklesCount={6}
               className="text-base tracking-wide text-white"
