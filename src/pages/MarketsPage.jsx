@@ -2081,13 +2081,13 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                           {(strategy.tags && strategy.tags.length > 0 ? strategy.tags.slice(0, 2) : [strategy.risk_level || 'Balanced']).map((tag) => (
                             <span
                               key={tag}
-                              className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600"
+                              className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600 uppercase"
                             >
                               {tag}
                             </span>
                           ))}
                           {strategy.is_featured && (
-                            <span className="rounded-full border border-violet-200 bg-violet-50 px-3 py-1 text-xs font-semibold text-violet-600">
+                            <span className="rounded-full border border-violet-200 bg-violet-50 px-3 py-1 text-xs font-semibold text-violet-600 uppercase">
                               Featured
                             </span>
                           )}
