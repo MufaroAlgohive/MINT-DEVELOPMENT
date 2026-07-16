@@ -47,7 +47,8 @@ function SparkLine({ positive = true }) {
  *   onGift       — callback(item)
  *   isOwner      — hides gift CTA
  *   canGift      — user is logged in + KYC complete
- *   onAuthPrompt — called when unauthenticated user taps Gift
+ *   needsKyc     — user IS logged in but KYC is not yet complete (changes label + action)
+ *   onAuthPrompt — called when unauthenticated user taps Gift, or logged-in user needs KYC
  *   alreadyGifted — whether the viewer has already contributed to this item
  */
 export default function GiftRegistryItemCard({
@@ -55,6 +56,7 @@ export default function GiftRegistryItemCard({
   onGift,
   isOwner = false,
   canGift = false,
+  needsKyc = false,
   onAuthPrompt,
   alreadyGifted = false,
   startDate = null,
@@ -68,8 +70,12 @@ export default function GiftRegistryItemCard({
 
   function handleGiftTap() {
     if (!canGift) {
-      // Default to login intent — returning gifters are the common case
-      if (typeof onAuthPrompt === "function") onAuthPrompt(undefined, "login");
+      if (typeof onAuthPrompt === "function") {
+        // Logged in but KYC incomplete → go to onboarding, not auth
+        if (needsKyc) onAuthPrompt("kyc", undefined);
+        // Not logged in → go to login
+        else onAuthPrompt(undefined, "login");
+      }
       return;
     }
     if (typeof onGift === "function") onGift(item);
@@ -257,7 +263,7 @@ export default function GiftRegistryItemCard({
                 className="w-full py-3 rounded-2xl bg-slate-900 text-white text-sm text-center font-semibold flex items-center justify-center gap-2 active:opacity-80"
               >
                 <Gift className="w-4 h-4" />
-                {canGift ? "Gift this" : "Sign in to gift"}
+                {canGift ? "Gift this" : needsKyc ? "Complete verification" : "Sign in to gift"}
               </button>
             )}
           </div>
@@ -351,7 +357,7 @@ export default function GiftRegistryItemCard({
               className="w-full py-3 rounded-2xl bg-slate-900 text-white text-sm text-center font-semibold flex items-center justify-center gap-2 active:opacity-80"
             >
               <Gift className="w-4 h-4" />
-              {canGift ? "Gift this" : "Sign in to gift"}
+              {canGift ? "Gift this" : needsKyc ? "Complete verification" : "Sign in to gift"}
             </button>
           )}
         </div>
