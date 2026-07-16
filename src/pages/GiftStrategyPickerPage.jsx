@@ -440,52 +440,46 @@ export default function GiftStrategyPickerPage({ onBack, onNavigate, autoOpenWis
     filteredGiftSecurities.filter(s => s.changePct != null).sort((a, b) => (b.changePct || 0) - (a.changePct || 0)).slice(0, 10),
     [filteredGiftSecurities]);
 
-  // Scroll-based section expansion — mirrors MarketsPage behaviour
+  // Section auto-expansion via IntersectionObserver.
+  // Must depend on viewTab because the sections only mount when viewTab === "markets",
+  // so refs are null on any earlier render (default tab is "baskets").
   useEffect(() => {
-    if (!giftSecurities.length) return;
+    if (!giftSecurities.length || viewTab !== "markets") return;
 
-    // Reset: only "largest" pinned on initial load
-    const initial = new Set(["largest"]);
-    expandedRef.current = initial;
-    setExpandedSections(new Set(initial));
+    const entries = [
+      { key: "dividend", ref: secRefDividend },
+      { key: "gainers",  ref: secRefGainers  },
+    ];
 
-    const sectionMap = { largest: secRefLargest, dividend: secRefDividend, gainers: secRefGainers };
+    // Small delay to ensure React has committed the section elements to the DOM
+    // before we call observe() — avoids ref.current being null on first mount.
+    const tid = setTimeout(() => {
+      const observers = entries.map(({ key, ref }) => {
+        const obs = new IntersectionObserver(
+          ([entry]) => {
+            if (entry.isIntersecting) {
+              setExpandedSections(prev => {
+                if (prev.has(key)) return prev;
+                return new Set([...prev, key]);
+              });
+            }
+          },
+          { threshold: 0.1 }
+        );
+        if (ref.current) obs.observe(ref.current);
+        return obs;
+      });
+      // Store cleanup on the ref so the timeout's closure can disconnect
+      expandedRef.current = observers;
+    }, 50);
 
-    const check = () => {
-      const threshold = window.innerHeight * 0.3;
-      let changed = false;
-      for (const [key, ref] of Object.entries(sectionMap)) {
-        if (!ref.current) continue;
-        const isPinned = key === "largest";
-        if (isPinned) {
-          if (!expandedRef.current.has(key)) {
-            expandedRef.current = new Set([...expandedRef.current, key]);
-            changed = true;
-          }
-          continue;
-        }
-        const { top } = ref.current.getBoundingClientRect();
-        const shouldBeExpanded = top < threshold;
-        const isExpanded = expandedRef.current.has(key);
-        if (shouldBeExpanded && !isExpanded) {
-          expandedRef.current = new Set([...expandedRef.current, key]);
-          changed = true;
-        } else if (!shouldBeExpanded && isExpanded) {
-          const next = new Set(expandedRef.current);
-          next.delete(key);
-          expandedRef.current = next;
-          changed = true;
-        }
+    return () => {
+      clearTimeout(tid);
+      if (Array.isArray(expandedRef.current)) {
+        expandedRef.current.forEach(obs => obs.disconnect());
       }
-      if (changed) setExpandedSections(new Set(expandedRef.current));
     };
-
-    // GiftStrategyPickerPage lives inside AppLayout's .app-content overflow-y-auto
-    // container, not the window — attach scroll listener there.
-    const scrollEl = document.querySelector(".app-content") || window;
-    scrollEl.addEventListener("scroll", check, { passive: true });
-    return () => scrollEl.removeEventListener("scroll", check);
-  }, [giftSecurities.length]);
+  }, [giftSecurities.length, viewTab]);
 
   // Load sparklines for grouped section cards once securities arrive
   useEffect(() => {
