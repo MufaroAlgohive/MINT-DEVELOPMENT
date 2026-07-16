@@ -539,21 +539,6 @@ export default function GiftRegistryCreateSheet({ open, onClose, onSaved, pendin
                         </div>
                       )}
 
-                      {/* SELF / OTHER: text input for name */}
-                      {form.beneficiaryType !== "CHILD" && (
-                        <div>
-                          <label className="text-[11px] font-medium text-slate-500 block mb-1.5">
-                            {form.beneficiaryType === "SELF" ? "Your first name" : "Their first name"}
-                            <span className="text-slate-400 font-normal ml-1">— shown on the public wishlist</span>
-                          </label>
-                          <input
-                            className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-300 focus:border-transparent"
-                            placeholder="First name only"
-                            value={form.beneficiaryDisplayName}
-                            onChange={e => set("beneficiaryDisplayName", e.target.value)}
-                          />
-                        </div>
-                      )}
                     </>
                   )}
 
