@@ -497,6 +497,25 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
             pulledAt: creditAt || undefined,
           }
         : null;
+      // Borrower full name for the marketplace record. When MINT sends no name,
+      // AlgoLend falls back to mintUserId (== the email) for BOTH name and email,
+      // then suppresses the duplicate — so Full Name renders as "—" in their
+      // console. Send the real profile name; fall back to a profiles lookup if it
+      // isn't already loaded on `profile` (e.g. credit-only borrowers).
+      let consumerName = [
+        profile?.firstName || profile?.first_name || "",
+        profile?.lastName || profile?.last_name || "",
+      ].filter(Boolean).join(" ").trim();
+      if (!consumerName && session?.user?.id) {
+        try {
+          const { data: pn } = await supabase
+            .from("profiles")
+            .select("first_name,last_name")
+            .eq("id", session.user.id)
+            .maybeSingle();
+          consumerName = [pn?.first_name, pn?.last_name].filter(Boolean).join(" ").trim();
+        } catch { /* non-fatal — omit rather than block the evaluation */ }
+      }
       const res = await fetch(`${ALGOLEND_URL}/api/marketplace/evaluate`, {
         method: "POST",
         headers: {
@@ -515,6 +534,7 @@ const CreditFlow = ({ profile, onBack, onTabChange }) => {
           requestedAmount: Number(app.requested_amount),
           termMonths: Number(app.requested_term_months),
           mintUserId: email,
+          consumerName: consumerName || undefined,
           bureau,
           creditProfile: bureau,
         }),
