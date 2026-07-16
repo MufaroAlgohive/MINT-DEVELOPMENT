@@ -488,7 +488,7 @@ app.get("/api/config", (req, res) => {
 app.use((req, res, next) => {
   res.setHeader(
     "Content-Security-Policy",
-    "frame-ancestors 'self' http://localhost:5000 http://localhost:5001 http://localhost:5002 https://*.truidconnect.io https://truidconnect.io https://*.thealgohive.com https://thealgohive.com https://algo-money-nine.vercel.app"
+    "frame-ancestors 'self' http://localhost:5000 http://localhost:5001 http://localhost:5002 https://*.truidconnect.io https://truidconnect.io https://*.thealgohive.com https://thealgohive.com https://algo-money-nine.vercel.app https://*.replit.dev https://*.replit.app https://*.spock.replit.dev"
   );
   next();
 });
