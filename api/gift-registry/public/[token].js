@@ -65,7 +65,7 @@ export default async function handler(req, res) {
       if (basketItems.length) {
         const { data: strategies, error: stratErr } = await supabaseAdmin
           .from('strategies_c')
-          .select('id, name, short_name, holdings, risk_level, objective, tags, total_holdings, min_investment')
+          .select('id, name, short_name, holdings, risk_level, objective, tags, min_investment')
           .in('id', basketItems.map(i => i.isin));
         _debug.strategiesQueryError = stratErr?.message || null;
         _debug.strategiesFound = (strategies || []).map(s => ({ id: s.id, name: s.name, holdingsCount: Array.isArray(s.holdings) ? s.holdings.length : null, min_investment: s.min_investment }));
