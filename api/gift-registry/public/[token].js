@@ -206,7 +206,7 @@ export default async function handler(req, res) {
       }
     }
 
-    return res.status(200).json({ registry, _debug: res.__debug || null });
+    return res.status(200).json({ registry, _debug });
   } catch (e) {
     return res.status(500).json({ error: e.message });
   }
