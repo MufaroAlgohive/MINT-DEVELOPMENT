@@ -19,7 +19,6 @@ export default async function handler(req, res) {
   // No-index header — prevent search engines from indexing personal wishlists
   res.setHeader('X-Robots-Tag', 'noindex, nofollow');
 
-  const _debug = {};
   try {
     const { token } = req.query;
 
@@ -43,8 +42,6 @@ export default async function handler(req, res) {
       const activeItems = registry.items.filter(i => i.status !== 'REMOVED');
       const shareItems = activeItems.filter(i => i.instrument_type !== 'BASKET');
       const basketItems = activeItems.filter(i => i.instrument_type === 'BASKET');
-      _debug.rawItems = activeItems.map(i => ({ id: i.id, isin: i.isin, instrument_type: i.instrument_type, price_snapshot_cents: i.price_snapshot_cents }));
-      _debug.basketIsins = basketItems.map(i => i.isin);
 
       // Look up SHARE items in securities_c
       // Query by both isin AND symbol in parallel — many JSE stocks have isin=null and
@@ -63,12 +60,10 @@ export default async function handler(req, res) {
       // Look up BASKET items in strategies_c (isin stores the strategy UUID)
       let stratMap = {};
       if (basketItems.length) {
-        const { data: strategies, error: stratErr } = await supabaseAdmin
+        const { data: strategies } = await supabaseAdmin
           .from('strategies_c')
           .select('id, name, short_name, holdings, risk_level, objective, tags, min_investment')
           .in('id', basketItems.map(i => i.isin));
-        _debug.strategiesQueryError = stratErr?.message || null;
-        _debug.strategiesFound = (strategies || []).map(s => ({ id: s.id, name: s.name, holdingsCount: Array.isArray(s.holdings) ? s.holdings.length : null, min_investment: s.min_investment }));
 
         // Collect all holding symbols so we can batch-fetch logos
         const allSymbols = [];
@@ -99,8 +94,6 @@ export default async function handler(req, res) {
             if (norm && !secBySymbol[norm]) secBySymbol[norm] = s;
           }
         }
-        _debug.secBySymbolKeys = Object.keys(secBySymbol);
-        _debug.allSymbols = allSymbols;
         const logoBySymbol = secBySymbol; // alias for backward compat below
 
         // Fetch the most recent YTD return for each strategy
@@ -143,8 +136,6 @@ export default async function handler(req, res) {
             ytd_as_of_date: ytdRow?.as_of_date || null,
           }];
         }));
-        _debug.stratMapKeys = Object.keys(stratMap);
-        _debug.stratMapValues = Object.values(stratMap).map(s => ({ name: s.name, live_price_cents: s.live_price_cents, min_investment: s.min_investment, holdingsSnap: s.holdings_snapshot?.length }));
       }
 
       registry.items = activeItems
@@ -206,7 +197,7 @@ export default async function handler(req, res) {
       }
     }
 
-    return res.status(200).json({ registry, _debug });
+    return res.status(200).json({ registry });
   } catch (e) {
     return res.status(500).json({ error: e.message });
   }
