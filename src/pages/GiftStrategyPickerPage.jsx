@@ -1,5 +1,5 @@
 import React, { useEffect, useId, useMemo, useRef, useState } from "react";
-import { ArrowLeft, BookMarked, Bookmark, Gift, Heart, Search, SlidersHorizontal, Sparkles, TrendingUp, X } from "lucide-react";
+import { ArrowLeft, Baby, BookMarked, Bookmark, Gift, Heart, Search, SlidersHorizontal, Sparkles, TrendingUp, X } from "lucide-react";
 import GiftRegistryCreateSheet from "../components/GiftRegistryCreateSheet.jsx";
 import WishlistPickerSheet from "../components/WishlistPickerSheet.jsx";
 import { AreaChart, Area, LineChart, Line, ResponsiveContainer } from "recharts";
@@ -12,6 +12,7 @@ import { supabase } from "../lib/supabase";
 import { formatCurrency } from "../lib/formatCurrency";
 import WishlistToast from "../components/WishlistToast.jsx";
 import { CollapsibleSection } from "../components/SecurityCards.jsx";
+import ChildMarketPromptModal from "../components/ChildMarketPromptModal.jsx";
 
 const HOME_BG = {
   backgroundColor: '#f8f6fa',
@@ -219,6 +220,13 @@ export default function GiftStrategyPickerPage({ onBack, onNavigate, autoOpenWis
   const [toastVisible, setToastVisible] = useState(false);
   const [toastRegistryId, setToastRegistryId] = useState(null);
 
+  // Child market mode — parent browses child-only strategies while staying logged in as parent
+  const [showChildMarketPrompt, setShowChildMarketPrompt] = useState(false);
+  const [childMarketMode, setChildMarketMode] = useState(false);
+  const [selectedChildForMarket, setSelectedChildForMarket] = useState(null);
+  // tracks whether the strategy being wishlisted is a kid strategy (for the picker guard)
+  const [wishlistPickerIsKid, setWishlistPickerIsKid] = useState(null);
+
   // Markets tab
   const [viewTab, setViewTab] = useState("baskets"); // "baskets" | "markets"
   const [giftSecurities, setGiftSecurities] = useState([]);
@@ -287,6 +295,14 @@ export default function GiftStrategyPickerPage({ onBack, onNavigate, autoOpenWis
       setWishlistedKeys(next);
       updatePrefs({ wishlistedKeys: [...next] });
     } else {
+      // Determine if the strategy being wishlisted is a kid strategy (used for guard in picker)
+      if (key.startsWith("gift:")) {
+        const stratId = key.slice(5);
+        const strat = strategies.find(s => s.id === stratId);
+        setWishlistPickerIsKid(strat ? strat.is_kid_strategy === true : null);
+      } else {
+        setWishlistPickerIsKid(null);
+      }
       // Show picker so the user can choose a wishlist category
       setWishlistPickerKey(key);
     }
@@ -391,9 +407,14 @@ export default function GiftStrategyPickerPage({ onBack, onNavigate, autoOpenWis
     return () => { cancelled = true; };
   }, [viewTab, securitiesLoaded]);
 
-  const sectors = ["All", ...new Set(strategies.map(s => s.sector || "General"))];
+  // In child market mode only show kid strategies; compute sectors from that subset
+  const visibleStrategies = childMarketMode
+    ? strategies.filter(s => s.is_kid_strategy === true)
+    : strategies;
 
-  const filtered = strategies.filter(s => {
+  const sectors = ["All", ...new Set(visibleStrategies.map(s => s.sector || "General"))];
+
+  const filtered = visibleStrategies.filter(s => {
     const matchCategory = activeCategory === "All" || (s.sector || "General") === activeCategory;
     const matchSearch = !searchQuery || s.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       s.objective?.toLowerCase().includes(searchQuery.toLowerCase());
@@ -554,13 +575,13 @@ export default function GiftStrategyPickerPage({ onBack, onNavigate, autoOpenWis
           <div className="flex items-center justify-between mb-6">
             <button
               type="button"
-              onClick={onBack}
+              onClick={childMarketMode ? () => { setChildMarketMode(false); setSelectedChildForMarket(null); setActiveCategory("All"); } : onBack}
               className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 backdrop-blur-sm"
             >
               <ArrowLeft className="h-5 w-5" />
             </button>
             <SparklesText
-              text="GIFT A BASKET"
+              text={childMarketMode ? "CHILD MARKET" : "GIFT A BASKET"}
               colors={{ first: "#c4b5fd", second: "#f0abfc" }}
               sparklesCount={6}
               className="text-base tracking-wide text-white"
@@ -622,6 +643,36 @@ export default function GiftStrategyPickerPage({ onBack, onNavigate, autoOpenWis
             </div>
           </div>
 
+          {/* Child market mode banner — shown when parent is browsing child strategies */}
+          <AnimatePresence>
+            {childMarketMode && selectedChildForMarket && (
+              <motion.div
+                key="child-market-banner"
+                initial={{ opacity: 0, y: -8, height: 0 }}
+                animate={{ opacity: 1, y: 0, height: "auto" }}
+                exit={{ opacity: 0, y: -8, height: 0 }}
+                transition={{ duration: 0.25 }}
+                className="mb-3 overflow-hidden"
+              >
+                <div className="flex items-center gap-2 rounded-2xl bg-violet-900/40 border border-violet-400/30 px-3.5 py-2.5">
+                  <Baby size={13} className="text-violet-300 flex-shrink-0" />
+                  <p className="text-[11px] text-violet-200 flex-1 leading-snug">
+                    Browsing as <span className="font-bold text-white">parent</span> for{" "}
+                    <span className="font-bold text-violet-100">{selectedChildForMarket.first_name}</span>
+                    {" "}· Child strategies only
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => { setChildMarketMode(false); setSelectedChildForMarket(null); setActiveCategory("All"); }}
+                    className="text-violet-300 hover:text-white text-[11px] font-semibold transition flex-shrink-0"
+                  >
+                    Exit ✕
+                  </button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
           {/* Tab switcher — MINT BASKETS / MARKETS */}
           <div className="flex gap-1.5 rounded-2xl bg-black/20 p-1 backdrop-blur-sm ring-1 ring-white/10 mb-4">
             <button
@@ -674,9 +725,31 @@ export default function GiftStrategyPickerPage({ onBack, onNavigate, autoOpenWis
                   <Gift size={15} className="text-violet-200" />
                 </div>
                 <p className="text-xs text-white/60 leading-relaxed">
-                  Pick a basket to gift. Recipient claims with SA ID + code.
+                  {childMarketMode
+                    ? "Showing child-friendly strategies only. Your account stays active."
+                    : "Pick a basket to gift. Recipient claims with SA ID + code."}
                 </p>
               </motion.div>
+
+              {/* Child market CTA — only shown when NOT already in child market mode */}
+              {!childMarketMode && (
+                <motion.button
+                  type="button"
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.4, delay: 0.25 }}
+                  onClick={() => setShowChildMarketPrompt(true)}
+                  className="flex w-full items-center gap-2 rounded-2xl bg-white/10 border border-white/10 px-3.5 py-2.5 mb-1 text-left hover:bg-white/15 transition active:scale-[0.98]"
+                >
+                  <Baby size={13} className="text-violet-300 flex-shrink-0" />
+                  <p className="text-[11px] text-white/70 flex-1">
+                    Browsing for a child?{" "}
+                    <span className="font-semibold text-violet-300 underline underline-offset-2">
+                      View Child Strategies
+                    </span>
+                  </p>
+                </motion.button>
+              )}
 
               {/* Category pills */}
               <div className="flex gap-2 overflow-x-auto scrollbar-hide pt-2 pb-1">
@@ -1018,6 +1091,11 @@ export default function GiftStrategyPickerPage({ onBack, onNavigate, autoOpenWis
       {wishlistPickerKey && (
         <WishlistPickerSheet
           itemKey={wishlistPickerKey}
+          isKidStrategy={wishlistPickerIsKid}
+          onGoToChildMarket={() => {
+            setWishlistPickerKey(null);
+            setShowChildMarketPrompt(true);
+          }}
           onClose={() => setWishlistPickerKey(null)}
           onSaved={(savedItemKey, listName, registryId) => {
             const next = new Set([...wishlistedKeys, savedItemKey]);
@@ -1076,6 +1154,20 @@ export default function GiftStrategyPickerPage({ onBack, onNavigate, autoOpenWis
           } else {
             onNavigate?.("giftRegistryDashboard");
           }
+        }}
+      />
+
+      {/* Child market prompt — asks parent to browse child strategies + pick a child */}
+      <ChildMarketPromptModal
+        open={showChildMarketPrompt}
+        onClose={() => setShowChildMarketPrompt(false)}
+        onSelectChild={(child) => {
+          setSelectedChildForMarket(child);
+          setChildMarketMode(true);
+          setActiveCategory("All");
+          setSearchQuery("");
+          setViewTab("baskets");
+          setShowChildMarketPrompt(false);
         }}
       />
     </div>

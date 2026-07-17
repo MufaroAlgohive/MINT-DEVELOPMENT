@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Heart, Plus, Check, ArrowRight, Lock, Baby } from "lucide-react";
+import { X, Heart, Plus, Check, ArrowRight, Lock, Baby, AlertTriangle } from "lucide-react";
 import WishlistPreviewGrid from "./WishlistPreviewGrid.jsx";
 
 const CARD_GRADIENTS = [
@@ -15,12 +15,13 @@ const CARD_GRADIENTS = [
 
 const year = new Date().getFullYear();
 
-export default function WishlistPickerSheet({ itemKey, onClose, onSaved, onCreateNew, childFamilyMemberId }) {
+export default function WishlistPickerSheet({ itemKey, onClose, onSaved, onCreateNew, childFamilyMemberId, isKidStrategy, onGoToChildMarket }) {
   const [wishlists, setWishlists] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(null);
   const [savedId, setSavedId] = useState(null);
   const [errorMsg, setErrorMsg] = useState(null);
+  const [childGuardActive, setChildGuardActive] = useState(false);
 
   // Step-1 form state (shown when no wishlists exist)
   const [name, setName] = useState(`My Wishlist ${year}`);
@@ -95,6 +96,9 @@ export default function WishlistPickerSheet({ itemKey, onClose, onSaved, onCreat
     }
   }, [wishlists.length]);
 
+  // Reset guard when item key changes (new strategy being wishlisted)
+  useEffect(() => { setChildGuardActive(false); }, [itemKey]);
+
   async function handlePick(list) {
     if (saving) return;
     if (list.isClosed) {
@@ -102,6 +106,14 @@ export default function WishlistPickerSheet({ itemKey, onClose, onSaved, onCreat
       setTimeout(() => setErrorMsg(null), 3200);
       return;
     }
+
+    // Guard: prevent adding a non-child strategy to a child's wishlist
+    if (list.beneficiaryType === "CHILD" && isKidStrategy === false) {
+      setChildGuardActive(true);
+      return;
+    }
+
+    setChildGuardActive(false);
     setErrorMsg(null);
     setSaving(list.id);
     try {
@@ -228,6 +240,52 @@ export default function WishlistPickerSheet({ itemKey, onClose, onSaved, onCreat
                 <h2 className="text-[17px] font-bold text-slate-900 leading-tight">Save to wishlist</h2>
                 <p className="text-[11px] text-slate-400 mt-0.5">Pick a category or create a new one</p>
               </div>
+
+              {/* Child strategy guard — shown when parent tries to add a non-child strategy to a child wishlist */}
+              <AnimatePresence>
+                {childGuardActive && (
+                  <motion.div
+                    key="child-guard"
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    transition={{ duration: 0.22 }}
+                    className="mx-5 mb-3 flex-shrink-0"
+                  >
+                    <div className="rounded-2xl bg-amber-50 border border-amber-200 p-4">
+                      <div className="flex items-start gap-2.5 mb-3">
+                        <AlertTriangle size={16} className="text-amber-600 mt-0.5 flex-shrink-0" />
+                        <div>
+                          <p className="text-[13px] font-bold text-amber-900 leading-tight">
+                            Child strategies only
+                          </p>
+                          <p className="text-xs text-amber-700 mt-1 leading-relaxed">
+                            This wishlist belongs to a child. Only child-friendly strategies can be added to it — please browse the Child Market to find the right one.
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setChildGuardActive(false);
+                          onClose?.();
+                          onGoToChildMarket?.();
+                        }}
+                        className="w-full py-2.5 rounded-xl bg-[#6B21A8] text-white text-xs font-bold transition active:scale-[0.97]"
+                      >
+                        Browse Child Strategies →
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setChildGuardActive(false)}
+                        className="w-full mt-2 py-2 text-xs text-slate-500 font-medium"
+                      >
+                        Choose a different wishlist
+                      </button>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
 
               {/* Wishlist grid */}
               <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-5 pb-3">
