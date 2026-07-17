@@ -140,14 +140,13 @@ export default function ChildMarketPromptModal({ open, onClose, onSelectChild, i
                     <div className="flex items-start gap-2.5">
                       <Star size={14} className="text-violet-500 mt-0.5 flex-shrink-0" />
                       <p className="text-sm text-slate-700 leading-relaxed">
-                        <span className="font-semibold text-slate-900">Child wishlists require child strategies.</span>{" "}
-                        Only baskets marked as child-friendly (like My Growth Fund) can be added to your child's wishlist.
+                        Only <span className="font-semibold text-slate-900">child-friendly baskets</span> can be added to a child's wishlist.
                       </p>
                     </div>
                     <div className="flex items-start gap-2.5">
                       <Baby size={14} className="text-violet-500 mt-0.5 flex-shrink-0" />
                       <p className="text-sm text-slate-600 leading-relaxed">
-                        Browsing the Child Market keeps you logged in as the parent — your account stays active throughout.
+                        You stay logged in as the parent the whole time.
                       </p>
                     </div>
                   </div>
@@ -157,7 +156,7 @@ export default function ChildMarketPromptModal({ open, onClose, onSelectChild, i
                     onClick={() => setStep(2)}
                     className="w-full py-4 rounded-2xl bg-[#6B21A8] text-white font-semibold text-[14px] transition active:scale-[0.98] shadow-sm"
                   >
-                    Yes, show me Child Strategies
+                    Show Child Strategies
                   </button>
                   <button
                     type="button"
