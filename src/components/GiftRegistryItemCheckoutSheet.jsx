@@ -144,7 +144,7 @@ export default function GiftRegistryItemCheckoutSheet({ item, registryId, onSucc
       });
       const json = await res.json();
       if (!res.ok) {
-        if (json.code === "SOLD_OUT") setError("This item is no longer available to gift.");
+        if (json.code === "SOLD_OUT") setError("Someone else is completing their purchase right now. Please try again in a few minutes — if their payment doesn't go through, it'll open back up.");
         else if (json.code === "KYC_INCOMPLETE") {
           // Debug: fetch the onboarding status so we can see exactly what the server sees
           try {

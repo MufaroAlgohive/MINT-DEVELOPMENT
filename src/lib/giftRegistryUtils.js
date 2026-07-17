@@ -18,16 +18,32 @@ export function calcMinTrancheForAsset(livePriceCents) {
 /**
  * Availability state of a registry item.
  * Returns { state, available } — drives UI grey-out and button copy.
+ *
+ * Visual state (GREYED_OUT / REMAINDER_ONLY / OPEN) is based solely on
+ * filled_quantity — items in someone else's checkout (reserved_quantity > 0)
+ * should still appear OPEN so multiple people can tap "Gift This".
+ * The backend's optimistic lock on /api/gift-registry/reserve ensures only
+ * one buyer wins at payment time; everyone else gets a friendly SOLD_OUT.
+ *
+ * `available` accounts for active reservations so the checkout sheet knows
+ * the real remaining capacity when it calls the reserve API.
  */
 export function getItemGiftState(item) {
-  const available =
-    (item.target_quantity ?? 0) -
-    (item.filled_quantity ?? 0) -
-    (item.reserved_quantity ?? 0);
+  // How many shares are genuinely unfilled (actual purchases only)
+  const filledRemaining =
+    (item.target_quantity ?? 0) - (item.filled_quantity ?? 0);
+  // Real remaining after subtracting active checkout holds
+  const realAvailable = Math.max(
+    0,
+    filledRemaining - (item.reserved_quantity ?? 0)
+  );
   const min = item.min_tranche_quantity ?? 1;
-  if (available <= 0) return { state: "GREYED_OUT", available: 0 };
-  if (available < min) return { state: "REMAINDER_ONLY", available };
-  return { state: "OPEN", available };
+
+  // Fully purchased → grey out
+  if (filledRemaining <= 0) return { state: "GREYED_OUT", available: 0 };
+  // Unfilled remainder too small to gift at minimum tranche → grey out
+  if (filledRemaining < min) return { state: "REMAINDER_ONLY", available: realAvailable };
+  return { state: "OPEN", available: realAvailable };
 }
 
 /**
