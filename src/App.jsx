@@ -1338,6 +1338,7 @@ const App = () => {
             onBack={noOp}
             onTabChange={handleTabChange}
             onWithdraw={() => { setWithdrawChild(selectedFamilyChild); navigateTo("withdraw"); }}
+            onOpenNotifications={() => { setNotificationReturnPage("childDashboard"); navigateTo("notifications"); }}
             onOpenFactsheet={(strategy) => {
               setSelectedChildForInvest(selectedFamilyChild);
               setSelectedStrategy(strategy);
@@ -2601,6 +2602,7 @@ const App = () => {
           child={selectedFamilyChild}
           onBack={goBack}
           onWithdraw={() => { setWithdrawChild(selectedFamilyChild); navigateTo("withdraw"); }}
+          onOpenNotifications={() => { setNotificationReturnPage("childDashboard"); navigateTo("notifications"); }}
           onOpenFactsheet={(strategy) => {
             setSelectedChildForInvest(selectedFamilyChild);
             setSelectedStrategy(strategy);

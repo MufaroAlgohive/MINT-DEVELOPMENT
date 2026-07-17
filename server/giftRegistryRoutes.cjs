@@ -1256,12 +1256,32 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
 
         // Fetch registry owner + item details (include item instrument_type and isin for holdings)
         const [registryRow, filledItemRow] = await Promise.all([
-          supabaseAdmin.from('gift_events').select('creator_user_id, title').eq('id', registryId).single().then(r => r.data),
+          supabaseAdmin.from('gift_events').select('creator_user_id, title, beneficiary_type, beneficiary_ref, share_token').eq('id', registryId).single().then(r => r.data),
           supabaseAdmin.from('gift_registry_items').select('isin, instrument_type').eq('id', reservedItemId).single().then(r => r.data),
         ]);
 
-        const ownerUserId = registryRow?.creator_user_id;
+        const ownerUserId = registryRow?.creator_user_id; // parent / creator
         const registryTitle = registryRow?.title || 'your wishlist';
+
+        // Resolve actual investment recipient: for CHILD registries the holdings
+        // and transaction must go to the child's own Supabase account (linked_user_id),
+        // not the parent who created the registry.
+        let recipientUserId = ownerUserId;
+        if (registryRow?.beneficiary_type === 'CHILD' && registryRow?.beneficiary_ref) {
+          try {
+            const { data: famMember } = await supabaseAdmin
+              .from('family_members')
+              .select('linked_user_id')
+              .eq('id', registryRow.beneficiary_ref)
+              .maybeSingle();
+            if (famMember?.linked_user_id) {
+              recipientUserId = famMember.linked_user_id;
+              console.log(`[gift-registry] contribute: CHILD registry — routing holdings to child user ${recipientUserId} (not parent ${ownerUserId})`);
+            }
+          } catch (famErr) {
+            console.warn('[gift-registry] contribute: could not resolve child linked_user_id, falling back to creator:', famErr.message);
+          }
+        }
         const itemIsin = filledItemRow?.isin || '';
         const isBasket = filledItemRow?.instrument_type === 'BASKET';
 
@@ -1283,7 +1303,8 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
         // ── 1. Insert pending holdings + transaction for the recipient ──
         // Without a transaction named "Strategy Investment: <name>", the strategy
         // never appears in /api/user/strategies, so the pending card cannot show.
-        if (ownerUserId && isBasket && itemIsin) {
+        // recipientUserId is the child's own account (if CHILD registry), else the creator.
+        if (recipientUserId && isBasket && itemIsin) {
           try {
             const { data: strategy } = await supabaseAdmin.from('strategies_c').select('id, name, holdings').eq('id', itemIsin).maybeSingle();
             const stratHoldings = strategy?.holdings || [];
@@ -1295,14 +1316,14 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
               const secMap = {};
               for (const s of securities || []) secMap[s.symbol] = s;
 
-              // Create a transaction for the owner — this is what /api/user/strategies
+              // Create a transaction for the recipient — this is what /api/user/strategies
               // uses to detect the strategy purchase and surface it as a pending card.
               const now = new Date().toISOString();
               const investAmountCents = reservation.price_lock_cents * qty;
-              let ownerTxId = null;
+              let recipientTxId = null;
               try {
                 const { data: txRow } = await supabaseAdmin.from('transactions').insert({
-                  user_id: ownerUserId,
+                  user_id: recipientUserId,
                   direction: 'debit',
                   name: `Strategy Investment: ${strategyName}`,
                   description: 'Investment received as wishlist gift',
@@ -1313,9 +1334,9 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
                   transaction_date: now,
                   created_at: now,
                 }).select('id').single();
-                ownerTxId = txRow?.id || null;
+                recipientTxId = txRow?.id || null;
               } catch (txErr) {
-                console.warn('[gift-registry] contribute: owner transaction insert:', txErr.message);
+                console.warn('[gift-registry] contribute: recipient transaction insert:', txErr.message);
               }
 
               // Calculate scale: invested amount (base price before markup) vs basket cost
@@ -1334,7 +1355,7 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
                 const holdingQty = Math.max(1, Math.round((h.weight || 1) * scale));
                 try {
                   await supabaseAdmin.from('stock_holdings_c').insert({
-                    user_id: ownerUserId,
+                    user_id: recipientUserId,
                     security_id: sec.id,
                     strategy_id: itemIsin,
                     quantity: holdingQty,
@@ -1343,21 +1364,21 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
                     unrealized_pnl: 0,
                     as_of_date: null,
                     Status: 'active',
-                    transaction_id: ownerTxId || null,
+                    transaction_id: recipientTxId || null,
                   });
                   holdingsInserted++;
                 } catch (he) { console.warn('[gift-registry] contribute: pending holding insert:', he.message); }
               }
-              console.log(`[gift-registry] contribute: ${holdingsInserted} holding(s) + tx ${ownerTxId} created for owner ${ownerUserId} (strategy: ${strategyName})`);
+              console.log(`[gift-registry] contribute: ${holdingsInserted} holding(s) + tx ${recipientTxId} created for recipient ${recipientUserId} (strategy: ${strategyName})`);
 
               // Upsert user_strategies so the strategy is discoverable
               if (holdingsInserted > 0) {
                 try {
-                  const { data: existingUS } = await supabaseAdmin.from('user_strategies').select('id, invested_amount').eq('user_id', ownerUserId).eq('strategy_id', itemIsin).maybeSingle();
+                  const { data: existingUS } = await supabaseAdmin.from('user_strategies').select('id, invested_amount').eq('user_id', recipientUserId).eq('strategy_id', itemIsin).maybeSingle();
                   if (existingUS) {
                     await supabaseAdmin.from('user_strategies').update({ invested_amount: (existingUS.invested_amount || 0) + investAmountCents, updated_at: now }).eq('id', existingUS.id);
                   } else {
-                    await supabaseAdmin.from('user_strategies').insert({ user_id: ownerUserId, strategy_id: itemIsin, invested_amount: investAmountCents, status: 'active', created_at: now, updated_at: now });
+                    await supabaseAdmin.from('user_strategies').insert({ user_id: recipientUserId, strategy_id: itemIsin, invested_amount: investAmountCents, status: 'active', created_at: now, updated_at: now });
                   }
                 } catch (usErr) { console.warn('[gift-registry] contribute: user_strategies upsert:', usErr.message); }
               }
@@ -1367,35 +1388,66 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
           }
         }
 
-        // ── 2. Notify the registry owner that someone gifted them ──
-        if (ownerUserId && ownerUserId !== user.id) {
-          const msgPart = gifterMessage ? ` — "${gifterMessage.slice(0, 80)}"` : '';
-          const mintPart = gifterMintNumber ? ` (${gifterMintNumber})` : '';
-          // Fetch share_token so the deep link works
-          const { data: regForToken } = await supabaseAdmin.from('gift_events').select('share_token').eq('id', registryId).maybeSingle();
-          const shareToken = regForToken?.share_token || '';
-          const { error: notifInsertErr } = await supabaseAdmin.from('notifications').insert({
-            user_id: ownerUserId,
+        // ── 2. Notify the gift recipient and parent about the gift ──
+        const shareToken = registryRow?.share_token || '';
+        const msgPart = gifterMessage ? ` — "${gifterMessage.slice(0, 80)}"` : '';
+        const mintPart = gifterMintNumber ? ` (${gifterMintNumber})` : '';
+        const notifPayload = {
+          action: 'OPEN_GIFT_REGISTRY',
+          registry_id: registryId,
+          registry_item_id: reservedItemId,
+          share_token: shareToken,
+          deep_link: shareToken ? `/gift/${shareToken}` : null,
+          gifter_user_id: user.id,
+          gifter_message: gifterMessage || null,
+        };
+
+        // Notify actual recipient (child's own account, or creator for self-registries)
+        if (recipientUserId && recipientUserId !== user.id) {
+          const { error: recipientNotifErr } = await supabaseAdmin.from('notifications').insert({
+            user_id: recipientUserId,
             title: `${gifterName} gifted you 🎁`,
-            body: `${gifterName}${mintPart} gifted you a ${itemName} from your "${registryTitle}" wishlist. Tap to see what they sent you!`,
+            body: `${gifterName}${mintPart} gifted you ${itemName} from your "${registryTitle}" wishlist!`,
             type: 'system',
-            payload: {
-              action: 'OPEN_GIFT_REGISTRY',
-              registry_id: registryId,
-              registry_item_id: reservedItemId,
-              share_token: shareToken,
-              deep_link: shareToken ? `/gift/${shareToken}` : null,
-              gifter_user_id: user.id,
-              gifter_message: gifterMessage || null,
-            },
+            payload: notifPayload,
           });
-          if (notifInsertErr) {
-            console.error('[gift-registry] contribute: owner notification insert failed:', notifInsertErr.message, notifInsertErr.code);
+          if (recipientNotifErr) {
+            console.error('[gift-registry] contribute: recipient notification failed:', recipientNotifErr.message);
           } else {
-            console.log('[gift-registry] contribute: owner notification sent → user_id=', ownerUserId);
+            console.log('[gift-registry] contribute: recipient notification sent → user_id=', recipientUserId);
           }
-        } else {
-          console.log('[gift-registry] contribute: notification skipped — ownerUserId=', ownerUserId, 'userId=', user.id);
+        }
+
+        // Also notify the parent/creator if the registry is for a child (they want to know too)
+        if (ownerUserId && ownerUserId !== recipientUserId && ownerUserId !== user.id) {
+          const { error: parentNotifErr } = await supabaseAdmin.from('notifications').insert({
+            user_id: ownerUserId,
+            title: `${gifterName} gifted your child 🎁`,
+            body: `${gifterName}${mintPart} gifted ${itemName} to ${registryRow?.beneficiary_display_name || 'your child'} from the "${registryTitle}" wishlist!`,
+            type: 'system',
+            payload: notifPayload,
+          });
+          if (parentNotifErr) {
+            console.error('[gift-registry] contribute: parent notification failed:', parentNotifErr.message);
+          } else {
+            console.log('[gift-registry] contribute: parent notification sent → user_id=', ownerUserId);
+          }
+        }
+
+        // ── 3. Notify the gifter that their gift went through ──
+        if (user.id) {
+          const { error: gifterNotifErr } = await supabaseAdmin.from('notifications').insert({
+            user_id: user.id,
+            title: 'Gift sent! 🎉',
+            body: `You gifted ${itemName} from "${registryTitle}". The recipient will love it!`,
+            type: 'system',
+            payload: notifPayload,
+          });
+          if (gifterNotifErr) {
+            console.error('[gift-registry] contribute: gifter notification failed:', gifterNotifErr.message);
+          } else {
+            console.log('[gift-registry] contribute: gifter confirmation sent → user_id=', user.id);
+          }
         }
 
         // ── 3. If item is now FILLED — thank-you to every gifter ──

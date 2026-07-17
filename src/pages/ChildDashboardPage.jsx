@@ -1904,7 +1904,7 @@ function CompleteProfileModal({ child, parentProfile, onUpdate, onClose }) {
 
 // --- Main Page ---------------------------------------------------------------
 
-export default function ChildDashboardPage({ child: initialChild, onBack, onOpenFactsheet, onTabChange, onWithdraw }) {
+export default function ChildDashboardPage({ child: initialChild, onBack, onOpenFactsheet, onTabChange, onWithdraw, onOpenNotifications }) {
   const { profile } = useProfile();
   const isMounted = useRef(true);
   const [child, setChild] = useState(initialChild);
@@ -2933,7 +2933,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
             </div>
 
             {/* Notification bell */}
-            <NotificationBell onClick={() => {}} />
+            <NotificationBell onClick={onOpenNotifications || (() => {})} />
           </header>
 
           {activeChildTab !== "portfolio" && (
