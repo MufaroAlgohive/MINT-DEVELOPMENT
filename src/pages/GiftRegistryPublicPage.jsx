@@ -32,6 +32,8 @@ export default function GiftRegistryPublicPage({
   isAuthLoading = false,
   onAuthPrompt,
   onBack,
+  gifterName = null,
+  gifterMintNumber = null,
 }) {
   const { registry, loading, error, reload } = usePublicRegistry(token);
   const [checkoutItem, setCheckoutItem] = useState(null);
@@ -242,8 +244,11 @@ export default function GiftRegistryPublicPage({
         <div className="mx-5 mt-4 rounded-2xl bg-[#6B21A8] px-5 py-4 shadow-md">
           <p className="text-[11px] font-bold text-purple-200 uppercase tracking-widest mb-1">🎁 You received a gift</p>
           <p className="text-[15px] font-bold text-white leading-snug">
-            Someone gifted you from this wishlist
+            {gifterName ? `${gifterName} gifted you from this wishlist` : "Someone gifted you from this wishlist"}
           </p>
+          {gifterMintNumber && (
+            <p className="text-[12px] text-purple-300 font-mono mt-0.5">{gifterMintNumber}</p>
+          )}
           <p className="text-[13px] text-purple-200 mt-1">
             Scroll down to see the gift history and what was sent to you.
           </p>

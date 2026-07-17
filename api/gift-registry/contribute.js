@@ -361,6 +361,8 @@ export default async function handler(req, res) {
           share_token: shareToken,
           deep_link: shareToken ? `/gift/${shareToken}` : null,
           gifter_user_id: user.id,
+          gifter_name: gifterName,
+          gifter_mint_number: gifterProfile?.mint_number || null,
         };
 
         const notifRows = [];

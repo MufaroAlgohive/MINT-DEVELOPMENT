@@ -1399,6 +1399,8 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
           share_token: shareToken,
           deep_link: shareToken ? `/gift/${shareToken}` : null,
           gifter_user_id: user.id,
+          gifter_name: gifterName,
+          gifter_mint_number: gifterMintNumber || null,
           gifter_message: gifterMessage || null,
         };
 

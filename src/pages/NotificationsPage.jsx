@@ -111,6 +111,8 @@ const NotificationThreadView = ({ notification, onBack, onDelete, onNavigate }) 
   const endRef         = useRef(null);
 
   const navContext = isGiftReceived ? "gift_received" : "shared_wishlist";
+  const gifterName        = notification.payload?.gifter_name || sender || null;
+  const gifterMintNumber  = notification.payload?.gifter_mint_number || null;
 
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, []);
 
@@ -196,7 +198,7 @@ const NotificationThreadView = ({ notification, onBack, onDelete, onNavigate }) 
             <div className="w-8 shrink-0" />
             <button
               type="button"
-              onClick={() => onNavigate?.("giftRegistryPublic", { token: shareToken, context: navContext })}
+              onClick={() => onNavigate?.("giftRegistryPublic", { token: shareToken, context: navContext, gifterName, gifterMintNumber })}
               className="bg-[#6B21A8] rounded-2xl rounded-bl-sm px-5 py-5 text-left active:scale-95 transition-transform shadow-lg max-w-[80%] w-full"
             >
               <p className="text-[11px] font-bold text-purple-200 uppercase tracking-widest mb-2">🎁 You received a gift</p>
@@ -235,7 +237,7 @@ const NotificationThreadView = ({ notification, onBack, onDelete, onNavigate }) 
         {isGiftReceived && shareToken ? (
           <button
             type="button"
-            onClick={() => onNavigate?.("giftRegistryPublic", { token: shareToken, context: navContext })}
+            onClick={() => onNavigate?.("giftRegistryPublic", { token: shareToken, context: navContext, gifterName, gifterMintNumber })}
             className="w-full bg-[#6B21A8] text-white text-[15px] font-semibold py-4 rounded-full shadow-md active:opacity-80 transition-opacity"
           >
             See Your Gift →

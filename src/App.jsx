@@ -3012,6 +3012,8 @@ const App = () => {
           <GiftRegistryPublicPage
             token={giftRegistryNavState.token}
             context={giftRegistryNavState.context}
+            gifterName={giftRegistryNavState.gifterName || null}
+            gifterMintNumber={giftRegistryNavState.gifterMintNumber || null}
             user={profile?.id ? profile : null}
             isKycComplete={onboardingComplete}
             isAuthLoading={profileLoading || onboardingLoading}
