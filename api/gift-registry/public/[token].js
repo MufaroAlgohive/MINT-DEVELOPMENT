@@ -44,11 +44,17 @@ export default async function handler(req, res) {
       const basketItems = activeItems.filter(i => i.instrument_type === 'BASKET');
 
       // Look up SHARE items in securities_c
+      // Query by both isin AND symbol in parallel — many JSE stocks have isin=null and
+      // are only indexed by symbol (e.g. "BHG.JO"). Symbol match is overridden by isin match.
       let secMap = {};
       if (shareItems.length) {
-        const { data: securities } = await supabaseAdmin
-          .from('securities_c').select('isin, name, logo_url, last_price').in('isin', shareItems.map(i => i.isin));
-        secMap = Object.fromEntries((securities || []).map(s => [s.isin, s]));
+        const isins = shareItems.map(i => i.isin);
+        const [{ data: byIsin }, { data: bySymbol }] = await Promise.all([
+          supabaseAdmin.from('securities_c').select('isin, symbol, name, logo_url, last_price').in('isin', isins),
+          supabaseAdmin.from('securities_c').select('isin, symbol, name, logo_url, last_price').in('symbol', isins),
+        ]);
+        for (const s of (bySymbol || [])) if (s.symbol) secMap[s.symbol] = s;
+        for (const s of (byIsin   || [])) if (s.isin)   secMap[s.isin]   = s;
       }
 
       // Look up BASKET items in strategies_c (isin stores the strategy UUID)
@@ -70,15 +76,25 @@ export default async function handler(req, res) {
           }
         });
 
-        // Batch logo lookup
-        let logoBySymbol = {};
+        // Batch logo + price lookup
+        // Include both raw tickers (e.g. "STX40.JO") and normalized (e.g. "STX40") so lookup
+        // works regardless of which format securities_c uses.
+        let secBySymbol = {};
         if (allSymbols.length) {
+          const uniqueSymbols = [...new Set(allSymbols)];
+          const normalizedSymbols = uniqueSymbols.map(t => t.split('.')[0]).filter(Boolean);
+          const allQuerySymbols = [...new Set([...uniqueSymbols, ...normalizedSymbols])];
           const { data: secRows } = await supabaseAdmin
             .from('securities_c')
-            .select('symbol, logo_url, name')
-            .in('symbol', [...new Set(allSymbols)]);
-          (secRows || []).forEach(s => { logoBySymbol[s.symbol] = { logo_url: s.logo_url, name: s.name }; });
+            .select('symbol, logo_url, name, last_price')
+            .in('symbol', allQuerySymbols);
+          for (const s of (secRows || [])) {
+            secBySymbol[s.symbol] = s;
+            const norm = s.symbol.split('.')[0];
+            if (norm && !secBySymbol[norm]) secBySymbol[norm] = s;
+          }
         }
+        const logoBySymbol = secBySymbol; // alias for backward compat below
 
         // Fetch the most recent YTD return for each strategy
         let ytdByStratId = {};
@@ -99,13 +115,23 @@ export default async function handler(req, res) {
           const holdings = Array.isArray(s.holdings) ? s.holdings : [];
           const holdingsSnapshot = holdings.slice(0, 6).map(h => {
             const sym = h.ticker || h.symbol || h;
-            return { symbol: sym, name: logoBySymbol[sym]?.name || h.name || sym, logo_url: logoBySymbol[sym]?.logo_url || null };
+            const sec = secBySymbol[sym] || secBySymbol[sym.split('.')[0]];
+            return { symbol: sym, name: sec?.name || h.name || sym, logo_url: sec?.logo_url || null };
           });
+          // Live price: sum(shares × last_price_cents) — last_price is already in cents.
+          // Falls back to stored min_investment (cents) if live data unavailable.
+          const livePriceCents = holdings.reduce((sum, h) => {
+            const ticker = h.ticker || h.symbol || String(h);
+            const shares = Number(h.shares || h.quantity || h.weight || 1);
+            const sec = secBySymbol[ticker] || secBySymbol[ticker.split('.')[0]];
+            return sum + shares * (sec?.last_price || 0);
+          }, 0);
           const ytdRow = ytdByStratId[s.id];
           return [s.id, {
             ...s,
             holdings_snapshot: holdingsSnapshot,
             total_holdings: s.total_holdings || holdings.length,
+            live_price_cents: livePriceCents,
             r_ytd: ytdRow ? ytdRow.ytd_pct / 100 : null,
             ytd_as_of_date: ytdRow?.as_of_date || null,
           }];
@@ -117,11 +143,13 @@ export default async function handler(req, res) {
         .map(item => {
           if (item.instrument_type === 'BASKET') {
             const strat = stratMap[item.isin];
-            // Use stored price_snapshot_cents first; fall back to strategy min_investment (also in cents)
-            const priceCents = item.price_snapshot_cents || strat?.min_investment || 0;
+            // Prefer live computed price; fall back to stored snapshot, then min_investment
+            const priceCents = strat?.live_price_cents > 0
+              ? strat.live_price_cents
+              : (item.price_snapshot_cents || strat?.min_investment || 0);
             return {
               ...item,
-              name: strat?.short_name || strat?.name || item.isin,
+              name: strat?.name || strat?.short_name || item.isin,
               short_name: strat?.short_name || null,
               logo_url: null,
               price_snapshot_cents: priceCents,
@@ -134,11 +162,12 @@ export default async function handler(req, res) {
               ytd_as_of_date: strat?.ytd_as_of_date || null,
             };
           }
+          const sec = secMap[item.isin];
           return {
             ...item,
-            name: secMap[item.isin]?.name || item.isin,
-            logo_url: secMap[item.isin]?.logo_url || null,
-            price_snapshot_cents: item.price_snapshot_cents || secMap[item.isin]?.last_price || 0,
+            name: sec?.name || item.isin,
+            logo_url: sec?.logo_url || null,
+            price_snapshot_cents: item.price_snapshot_cents || sec?.last_price || 0,
           };
         });
 
