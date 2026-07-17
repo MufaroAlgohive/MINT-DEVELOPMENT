@@ -295,13 +295,14 @@ export default function GiftStrategyPickerPage({ onBack, onNavigate, autoOpenWis
       setWishlistedKeys(next);
       updatePrefs({ wishlistedKeys: [...next] });
     } else {
-      // Determine if the strategy being wishlisted is a kid strategy (used for guard in picker)
+      // Determine if the strategy being wishlisted is a kid strategy (used for guard in picker).
+      // Default to false (non-kid) when not found — safer to guard than to allow.
       if (key.startsWith("gift:")) {
         const stratId = key.slice(5);
         const strat = strategies.find(s => s.id === stratId);
-        setWishlistPickerIsKid(strat ? strat.is_kid_strategy === true : null);
+        setWishlistPickerIsKid(strat ? strat.is_kid_strategy === true : false);
       } else {
-        setWishlistPickerIsKid(null);
+        setWishlistPickerIsKid(false); // securities are never kid strategies
       }
       // Show picker so the user can choose a wishlist category
       setWishlistPickerKey(key);

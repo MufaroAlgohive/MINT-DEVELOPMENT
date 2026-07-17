@@ -107,8 +107,10 @@ export default function WishlistPickerSheet({ itemKey, onClose, onSaved, onCreat
       return;
     }
 
-    // Guard: prevent adding a non-child strategy to a child's wishlist
-    if (list.beneficiaryType === "CHILD" && isKidStrategy === false) {
+    // Guard: prevent adding a non-child strategy to a child's wishlist.
+    // isKidStrategy !== true catches false, null, and undefined — safer to block
+    // than to allow when we can't confirm the strategy is child-friendly.
+    if (list.beneficiaryType === "CHILD" && isKidStrategy !== true) {
       setChildGuardActive(true);
       return;
     }

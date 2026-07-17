@@ -7,12 +7,13 @@ import { getMarketsSecuritiesWithMetrics, getSecurityPrices, clearMarketDataCach
 import { useRealtimePrices } from "../lib/useRealtimePrices";
 import { getStrategiesWithMetrics, getPublicStrategies, formatChangePct, formatChangeAbs, getChangeColor } from "../lib/strategyData.js";
 import { useProfile } from "../lib/useProfile";
-import { TrendingUp, Search, SlidersHorizontal, X, ChevronRight, Bookmark, PlayCircle, Gift, Heart } from "lucide-react";
+import { TrendingUp, Search, SlidersHorizontal, X, ChevronRight, Bookmark, PlayCircle, Gift, Heart, Baby } from "lucide-react";
 import WishlistModal from "../components/WishlistModal.jsx";
 import WishlistPickerSheet from "../components/WishlistPickerSheet.jsx";
 import WishlistToast from "../components/WishlistToast.jsx";
 import ChildInvestModal from "../components/ChildInvestModal.jsx";
 import GiftRegistryCreateSheet from "../components/GiftRegistryCreateSheet.jsx";
+import ChildMarketPromptModal from "../components/ChildMarketPromptModal.jsx";
 import { saveMarketsInvestFilters, loadMarketsInvestFilters, saveMarketsStrategyFilters, loadMarketsStrategyFilters, buildInvestChips, buildChipsFromFilters } from "../lib/usePersistedFilters.js";
 import NotificationBell from "../components/NotificationBell";
 import FamilyDropdown from "../components/FamilyDropdown";
@@ -270,6 +271,11 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
   const [showChildWishlistCreate, setShowChildWishlistCreate] = useState(false);
   const childData = childFilter && typeof childFilter === "object" ? childFilter : null;
 
+  // Child market prompt — parent browses kid strategies from the wishlist guard
+  const [showChildMarketPrompt, setShowChildMarketPrompt] = useState(false);
+  const [localChildFilter, setLocalChildFilter] = useState(null); // overrides childFilter prop
+  const [wishlistPickerIsKid, setWishlistPickerIsKid] = useState(null);
+
   // Wishlist (heart) state — loaded from Supabase user_metadata, not localStorage
   const [wishlistedKeys, setWishlistedKeys] = useState(new Set());
   const [strategyWatchlist, setStrategyWatchlist] = useState([]);
@@ -328,6 +334,15 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
       setWishlistedKeys(next);
       updateWishlistPrefs({ wishlistedKeys: [...next] });
     } else {
+      // Determine if the strategy is a kid strategy (for the wishlist picker guard).
+      // Default to false when not found — safer to block than to allow.
+      if (itemKey.startsWith("strategy:")) {
+        const stratId = itemKey.slice(9);
+        const strat = publicStrategiesWithMetrics.find(s => s.id === stratId);
+        setWishlistPickerIsKid(strat ? strat.is_kid_strategy === true : false);
+      } else {
+        setWishlistPickerIsKid(false); // stocks/securities are never kid strategies
+      }
       // Show the wishlist picker so the user can choose a category
       setWishlistPickerKey(itemKey);
     }
@@ -847,7 +862,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
   const filteredStrategies = useMemo(() => {
     // Use publicStrategies for OpenStrategies view
     const results = publicStrategiesWithMetrics.filter((strategy) => {
-      if (childFilter && !strategy.is_kid_strategy) return false;
+      if ((localChildFilter || childFilter) && !strategy.is_kid_strategy) return false;
 
       const matchesName =
         strategiesSearchQuery.length === 0
@@ -910,6 +925,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
   }, [
     publicStrategiesWithMetrics,
     childFilter,
+    localChildFilter,
     strategiesSearchQuery,
     selectedRisks,
     selectedMinInvestment,
@@ -3129,6 +3145,11 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
       {wishlistPickerKey && (
         <WishlistPickerSheet
           itemKey={wishlistPickerKey}
+          isKidStrategy={wishlistPickerIsKid}
+          onGoToChildMarket={() => {
+            setWishlistPickerKey(null);
+            setShowChildMarketPrompt(true);
+          }}
           childFamilyMemberId={childData?.id || null}
           onClose={() => setWishlistPickerKey(null)}
           onSaved={(savedItemKey, listName, registryId) => {
@@ -3170,6 +3191,17 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
           onSaved={() => setShowChildWishlistCreate(false)}
         />
       )}
+
+      {/* Child market prompt — shown when parent hits the guard from the wishlist picker */}
+      <ChildMarketPromptModal
+        open={showChildMarketPrompt}
+        onClose={() => setShowChildMarketPrompt(false)}
+        onSelectChild={(child) => {
+          setLocalChildFilter(child);
+          setViewMode("openstrategies");
+          setShowChildMarketPrompt(false);
+        }}
+      />
     </div>
   );
 };
