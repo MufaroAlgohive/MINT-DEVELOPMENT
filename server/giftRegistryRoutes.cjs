@@ -178,13 +178,14 @@ async function getLatestPriceCents(isin, supabaseAdmin) {
 
   if (intraday?.current_price) return intraday.current_price; // already in cents
 
-  const { data: sec } = await supabaseAdmin
-    .from('securities_c')
-    .select('last_price')
-    .eq('isin', isin)
-    .single();
+  // Try by isin column first; fall back to symbol for JSE stocks where isin is null
+  const { data: byIsin } = await supabaseAdmin
+    .from('securities_c').select('last_price').eq('isin', isin).maybeSingle();
+  if (byIsin?.last_price) return byIsin.last_price;
 
-  return sec?.last_price || 0; // cents
+  const { data: bySym } = await supabaseAdmin
+    .from('securities_c').select('last_price').eq('symbol', isin).maybeSingle();
+  return bySym?.last_price || 0; // cents
 }
 
 // ─── Shared item enrichment helper ────────────────────────────────────────────
@@ -199,22 +200,29 @@ async function enrichItems(items, supabaseAdmin) {
 
   if (shareItems.length) {
     const isins = shareItems.map(i => i.isin);
-    const { data: securities } = await supabaseAdmin
-      .from('securities_c').select('isin, name, logo_url, last_price').in('isin', isins);
-    const secMap = Object.fromEntries((securities || []).map(s => [s.isin, s]));
+    // Query by isin AND by symbol in parallel — many JSE stocks have isin=null in
+    // securities_c and are only indexed by their symbol (e.g. "BHG.JO").
+    const [{ data: byIsin }, { data: bySymbol }] = await Promise.all([
+      supabaseAdmin.from('securities_c').select('isin, symbol, name, logo_url, last_price').in('isin', isins),
+      supabaseAdmin.from('securities_c').select('isin, symbol, name, logo_url, last_price').in('symbol', isins),
+    ]);
+    // Merge: symbol match first so it's overridden by a real isin match when both exist
+    const secMap = {};
+    for (const s of (bySymbol || [])) if (s.symbol) secMap[s.symbol] = s;
+    for (const s of (byIsin   || [])) if (s.isin)   secMap[s.isin]   = s;
     shareItems.forEach(item => {
+      const sec = secMap[item.isin];
       enrichedMap[item.id] = {
         ...item,
-        name: secMap[item.isin]?.name || item.isin,
-        logo_url: secMap[item.isin]?.logo_url || null,
-        price_snapshot_cents: item.price_snapshot_cents || secMap[item.isin]?.last_price || 0,
+        name: sec?.name || item.isin,
+        logo_url: sec?.logo_url || null,
+        price_snapshot_cents: item.price_snapshot_cents || sec?.last_price || 0,
       };
     });
   }
 
   if (basketItems.length) {
     const strategyIds = basketItems.map(i => i.isin);
-
     // Only select columns that actually exist in strategies_c.
     // r_ytd / ytd_as_of_date live in strategies_returns_c — fetched separately below.
     const { data: strategies, error: stratErr } = await supabaseAdmin
@@ -523,9 +531,13 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
 
       let secMap = {};
       if (shareIsins.length) {
-        const { data: securities } = await supabaseAdmin
-          .from('securities_c').select('isin, name, logo_url').in('isin', shareIsins);
-        secMap = Object.fromEntries((securities || []).map(s => [s.isin, s]));
+        // Query by isin AND symbol — JSE stocks often have isin=null in securities_c
+        const [{ data: byIsin }, { data: bySymbol }] = await Promise.all([
+          supabaseAdmin.from('securities_c').select('isin, symbol, name, logo_url').in('isin', shareIsins),
+          supabaseAdmin.from('securities_c').select('isin, symbol, name, logo_url').in('symbol', shareIsins),
+        ]);
+        for (const s of (bySymbol || [])) if (s.symbol) secMap[s.symbol] = s;
+        for (const s of (byIsin   || [])) if (s.isin)   secMap[s.isin]   = s;
         console.log(`[gift-registry] my-registries: secMap resolved=${Object.keys(secMap).length}/${shareIsins.length}`);
       }
 

@@ -125,9 +125,12 @@ const initialGiftToken = (() => {
   return match ? match[1] : null;
 })();
 
-// Detect /registry/:token deep link — public wishlist shared via QR code or link
+// Detect /registry/:token or /gift/:token deep link — public wishlist shared via QR code or link
+// Note: /gift/claim/:token is handled separately above and has two path segments, so it won't match here.
 const initialRegistryToken = (() => {
-  const match = window.location.pathname.match(/^\/registry\/([A-Za-z0-9_-]+)$/);
+  const match =
+    window.location.pathname.match(/^\/registry\/([A-Za-z0-9_-]+)$/) ||
+    window.location.pathname.match(/^\/gift\/([A-Za-z0-9_-]+)$/);
   return match ? match[1] : null;
 })();
 // Persist so we can redirect back here after login/signup
