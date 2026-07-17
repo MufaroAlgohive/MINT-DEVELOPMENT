@@ -2694,6 +2694,12 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
     }, {})
   ); // [[strategyId, [card, card?]], ...]
 
+  // Pending single-security gift holdings — received but not yet broker-filled.
+  // Shown as a "Pending Gift" card so the child can see what was gifted to them.
+  const pendingShareHoldings = holdings.filter(
+    h => !h.strategy_id && !isHoldingFilled(h) && h.security_id
+  );
+
   // Best performing INDIVIDUAL assets — only holdings without a strategy_id.
   // Strategy holdings get surfaced through their own strategy card / detail modal instead.
   const bestAssets = [...holdings]
@@ -3366,6 +3372,44 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
               </div>
             )}
           </motion.div>}
+
+          {/* -- Pending Gift Shares — home tab only — shows gifted single securities awaiting broker fill -- */}
+          {activeChildTab === "home" && pendingShareHoldings.length > 0 && (
+            <motion.div variants={item}>
+              <div className="flex items-center gap-2 mb-3 px-1">
+                <div className="h-2 w-2 rounded-full bg-violet-400 animate-pulse" />
+                <p className="text-[11px] font-bold uppercase tracking-widest text-slate-500">
+                  Pending Gift{pendingShareHoldings.length !== 1 ? "s" : ""}
+                </p>
+              </div>
+              <div className="space-y-2">
+                {pendingShareHoldings.map(h => (
+                  <div
+                    key={h.id}
+                    className="flex items-center gap-3 rounded-2xl bg-white border border-violet-100 shadow-sm p-4"
+                    style={{ background: "linear-gradient(135deg,#fdfbff 0%,#f5f0ff 100%)" }}
+                  >
+                    <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center overflow-hidden rounded-xl bg-violet-50 ring-1 ring-violet-100">
+                      {h.logo_url
+                        ? <img src={h.logo_url} alt={h.symbol} className="h-9 w-9 object-contain" />
+                        : <span className="text-[10px] font-bold text-violet-600">{(h.symbol || "?").substring(0, 3)}</span>}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-bold text-slate-900 truncate">{h.symbol || h.name || "Share"}</p>
+                      <p className="text-[10px] text-slate-500 truncate">{h.name || ""}</p>
+                      {h.quantity > 0 && (
+                        <p className="text-[10px] text-violet-500 font-semibold mt-0.5">{h.quantity} share{h.quantity !== 1 ? "s" : ""} · gifted 🎁</p>
+                      )}
+                    </div>
+                    <div className="text-right flex-shrink-0">
+                      <p className="text-sm font-bold text-violet-700">Pending</p>
+                      <p className="text-[10px] text-violet-400">Awaiting fill</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+          )}
 
           {/* -- Best Performing Assets — home tab only -- */}
           {activeChildTab === "home" && (loading ? (

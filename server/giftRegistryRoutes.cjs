@@ -1386,6 +1386,80 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
           } catch (holdingErr) {
             console.warn('[gift-registry] contribute: pending holdings block error:', holdingErr.message);
           }
+        } else if (recipientUserId && !isBasket && itemIsin) {
+          // ── Single security gift — create one pending holding row ──
+          try {
+            const { data: sec } = await supabaseAdmin
+              .from('securities_c')
+              .select('id, symbol, last_price')
+              .eq('isin', itemIsin)
+              .maybeSingle();
+
+            if (sec?.id) {
+              const now = new Date().toISOString();
+              const investAmountCents = reservation.price_lock_cents * qty;
+
+              // Get intraday price for Expected_fill (what the child sees as fill price)
+              const { data: intraday } = await supabaseAdmin
+                .from('stock_intraday_c')
+                .select('current_price')
+                .eq('security_id', sec.id)
+                .order('timestamp', { ascending: false })
+                .limit(1)
+                .maybeSingle();
+              const expectedFillRands = intraday?.current_price
+                ? Number(intraday.current_price) / 100
+                : (sec.last_price ? sec.last_price / 100 : null);
+
+              // Number of shares the gift amount can buy at current price
+              const sharesQty = sec.last_price > 0
+                ? Math.max(1, Math.floor(investAmountCents / sec.last_price))
+                : qty;
+
+              // Create a transaction so it appears in the child's activity feed
+              let recipientTxId = null;
+              try {
+                const { data: txRow } = await supabaseAdmin.from('transactions').insert({
+                  user_id: recipientUserId,
+                  direction: 'debit',
+                  name: `Purchased ${itemName}`,
+                  description: 'Investment received as wishlist gift',
+                  amount: investAmountCents,
+                  store_reference: `REGISTRY-CONTRIB-${contribution.id}`,
+                  currency: 'ZAR',
+                  status: 'posted',
+                  transaction_date: now,
+                  created_at: now,
+                }).select('id').single();
+                recipientTxId = txRow?.id || null;
+              } catch (txErr) {
+                console.warn('[gift-registry] contribute: single-security tx insert:', txErr.message);
+              }
+
+              // Create pending holding — avg_fill=null signals "pending" to the dashboard
+              try {
+                await supabaseAdmin.from('stock_holdings_c').insert({
+                  user_id: recipientUserId,
+                  security_id: sec.id,
+                  quantity: sharesQty,
+                  avg_fill: null,
+                  market_value: 0,
+                  unrealized_pnl: 0,
+                  as_of_date: null,
+                  Status: 'active',
+                  transaction_id: recipientTxId || null,
+                  Expected_fill: expectedFillRands,
+                });
+                console.log(`[gift-registry] contribute: single-security pending holding created for recipient ${recipientUserId} (${sec.symbol} × ${sharesQty})`);
+              } catch (holdErr) {
+                console.warn('[gift-registry] contribute: single-security holding insert:', holdErr.message);
+              }
+            } else {
+              console.warn('[gift-registry] contribute: single-security — security not found for isin:', itemIsin);
+            }
+          } catch (singleSecErr) {
+            console.warn('[gift-registry] contribute: single-security holdings block error:', singleSecErr.message);
+          }
         }
 
         // ── 2. Notify the gift recipient and parent about the gift ──
