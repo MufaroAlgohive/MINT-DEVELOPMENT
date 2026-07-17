@@ -3127,7 +3127,6 @@ const App = () => {
       setGiftRegistryNavState({ token: pendingRegistryToken, context: "shared_wishlist" });
       setCurrentPage("giftRegistryPublic");
     } else {
-      setLoginTransition({ show: true, label: "welcome" });
       setCurrentPage("home");
     }
     try {
