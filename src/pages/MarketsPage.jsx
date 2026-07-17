@@ -1340,10 +1340,14 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
       <div className="rounded-b-[36px] bg-gradient-to-b from-[#111111] via-[#3b1b7a] to-[#5b21b6] px-4 pb-6 pt-12 text-white md:px-8">
         <div className="mx-auto flex w-full max-w-sm flex-col gap-6 md:max-w-md">
           <header className="flex items-center justify-between text-white">
-            {(onBack || childFilter) ? (
+            {(onBack || childFilter || localChildFilter) ? (
               <button
                 type="button"
-                onClick={onBack || (() => window.dispatchEvent(new CustomEvent("navigate-within-app", { detail: { page: "childDashboard" } })))}
+                onClick={
+                  localChildFilter
+                    ? () => { setLocalChildFilter(null); setViewMode("openstrategies"); }
+                    : onBack || (() => window.dispatchEvent(new CustomEvent("navigate-within-app", { detail: { page: "childDashboard" } })))
+                }
                 aria-label="Back"
                 className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur-sm"
               >
@@ -1365,7 +1369,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                 }
               />
             )}
-            <h1 className="text-sm font-bold tracking-[0.18em] uppercase">{childFilter ? "Child Market" : "Markets"}</h1>
+            <h1 className="text-sm font-bold tracking-[0.18em] uppercase">{(childFilter || localChildFilter) ? "Child Market" : "Markets"}</h1>
             <div className="flex items-center gap-2">
               <div className="relative" ref={wishlistMenuRef}>
                 <button
