@@ -43,6 +43,42 @@ export default function GiftRegistryPublicPage({
   const handleItemUpdate = useCallback(() => reload(), [reload]);
   useGiftRegistryRealtime(registry?.id, handleItemUpdate);
 
+  // ── KYC debug: log state whenever it changes so we can trace timing issues
+  useEffect(() => {
+    console.log('[GiftRegistry][KYC_DEBUG] state:', {
+      userId: user?.id ?? null,
+      isKycComplete,
+      isAuthLoading,
+      canGift: !!user && isKycComplete,
+      needsKyc: !!user && !isKycComplete && !isAuthLoading,
+    });
+    if (!user) return;
+    // Also fetch the server-side status so we can compare client vs server
+    (async () => {
+      try {
+        const sb = await supabaseReady;
+        const { data: { session } } = await sb.auth.getSession();
+        if (!session?.access_token) return;
+        const res = await fetch('/api/onboarding/status', {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        });
+        const json = await res.json();
+        console.log('[GiftRegistry][KYC_DEBUG] server onboarding status:', {
+          is_fully_onboarded: json.is_fully_onboarded,
+          kyc_status: json.onboarding?.kyc_status,
+          sumsub_raw_keys: json.onboarding?.sumsub_raw
+            ? Object.keys(typeof json.onboarding.sumsub_raw === 'string'
+                ? JSON.parse(json.onboarding.sumsub_raw)
+                : json.onboarding.sumsub_raw)
+            : null,
+        });
+      } catch (e) {
+        console.warn('[GiftRegistry][KYC_DEBUG] onboarding fetch failed:', e.message);
+      }
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, isKycComplete, isAuthLoading]);
+
   useEffect(() => {
     if (!token || !user) return;
     let cancelled = false;

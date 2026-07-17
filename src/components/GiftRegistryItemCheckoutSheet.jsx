@@ -145,7 +145,32 @@ export default function GiftRegistryItemCheckoutSheet({ item, registryId, onSucc
       const json = await res.json();
       if (!res.ok) {
         if (json.code === "SOLD_OUT") setError("This item is no longer available to gift.");
-        else if (json.code === "KYC_INCOMPLETE") { setShowKycPrompt(true); return; }
+        else if (json.code === "KYC_INCOMPLETE") {
+          // Debug: fetch the onboarding status so we can see exactly what the server sees
+          try {
+            const sb2 = await supabaseReady;
+            const { data: { session: s2 } } = await sb2.auth.getSession();
+            if (s2?.access_token) {
+              const dbg = await fetch('/api/onboarding/status', {
+                headers: { Authorization: `Bearer ${s2.access_token}` },
+              });
+              const dbgJson = await dbg.json();
+              console.warn('[GiftRegistry][KYC_DEBUG] reserve blocked — onboarding status:', {
+                is_fully_onboarded: dbgJson.is_fully_onboarded,
+                kyc_status: dbgJson.onboarding?.kyc_status,
+                sumsub_raw_keys: dbgJson.onboarding?.sumsub_raw
+                  ? Object.keys(typeof dbgJson.onboarding.sumsub_raw === 'string'
+                      ? JSON.parse(dbgJson.onboarding.sumsub_raw)
+                      : dbgJson.onboarding.sumsub_raw)
+                  : null,
+              });
+            }
+          } catch (dbgErr) {
+            console.warn('[GiftRegistry][KYC_DEBUG] could not fetch onboarding status:', dbgErr.message);
+          }
+          setShowKycPrompt(true);
+          return;
+        }
         else if (res.status === 401) setError("Your session has expired. Please sign in again to gift.");
         else setError(json.error || "Could not reserve. Please try again.");
         return;
