@@ -329,7 +329,7 @@ export default function GiftRegistryPublicPage({
                 onGift={handleGiftTap}
                 isOwner={false}
                 canGift={canGift && !isClosed}
-                needsKyc={!!user && !isKycComplete}
+                needsKyc={!!user && !isKycComplete && !isAuthLoading}
                 onAuthPrompt={onAuthPrompt}
                 alreadyGifted={myGiftedItemIds.has(item.id)}
                 startDate={eventDate}

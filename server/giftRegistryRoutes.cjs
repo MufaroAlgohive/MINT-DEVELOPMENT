@@ -116,13 +116,47 @@ async function isKycComplete(userId, supabaseAdmin) {
   try {
     const { data, error } = await supabaseAdmin
       .from('user_onboarding')
-      .select('kyc_status')
+      .select('kyc_status, sumsub_raw')
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle();
-    const result = !error && !!data && ['approved', 'onboarding_complete', 'verified'].includes(data.kyc_status);
-    console.log(`[gift-registry] isKycComplete userId=${userId} kyc_status=${data?.kyc_status} error=${error?.message} result=${result}`);
+
+    if (error || !data) {
+      console.log(`[gift-registry] isKycComplete userId=${userId} result=false (no row or query error: ${error?.message})`);
+      return false;
+    }
+
+    // Mirror exactly the logic used by /api/onboarding/status so the server
+    // never rejects a user the frontend considers fully onboarded.
+
+    // "onboarding_complete" is the definitive completed-flow marker.
+    if (data.kyc_status === 'onboarding_complete') {
+      console.log(`[gift-registry] isKycComplete userId=${userId} kyc_status=onboarding_complete result=true`);
+      return true;
+    }
+
+    const kycDone = ['approved', 'onboarding_complete', 'verified'].includes(data.kyc_status);
+    let raw = {};
+    try { raw = typeof data.sumsub_raw === 'string' ? JSON.parse(data.sumsub_raw) : (data.sumsub_raw || {}); } catch {}
+
+    const signed = !!raw?.signed_at || !!raw?.account_agreement_signed;
+
+    // Grandfathering: KYC-approved + signature = all onboarding steps treated as done.
+    if (kycDone && signed) {
+      console.log(`[gift-registry] isKycComplete userId=${userId} kyc_status=${data.kyc_status} grandfathered=true result=true`);
+      return true;
+    }
+
+    // Non-grandfathered: every step must be individually complete.
+    const taxDone      = !!raw?.tax_details_saved;
+    const bankDone     = !!raw?.bank_details_saved;
+    const mandateDone  = !!raw?.mandate_data?.agreedMandate || !!raw?.mandate_accepted;
+    const riskDone     = !!raw?.risk_disclosure_accepted;
+    const sofDone      = !!raw?.source_of_funds_accepted;
+    const termsDone    = !!raw?.terms_accepted;
+    const result = kycDone && taxDone && bankDone && mandateDone && riskDone && sofDone && termsDone && signed;
+    console.log(`[gift-registry] isKycComplete userId=${userId} kyc_status=${data.kyc_status} result=${result}`);
     return result;
   } catch (e) {
     console.warn(`[gift-registry] isKycComplete THREW userId=${userId} err=${e.message}`);
