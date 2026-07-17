@@ -35,6 +35,31 @@ export default async function handler(req, res) {
       .eq('id', itemId).eq('gift_event_id', registryId).single();
     if (!item) return res.status(404).json({ error: 'Item not found or does not belong to this registry' });
 
+    // Auto-release the caller's OWN stale HELD reservation(s) on this item before
+    // computing availability. Items are usually target_quantity=1, so an abandoned
+    // checkout (user went back / closed the sheet) would otherwise block them from
+    // gifting again until the 10-min hold expires.
+    // Only ever touches reservations owned by this user — never another gifter's hold.
+    const { data: ownHeld } = await supabaseAdmin
+      .from('gift_reservations')
+      .select('id, quantity')
+      .eq('registry_item_id', itemId)
+      .eq('gifter_user_id', user.id)
+      .eq('status', 'HELD');
+
+    if (ownHeld?.length) {
+      const ownHeldQty = ownHeld.reduce((sum, r) => sum + (r.quantity || 0), 0);
+      await supabaseAdmin
+        .from('gift_reservations')
+        .update({ status: 'RELEASED' })
+        .in('id', ownHeld.map(r => r.id));
+      item.reserved_quantity = Math.max(0, item.reserved_quantity - ownHeldQty);
+      await supabaseAdmin
+        .from('gift_registry_items')
+        .update({ reserved_quantity: item.reserved_quantity, updated_at: new Date().toISOString() })
+        .eq('id', itemId);
+    }
+
     const available = item.target_quantity - item.filled_quantity - item.reserved_quantity;
     if (quantity > available) {
       return res.status(409).json({ error: 'Not enough shares available', code: 'SOLD_OUT', remaining: available });
