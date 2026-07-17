@@ -1,0 +1,146 @@
+vendor-supabase-D45aZRic.js:44  GET https://mfxnghmuccevsxwcetej.supabase.co/rest/v1/stock_intraday_c?select=security_id%2Ccurrent_price%2C1d_pct%2C1d_abs%2Ctimestamp&order=timestamp.desc 500 (Internal Server Error)
+(anonymous) @ vendor-supabase-D45aZRic.js:44
+(anonymous) @ vendor-supabase-D45aZRic.js:44
+await in (anonymous)
+(anonymous) @ vendor-supabase-D45aZRic.js:1
+then @ vendor-supabase-D45aZRic.js:1
+requestIdleCallback
+(anonymous) @ index-2B8tovuz.js:96
+setTimeout
+(anonymous) @ index-2B8tovuz.js:96
+ju @ vendor-recharts-BfjPiJtV.js:8
+ha @ vendor-recharts-BfjPiJtV.js:8
+(anonymous) @ vendor-recharts-BfjPiJtV.js:8
+I @ vendor-recharts-BfjPiJtV.js:1
+F @ vendor-recharts-BfjPiJtV.js:1
+postMessage
+re @ vendor-recharts-BfjPiJtV.js:1
+F @ vendor-recharts-BfjPiJtV.js:1
+postMessage
+re @ vendor-recharts-BfjPiJtV.js:1
+he @ vendor-recharts-BfjPiJtV.js:1
+e.unstable_scheduleCallback @ vendor-recharts-BfjPiJtV.js:1
+J0 @ vendor-recharts-BfjPiJtV.js:8
+Vt @ vendor-recharts-BfjPiJtV.js:8
+jr @ vendor-recharts-BfjPiJtV.js:8
+Bu @ vendor-recharts-BfjPiJtV.js:8
+Uu.render.Wd.render @ vendor-recharts-BfjPiJtV.js:8
+(anonymous) @ index-2B8tovuz.js:96
+Promise.finally
+(anonymous) @ index-2B8tovuz.js:96
+index-2B8tovuz.js:2 ❌ Error fetching from stock_intraday_c: {code: '57014', details: null, hint: null, message: 'canceling statement due to statement timeout'}
+Xh @ index-2B8tovuz.js:2
+await in Xh
+v @ index-2B8tovuz.js:96
+requestIdleCallback
+(anonymous) @ index-2B8tovuz.js:96
+setTimeout
+(anonymous) @ index-2B8tovuz.js:96
+ju @ vendor-recharts-BfjPiJtV.js:8
+ha @ vendor-recharts-BfjPiJtV.js:8
+(anonymous) @ vendor-recharts-BfjPiJtV.js:8
+I @ vendor-recharts-BfjPiJtV.js:1
+F @ vendor-recharts-BfjPiJtV.js:1
+postMessage
+re @ vendor-recharts-BfjPiJtV.js:1
+F @ vendor-recharts-BfjPiJtV.js:1
+postMessage
+re @ vendor-recharts-BfjPiJtV.js:1
+he @ vendor-recharts-BfjPiJtV.js:1
+e.unstable_scheduleCallback @ vendor-recharts-BfjPiJtV.js:1
+J0 @ vendor-recharts-BfjPiJtV.js:8
+Vt @ vendor-recharts-BfjPiJtV.js:8
+jr @ vendor-recharts-BfjPiJtV.js:8
+Bu @ vendor-recharts-BfjPiJtV.js:8
+Uu.render.Wd.render @ vendor-recharts-BfjPiJtV.js:8
+(anonymous) @ index-2B8tovuz.js:96
+Promise.finally
+(anonymous) @ index-2B8tovuz.js:96
+index-2B8tovuz.js:2 💥 Exception while fetching securities with metrics: {code: '57014', details: null, hint: null, message: 'canceling statement due to statement timeout'}
+Xh @ index-2B8tovuz.js:2
+await in Xh
+v @ index-2B8tovuz.js:96
+requestIdleCallback
+(anonymous) @ index-2B8tovuz.js:96
+setTimeout
+(anonymous) @ index-2B8tovuz.js:96
+ju @ vendor-recharts-BfjPiJtV.js:8
+ha @ vendor-recharts-BfjPiJtV.js:8
+(anonymous) @ vendor-recharts-BfjPiJtV.js:8
+I @ vendor-recharts-BfjPiJtV.js:1
+F @ vendor-recharts-BfjPiJtV.js:1
+postMessage
+re @ vendor-recharts-BfjPiJtV.js:1
+F @ vendor-recharts-BfjPiJtV.js:1
+postMessage
+re @ vendor-recharts-BfjPiJtV.js:1
+he @ vendor-recharts-BfjPiJtV.js:1
+e.unstable_scheduleCallback @ vendor-recharts-BfjPiJtV.js:1
+J0 @ vendor-recharts-BfjPiJtV.js:8
+Vt @ vendor-recharts-BfjPiJtV.js:8
+jr @ vendor-recharts-BfjPiJtV.js:8
+Bu @ vendor-recharts-BfjPiJtV.js:8
+Uu.render.Wd.render @ vendor-recharts-BfjPiJtV.js:8
+(anonymous) @ index-2B8tovuz.js:96
+Promise.finally
+(anonymous) @ index-2B8tovuz.js:96
+GiftRegistryPublicPage-CDOmqzyS.js:1  GET https://mint-development.vercel.app/api/gift-registry/public/seDY4DS7LNMPctYx9u352YOYYYh-LXal/my-contributions 404 (Not Found)
+(anonymous) @ GiftRegistryPublicPage-CDOmqzyS.js:1
+await in (anonymous)
+(anonymous) @ GiftRegistryPublicPage-CDOmqzyS.js:1
+ju @ vendor-recharts-BfjPiJtV.js:8
+ha @ vendor-recharts-BfjPiJtV.js:8
+(anonymous) @ vendor-recharts-BfjPiJtV.js:8
+I @ vendor-recharts-BfjPiJtV.js:1
+F @ vendor-recharts-BfjPiJtV.js:1
+postMessage
+re @ vendor-recharts-BfjPiJtV.js:1
+he @ vendor-recharts-BfjPiJtV.js:1
+e.unstable_scheduleCallback @ vendor-recharts-BfjPiJtV.js:1
+J0 @ vendor-recharts-BfjPiJtV.js:8
+Vt @ vendor-recharts-BfjPiJtV.js:8
+jr @ vendor-recharts-BfjPiJtV.js:8
+WC @ vendor-recharts-BfjPiJtV.js:6
+(anonymous) @ index-2B8tovuz.js:7
+await in (anonymous)
+(anonymous) @ index-2B8tovuz.js:7
+ju @ vendor-recharts-BfjPiJtV.js:8
+ha @ vendor-recharts-BfjPiJtV.js:8
+(anonymous) @ vendor-recharts-BfjPiJtV.js:8
+I @ vendor-recharts-BfjPiJtV.js:1
+F @ vendor-recharts-BfjPiJtV.js:1
+postMessage
+re @ vendor-recharts-BfjPiJtV.js:1
+F @ vendor-recharts-BfjPiJtV.js:1
+postMessage
+re @ vendor-recharts-BfjPiJtV.js:1
+he @ vendor-recharts-BfjPiJtV.js:1
+e.unstable_scheduleCallback @ vendor-recharts-BfjPiJtV.js:1
+J0 @ vendor-recharts-BfjPiJtV.js:8
+Vt @ vendor-recharts-BfjPiJtV.js:8
+jr @ vendor-recharts-BfjPiJtV.js:8
+WC @ vendor-recharts-BfjPiJtV.js:6
+rt @ AuthPage-Cg6pLewX.js:1
+await in rt
+Ok @ vendor-recharts-BfjPiJtV.js:5
+Ak @ vendor-recharts-BfjPiJtV.js:5
+_k @ vendor-recharts-BfjPiJtV.js:5
+bg @ vendor-recharts-BfjPiJtV.js:5
+xg @ vendor-recharts-BfjPiJtV.js:5
+(anonymous) @ vendor-recharts-BfjPiJtV.js:5
+Dd @ vendor-recharts-BfjPiJtV.js:8
+_y @ vendor-recharts-BfjPiJtV.js:5
+Df @ vendor-recharts-BfjPiJtV.js:5
+mf @ vendor-recharts-BfjPiJtV.js:5
+Uk @ vendor-recharts-BfjPiJtV.js:5
+GiftRegistryPublicPage-CDOmqzyS.js:1  POST https://mint-development.vercel.app/api/gift-registry/reserve 403 (Forbidden)
+F @ GiftRegistryPublicPage-CDOmqzyS.js:1
+await in F
+(anonymous) @ GiftRegistryPublicPage-CDOmqzyS.js:1
+ju @ vendor-recharts-BfjPiJtV.js:8
+ha @ vendor-recharts-BfjPiJtV.js:8
+aj @ vendor-recharts-BfjPiJtV.js:8
+vi @ vendor-recharts-BfjPiJtV.js:8
+q0 @ vendor-recharts-BfjPiJtV.js:8
+Dn @ vendor-recharts-BfjPiJtV.js:6
+(anonymous) @ vendor-recharts-BfjPiJtV.js:8

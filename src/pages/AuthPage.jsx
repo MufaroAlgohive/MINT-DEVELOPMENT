@@ -61,7 +61,7 @@ const AuthPage = ({ initialStep, onSignupComplete, onLoginComplete, onPreLogin }
           .from('app_settings')
           .select('is_enabled')
           .limit(1)
-          .single();
+          .maybeSingle();
 
         if (!error && data) {
           setIsEnabled(data.is_enabled);
