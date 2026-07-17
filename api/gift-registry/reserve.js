@@ -10,9 +10,15 @@ export default async function handler(req, res) {
     if (authError || !user) return res.status(401).json({ error: 'Unauthorized' });
 
     // Decision 1 & 3: KYC check
+    // Check user_onboarding.kyc_status — covers both Sumsub and Experian flows.
+    // user_onboarding_pack_details is Sumsub-only and is missing for Experian users.
     const { data: onboarding } = await supabaseAdmin
-      .from('user_onboarding_pack_details').select('id').eq('user_id', user.id).single();
-    if (!onboarding) return res.status(403).json({ error: 'Complete your verification to gift', code: 'KYC_INCOMPLETE' });
+      .from('user_onboarding')
+      .select('kyc_status')
+      .eq('user_id', user.id)
+      .maybeSingle();
+    const kycOk = onboarding && ['approved', 'onboarding_complete', 'verified'].includes(onboarding.kyc_status);
+    if (!kycOk) return res.status(403).json({ error: 'Complete your verification to gift', code: 'KYC_INCOMPLETE' });
 
     const { itemId, quantity, registryId } = req.body;
     if (!itemId || !quantity || quantity < 1) return res.status(400).json({ error: 'Invalid request' });
