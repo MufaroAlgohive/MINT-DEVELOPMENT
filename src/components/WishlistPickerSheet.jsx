@@ -303,24 +303,15 @@ export default function WishlistPickerSheet({ itemKey, onClose, onSaved, onCreat
                         whileTap={{ scale: list.isClosed ? 1 : 0.95 }}
                         onClick={() => handlePick(list)}
                         disabled={!!saving}
-                        className="relative rounded-2xl p-4 text-left shadow-sm overflow-hidden"
+                        className="relative rounded-2xl p-3.5 text-left shadow-sm overflow-hidden flex flex-col gap-2"
                         style={{
                           minHeight: 110,
                           background: `linear-gradient(135deg, ${fromColor}, ${toColor})`,
                           opacity: list.isClosed ? 0.55 : 1,
                         }}
                       >
-                        {/* Asset mosaic preview — prefer strategy snapshot logos */}
-                        <WishlistPreviewGrid
-                          items={
-                            Array.isArray(list.preview_logos) && list.preview_logos.length > 0
-                              ? list.preview_logos
-                              : Array.isArray(list.items) ? list.items : []
-                          }
-                        />
-
                         {list.isClosed && (
-                          <div className="absolute inset-0 z-10" style={{ background: "rgba(0,0,0,0.25)" }} />
+                          <div className="absolute inset-0 z-10 rounded-2xl" style={{ background: "rgba(0,0,0,0.25)" }} />
                         )}
 
                         <AnimatePresence>
@@ -338,35 +329,45 @@ export default function WishlistPickerSheet({ itemKey, onClose, onSaved, onCreat
                           )}
                         </AnimatePresence>
 
-                        {/* Text content — sits above the mosaic via z-index */}
-                        <div className="relative z-10 flex flex-col h-full justify-between">
-                          <div className="flex items-start justify-between mb-2">
-                            {list.isClosed ? (
-                              <Lock size={14} className="text-white/80 drop-shadow" />
-                            ) : (
-                              <Heart size={16} className="fill-white/70 text-white/70 drop-shadow" />
+                        {/* Row 1: icon + badges */}
+                        <div className="relative z-10 flex items-center justify-between">
+                          {list.isClosed ? (
+                            <Lock size={13} className="text-white/80 drop-shadow" />
+                          ) : (
+                            <Heart size={14} className="fill-white/70 text-white/70 drop-shadow" />
+                          )}
+                          <div className="flex items-center gap-1">
+                            {!childFamilyMemberId && list.beneficiaryType === 'CHILD' && list.beneficiaryName && (
+                              <span className="flex items-center gap-0.5 rounded-full bg-white/20 backdrop-blur-sm px-1.5 py-0.5 text-[9px] font-bold text-white/90 drop-shadow leading-none">
+                                <Baby size={8} className="flex-shrink-0" />
+                                {list.beneficiaryName.split(' ')[0]}
+                              </span>
                             )}
-                            <div className="flex items-center gap-1">
-                              {/* Child badge — shown in parent view for child-owned registries */}
-                              {!childFamilyMemberId && list.beneficiaryType === 'CHILD' && list.beneficiaryName && (
-                                <span className="flex items-center gap-0.5 rounded-full bg-white/20 backdrop-blur-sm px-1.5 py-0.5 text-[9px] font-bold text-white/90 drop-shadow leading-none">
-                                  <Baby size={8} className="flex-shrink-0" />
-                                  {list.beneficiaryName.split(' ')[0]}
-                                </span>
-                              )}
-                              {isSaving && !isSaved && (
-                                <div className="h-4 w-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />
-                              )}
-                            </div>
+                            {isSaving && !isSaved && (
+                              <div className="h-4 w-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />
+                            )}
                           </div>
-                          <div>
-                            <p className="text-[13px] font-bold text-white leading-tight line-clamp-2 pr-1 drop-shadow">{list.name}</p>
-                            <p className="text-[11px] text-white/80 mt-0.5 drop-shadow">
-                              {list.isClosed
-                                ? "Closed"
-                                : `${list.items?.filter(i => i.status !== 'REMOVED')?.length || list.items?.length || 0} ${((list.items?.filter(i => i.status !== 'REMOVED')?.length || list.items?.length || 0) === 1) ? "item" : "items"}`}
-                            </p>
-                          </div>
+                        </div>
+
+                        {/* Row 2: logo strip — normal flow, no overlap with text */}
+                        <div className="relative z-10">
+                          <WishlistPreviewGrid
+                            items={
+                              Array.isArray(list.preview_logos) && list.preview_logos.length > 0
+                                ? list.preview_logos
+                                : Array.isArray(list.items) ? list.items : []
+                            }
+                          />
+                        </div>
+
+                        {/* Row 3: name + count */}
+                        <div className="relative z-10 mt-auto">
+                          <p className="text-[12px] font-bold text-white leading-tight line-clamp-1 drop-shadow">{list.name}</p>
+                          <p className="text-[10px] text-white/80 mt-0.5 drop-shadow">
+                            {list.isClosed
+                              ? "Closed"
+                              : `${list.items?.filter(i => i.status !== 'REMOVED')?.length || list.items?.length || 0} ${((list.items?.filter(i => i.status !== 'REMOVED')?.length || list.items?.length || 0) === 1) ? "item" : "items"}`}
+                          </p>
                         </div>
                       </motion.button>
                     );
