@@ -287,7 +287,7 @@ const App = () => {
       .from('app_settings')
       .select('is_enabled')
       .limit(1)
-      .single()
+      .maybeSingle()
       .then(({ data, error }) => {
         if (!error && data) fetchAndEnforce(data.is_enabled);
       })
