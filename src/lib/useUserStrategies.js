@@ -3,6 +3,7 @@ import { supabase } from "./supabase";
 import { higherOfCostPerShareRands, fetchStrategyCashCents } from "./strategyValuation";
 import { getStrategyPriceHistory } from "./strategyData";
 import { registerCacheResetCallback } from "./userCacheReset.js";
+import { fetchApprovedReturns, clearApprovedReturnsCache } from "./approvedReturns.js";
 
 // Cost basis per share in Rands for a snapshot/holding row.
 // Prefers Expected_fill (the price the client saw at click time, in rands) over
@@ -23,6 +24,7 @@ const _cachedStrategiesDataMap = {};
 
 export function clearUserStrategiesCache() {
   Object.keys(_cachedStrategiesDataMap).forEach(k => delete _cachedStrategiesDataMap[k]);
+  clearApprovedReturnsCache();
 }
 
 registerCacheResetCallback(clearUserStrategiesCache);
@@ -101,7 +103,7 @@ export const useUserStrategies = (familyMemberId = null) => {
         ? activeQuery.eq("family_member_id", familyMemberId)
         : activeQuery.is("family_member_id", null);
 
-      const [allReturnsResult, strategiesResult, residualResult, closedResult, activeResult] = await Promise.all([
+      const [allReturnsResult, strategiesResult, residualResult, closedResult, activeResult, approvedReturns] = await Promise.all([
         returnsQuery.order("as_of_date", { ascending: false }),
         supabase
           .from("strategies_c")
@@ -110,6 +112,7 @@ export const useUserStrategies = (familyMemberId = null) => {
         residualQuery,
         closedQuery,
         activeQuery,
+        fetchApprovedReturns(session, familyMemberId),
       ]);
 
       /* Value positions straight from holdings (NOT the EOD returns snapshot):
@@ -174,7 +177,18 @@ export const useUserStrategies = (familyMemberId = null) => {
         return;
       }
 
-      const allReturns = allReturnsResult.data || [];
+      const approvedClientRows = approvedReturns?.client_returns || [];
+      const approvedStrategyIds = new Set(approvedClientRows.map((row) => row.strategy_id));
+      const allReturns = [
+        ...approvedClientRows.slice().reverse().map((row) => ({
+          ...row,
+          basket_value: row.complete_nav_cents,
+          ytd_pct: row.gross_strategy_twr_pct,
+          inception_pnl: row.strategy_pnl_cents,
+          approved_repair: true,
+        })),
+        ...(allReturnsResult.data || []).filter((row) => !approvedStrategyIds.has(row.strategy_id)),
+      ];
 
       const residualRandsByStrategy = {};
       (residualResult?.data || []).forEach((row) => {
@@ -228,7 +242,10 @@ export const useUserStrategies = (familyMemberId = null) => {
         const positionsVal = Number((positionsByStrategy[strategyId] || 0).toFixed(2));
         const investedBase = Number((costBasisByStrategy[strategyId] || 0).toFixed(2));
         /* Portfolio value = live positions + cash element (residual + buffer). */
-        const currentVal = Number((positionsVal + cashElement).toFixed(2));
+        const approvedRow = returnsRow.approved_repair ? returnsRow : null;
+        const currentVal = approvedRow
+          ? Number((Number(approvedRow.complete_nav_cents || 0) / 100).toFixed(2))
+          : Number((positionsVal + cashElement).toFixed(2));
         /* P&L = realised (locked in from rebalance sells) + unrealised (paper
            gain on the CURRENT open positions). A rebalance just converts
            unrealised → realised, so the TOTAL stays stable across rebalances —
@@ -241,8 +258,12 @@ export const useUserStrategies = (familyMemberId = null) => {
            exactly as before — backward compatible.) */
         const realizedPnl = Number((realizedRandsByStrategy[strategyId] || 0).toFixed(2));
         const unrealizedPnl = Number((positionsVal - investedBase).toFixed(2));
-        const totalPnl = Number((unrealizedPnl + realizedPnl).toFixed(2));
-        const invested = Number((currentVal - totalPnl).toFixed(2));
+        const totalPnl = approvedRow
+          ? Number((Number(approvedRow.strategy_pnl_cents || 0) / 100).toFixed(2))
+          : Number((unrealizedPnl + realizedPnl).toFixed(2));
+        const invested = approvedRow
+          ? Number((Number(approvedRow.opening_performance_nav_cents || 0) / 100).toFixed(2))
+          : Number((currentVal - totalPnl).toFixed(2));
         const changePct = invested > 0 ? (totalPnl / invested) * 100 : 0;
         const ytdPctDecimal = returnsRow.ytd_pct != null ? returnsRow.ytd_pct / 100 : null;
 
