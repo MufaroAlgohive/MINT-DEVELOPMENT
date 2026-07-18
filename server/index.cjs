@@ -12743,6 +12743,33 @@ async function computeAndSaveStrategyReturns() {
       console.warn('[strategy-returns] No symbols in strategy holdings'); return;
     }
 
+    // Returns must resolve the effective composition and global continuity-cash
+    // rule. Reading current holdings alone cannot preserve a rebalance boundary.
+    const strategyIds = strategies.map((s) => s.id);
+    const [{ data: compositionRows, error: compositionErr }, { data: valuationRows, error: valuationErr }] = await Promise.all([
+      db.from('strategy_composition_log_c')
+        .select('strategy_id,effective_from,effective_to,holdings')
+        .in('strategy_id', strategyIds)
+        .lte('effective_from', todayStr)
+        .order('effective_from', { ascending: false }),
+      db.from('strategy_valuation_rules_c')
+        .select('strategy_id,effective_from,continuity_cash_per_lot_cents,status')
+        .in('strategy_id', strategyIds)
+        .in('status', ['ACTIVE', 'SUPERSEDED'])
+        .lte('effective_from', todayStr)
+        .order('effective_from', { ascending: false }),
+    ]);
+    if (compositionErr || valuationErr) {
+      console.error('[strategy-returns] Canonical boundary metadata unavailable:', compositionErr?.message || valuationErr?.message);
+      return;
+    }
+    const compositionMap = {};
+    for (const row of (compositionRows || [])) {
+      if (!compositionMap[row.strategy_id] && (!row.effective_to || row.effective_to >= todayStr)) compositionMap[row.strategy_id] = row;
+    }
+    const valuationMap = {};
+    for (const row of (valuationRows || [])) if (!valuationMap[row.strategy_id]) valuationMap[row.strategy_id] = row;
+
     const baseSymbolList = Array.from(allBaseSymbols);
     // Query both bare ("NED") and JSE format ("NED.JO") — DB may use either
     const querySymbolList = [
@@ -12866,15 +12893,18 @@ async function computeAndSaveStrategyReturns() {
     //    so they are safe to use for YTD calculations.
     const { data: latestRows } = await db
       .from('stock_intraday_c')
-      .select('symbol, current_price')
+      .select('symbol, current_price, timestamp')
       .in('symbol', querySymbolList)
       .order('timestamp', { ascending: false });
 
     const latestPriceMap = {}; // base → cents
+    const latestPriceAtMap = {};
     for (const row of (latestRows || [])) {
       const base = toBase(row.symbol);
-      if (!latestPriceMap[base] && row.current_price > 0)
+      if (!latestPriceMap[base] && row.current_price > 0) {
         latestPriceMap[base] = row.current_price;
+        latestPriceAtMap[base] = row.timestamp;
+      }
     }
 
     // 4b. Previous EOD price per base-symbol from stock_returns_c.
@@ -12882,16 +12912,19 @@ async function computeAndSaveStrategyReturns() {
     //     stock_returns_c is populated from stock_intraday_c so its prices are also guarded.
     const { data: eodRows } = await db
       .from('stock_returns_c')
-      .select('symbol, current_price')
+      .select('symbol, current_price, as_of_date')
       .in('symbol', querySymbolList)
       .lt('as_of_date', todayStr)
       .order('as_of_date', { ascending: false });
 
     const prevEodMap = {}; // base → cents (most recent EOD price before today)
+    const prevEodAtMap = {};
     for (const row of (eodRows || [])) {
       const base = toBase(row.symbol);
-      if (!prevEodMap[base] && row.current_price > 0)
+      if (!prevEodMap[base] && row.current_price > 0) {
         prevEodMap[base] = row.current_price;
+        prevEodAtMap[base] = `${row.as_of_date}T15:30:00+02:00`;
+      }
     }
     console.log(`[strategy-returns] prevEodMap: ${Object.keys(prevEodMap).length} symbols resolved`);
 
@@ -12975,7 +13008,7 @@ async function computeAndSaveStrategyReturns() {
     //    with prevEodMap (stock_returns_c) as fallback when intraday is unavailable.
     //    securities_c.last_price is NOT used here — it has no anomaly guard and can carry
     //    corrupt values from a bad external price feed.
-    const basketYtdReturn = (holdings) => {
+    const basketYtdReturn = (holdings, continuityCashCents = 0) => {
       let todayVal = 0, anchorVal = 0, matched = 0;
       for (const { symbol, shares } of holdings) {
         const anchorPrice = _ytdAnchorCache[symbol];
@@ -12987,7 +13020,7 @@ async function computeAndSaveStrategyReturns() {
         matched++;
       }
       if (!anchorVal || !matched) return null;
-      return ((todayVal / anchorVal) - 1) * 100;
+      return (((todayVal + continuityCashCents) / (anchorVal + continuityCashCents)) - 1) * 100;
     };
 
     // 7. Compute + write per strategy
@@ -13008,14 +13041,19 @@ async function computeAndSaveStrategyReturns() {
     const perStrategyResults = await Promise.all(
       strategies.map(s =>
         db
-          .from('strategies_returns_c')
-          .select('strategy_id, ytd_pct, basket_value, as_of_date, "1d_pct"')
+          .from('strategy_returns_effective_c')
+          .select('strategy_id, ytd_pct, basket_value_cents, as_of_date, "1d_pct", composition_effective_from')
           .eq('strategy_id', s.id)
           .gte('as_of_date', yearStart)
           .lt('as_of_date', todayStr)
           .order('as_of_date', { ascending: false })
       )
     );
+    const effectiveReadError = perStrategyResults.find((result) => result.error)?.error;
+    if (effectiveReadError) {
+      console.error('[strategy-returns] Canonical return view unavailable; refusing legacy write:', effectiveReadError.message);
+      return;
+    }
 
     const prevYtdMap  = {}; // strategy_id → most-recent { ytd_pct, basket_value, as_of_date }
     const chainYtdMap = {}; // strategy_id → chain-linked ytd % through yesterday
@@ -13027,8 +13065,9 @@ async function computeAndSaveStrategyReturns() {
       // Most-recent row (rows are DESC) — used for prevBasket
       prevYtdMap[sid] = {
         ytd_pct:    rows[0].ytd_pct,
-        basket_value: rows[0].basket_value,
+        basket_value: rows[0].basket_value_cents,
         as_of_date:   rows[0].as_of_date,
+        composition_effective_from: rows[0].composition_effective_from,
       };
 
       // Chain-linked YTD: multiply (1 + 1d_pct/100) ascending (reverse of DESC fetch).
@@ -13080,21 +13119,41 @@ async function computeAndSaveStrategyReturns() {
         // Basket value today (cents) — used for 1d_pct chain and stored for next day's calc
         let basketValueToday = 0;
         let basketMatched = 0;
+        const usedPriceTimes = [];
         for (const { symbol, shares } of holdings) {
           const price = latestPriceMap[symbol] || prevEodMap[symbol];
           if (!price) continue;
           basketValueToday += shares * price;
           basketMatched++;
+          const priceAt = latestPriceAtMap[symbol] || prevEodAtMap[symbol];
+          if (priceAt) usedPriceTimes.push(new Date(priceAt).getTime());
         }
         const basketValueCents = basketMatched === holdings.length ? Math.round(basketValueToday) : null;
+
+        const composition = compositionMap[strategy.id];
+        const valuation = valuationMap[strategy.id];
+        if (!composition || !valuation) {
+          console.warn(`[strategy-returns] BLOCKED for "${strategy.name}": missing effective composition or valuation rule.`);
+          blocked++;
+          continue;
+        }
+        const continuityCashCents = Number(valuation.continuity_cash_per_lot_cents || 0);
+        const completeValueCents = basketValueCents == null ? null : basketValueCents + continuityCashCents;
 
         // 1d_pct — today's basket vs yesterday's stored basket_value (chain-linked).
         // Using the STORED basket avoids rebalance-day artifacts: both sides reflect
         // the actual portfolio value (old template yesterday, new template today).
         const prev = prevYtdMap[strategy.id];
         const prevBasket = prev?.basket_value ? Number(prev.basket_value) : null;
-        const oneDayPct = (basketValueCents && prevBasket)
-          ? parseFloat((((basketValueCents - prevBasket) / prevBasket) * 100).toFixed(6))
+        const compositionChanged = Boolean(prev?.composition_effective_from)
+          && prev.composition_effective_from !== composition.effective_from;
+        if (compositionChanged) {
+          console.warn(`[strategy-returns] BOUNDARY BLOCKED for "${strategy.name}": composition changed from ${prev.composition_effective_from} to ${composition.effective_from}; settlement must publish the reconciled bridge.`);
+          blocked++;
+          continue;
+        }
+        const oneDayPct = (completeValueCents && prevBasket)
+          ? parseFloat((((completeValueCents - prevBasket) / prevBasket) * 100).toFixed(6))
           : null;
 
         const fmt = (v) => v !== null ? parseFloat(v.toFixed(4)) : null;
@@ -13124,29 +13183,47 @@ async function computeAndSaveStrategyReturns() {
             ytd = chainPrev;
           } else {
             // No prior rows this year — seed with current-template vs Dec-31 anchor
-            ytd = basketYtdReturn(holdings);
+            ytd = basketYtdReturn(holdings, continuityCashCents);
           }
         }
 
-        // Delete any existing row for today first (avoids duplicates)
-        await db
-          .from('strategies_returns_c')
-          .delete()
-          .eq('strategy_id', strategy.id)
-          .eq('as_of_date', todayStr);
+        const oldestUsedPriceAt = usedPriceTimes.length === holdings.length
+          ? new Date(Math.min(...usedPriceTimes)).toISOString()
+          : null;
+        const previousChainFactor = chainYtdMap[strategy.id] == null
+          ? null
+          : 1 + chainYtdMap[strategy.id] / 100;
+        const chainFactor = previousChainFactor == null
+          ? 1 + ytd / 100
+          : previousChainFactor * (1 + (oneDayPct || 0) / 100);
 
-        const { error: insertErr } = await db
-          .from('strategies_returns_c')
-          .insert({
-            strategy_id:   strategy.id,
-            as_of_date:    todayStr,
-            basket_value:  basketValueCents,
-            '1d_pct':      oneDayPct,
-            ytd_pct:       fmt(ytd),
-            '5d_pct':      fmt(r5d),
-            '1m_pct':      fmt(r1m),
-            '6m_pct':      fmt(r6m),
-          });
+        // One atomic, idempotent RPC validates price coverage/freshness, complete
+        // value, composition snapshot and chain reconciliation before publishing.
+        // Never delete the previous production row first.
+        const { error: insertErr } = await db.rpc('publish_guarded_strategy_return', {
+          p_strategy_id: strategy.id,
+          p_as_of_date: todayStr,
+          p_source_run_id: null,
+          p_securities_value_cents: basketValueCents,
+          p_continuity_cash_cents: continuityCashCents,
+          p_complete_value_cents: completeValueCents,
+          p_covered_holdings: basketMatched,
+          p_expected_holdings: holdings.length,
+          p_freshest_price_at: oldestUsedPriceAt,
+          p_composition_effective_from: composition.effective_from,
+          p_holdings_snapshot: composition.holdings,
+          p_boundary_bridge_pct: null,
+          p_chain_factor: chainFactor,
+          p_ytd_pct: fmt(ytd),
+          p_checks: {
+            publisher: 'mint-server-strategy-returns-v2',
+            one_day_pct: oneDayPct,
+            five_day_pct: fmt(r5d),
+            one_month_pct: fmt(r1m),
+            six_month_pct: fmt(r6m),
+            price_timestamp_is_oldest_used: true,
+          },
+        });
 
         if (insertErr) {
           console.error(`[strategy-returns] Insert failed for "${strategy.name}":`, insertErr.message);
@@ -13217,7 +13294,7 @@ app.get('/api/strategy-returns/status', async (req, res) => {
       .eq('status', 'active');
 
     const { data: rows } = await db
-      .from('strategies_returns_c')
+      .from('strategy_returns_effective_c')
       .select('strategy_id, as_of_date, ytd_pct')
       .in('strategy_id', (strategies || []).map(s => s.id))
       .order('as_of_date', { ascending: false });
