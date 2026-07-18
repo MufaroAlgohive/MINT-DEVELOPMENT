@@ -8,15 +8,7 @@ const MaintenanceScreen = () => (
     <div className="flex flex-1 flex-col items-center justify-center px-8 py-16 text-center">
       {/* Logo */}
       <div className="mb-10">
-        <img src="/mint-logo.svg" alt="Mint" className="h-10 mx-auto" onError={e => { e.target.style.display = 'none'; }} />
-        <span className="text-2xl font-bold tracking-tight" style={{ color: '#4f2d8a' }}>MINT</span>
-      </div>
-
-      {/* Icon */}
-      <div className="mb-8 flex items-center justify-center w-20 h-20 rounded-full bg-purple-50">
-        <svg xmlns="http://www.w3.org/2000/svg" className="w-10 h-10 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M11.42 15.17 17.25 21A2.652 2.652 0 0 0 21 17.25l-5.877-5.877M11.42 15.17l2.496-3.03c.317-.384.74-.626 1.208-.766M11.42 15.17l-4.655 5.653a2.548 2.548 0 1 1-3.586-3.586l5.654-4.655m5.71-4.978a9.027 9.027 0 0 1-3.051 1.273M5.093 11.95a9.03 9.03 0 0 1-.46-1.273M15 9a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
-        </svg>
+        <span className="mint-brand text-3xl font-semibold tracking-[0.2em]">MINT</span>
       </div>
 
       <h1 className="text-2xl font-bold text-gray-900 mb-4 leading-snug">
