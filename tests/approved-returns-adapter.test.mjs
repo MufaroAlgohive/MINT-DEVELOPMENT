@@ -7,6 +7,9 @@ const hook = fs.readFileSync(new URL("../src/lib/useUserStrategies.js", import.m
 
 assert.match(api, /authenticateUser/);
 assert.match(api, /\.eq\("user_id", user\.id\)/);
+assert.match(api, /client_strategy_returns_effective_c/);
+assert.match(api, /strategy_returns_effective_c/);
+assert.match(api, /CANONICAL_EFFECTIVE_VIEW/);
 assert.match(api, /\.eq\("status", "PROMOTED"\)/);
 assert.match(api, /strategy_pnl_cents: Math\.round\(opening \* twr \/ 100\)/);
 assert.match(adapter, /Authorization: `Bearer \$\{session\.access_token\}`/);
@@ -16,4 +19,4 @@ assert.match(hook, /ytd_pct: row\.gross_strategy_twr_pct/);
 assert.match(hook, /approvedRow\.strategy_pnl_cents/);
 assert.match(hook, /approvedRow\.opening_performance_nav_cents/);
 
-console.log("approved returns adapter: 10/10 green");
+console.log("approved returns adapter: 13/13 green");

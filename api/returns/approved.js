@@ -8,6 +8,36 @@ export default async function handler(req, res) {
   if (!supabaseAdmin) return res.status(503).json({ success: false, error: "Approved returns service is not configured" });
 
   const familyMemberId = String(req.query?.family_member_id || "").trim() || null;
+  let effectiveClientQuery = supabaseAdmin
+    .from("client_strategy_returns_effective_c")
+    .select("strategy_id,as_of_date,securities_value_cents,residual_cash_cents,unused_reserve_cents,accrued_liability_cents,basket_value_cents,ytd_pct,inception_pct,inception_pnl_cents,net_cash_pnl_cents,net_cash_return_pct,opening_performance_nav_cents,source_kind,repair_run_id")
+    .eq("user_id", user.id)
+    .order("as_of_date", { ascending: true });
+  effectiveClientQuery = familyMemberId
+    ? effectiveClientQuery.eq("family_member_id", familyMemberId)
+    : effectiveClientQuery.is("family_member_id", null);
+  const [effectiveStrategies, effectiveClients] = await Promise.all([
+    supabaseAdmin.from("strategy_returns_effective_c")
+      .select('strategy_id,as_of_date,basket_value_cents,complete_value_cents,"1d_pct","5d_pct","1m_pct",mtd_pct,ytd_pct,source_kind,repair_run_id')
+      .order("as_of_date", { ascending: true }),
+    effectiveClientQuery,
+  ]);
+  if (!effectiveStrategies.error && !effectiveClients.error) {
+    return res.status(200).json({
+      success: true,
+      source: "CANONICAL_EFFECTIVE_VIEW",
+      run: { status: "EFFECTIVE" },
+      strategy_returns: (effectiveStrategies.data || []).map(row => ({ ...row, chain_nav_cents: row.basket_value_cents })),
+      client_returns: (effectiveClients.data || []).map(row => ({
+        ...row,
+        complete_nav_cents: row.basket_value_cents,
+        gross_strategy_twr_pct: row.ytd_pct,
+        strategy_pnl_cents: row.inception_pnl_cents,
+      })),
+    });
+  }
+  console.warn("[approved returns] canonical views unavailable; using promoted shadow fallback", effectiveStrategies.error?.message || effectiveClients.error?.message);
+
   const { data: runs, error: runError } = await supabaseAdmin
     .from("return_repair_runs_c")
     .select("id,repair_key,status,methodology_version,promoted_at")
