@@ -639,7 +639,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
 
         // Fetch latest returns for each strategy from strategies_returns_c
         const { data: returns, error } = await supabase
-          .from("strategies_returns_c")
+          .from("strategy_returns_effective_c")
           .select("strategy_id, ytd_pct, as_of_date")
           .in("strategy_id", strategyIds)
           .order("as_of_date", { ascending: false });
@@ -990,7 +990,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
         const yearStart = `${currentYear}-01-01`;
 
         const { data: dailyReturns, error } = await supabase
-          .from("strategies_returns_c")
+          .from("strategy_returns_effective_c")
           .select("strategy_id, as_of_date, \"1d_pct\"")
           .eq("strategy_id", strategyId)
           .gte("as_of_date", yearStart)

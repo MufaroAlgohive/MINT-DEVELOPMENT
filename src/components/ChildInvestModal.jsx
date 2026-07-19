@@ -97,7 +97,7 @@ export default function ChildInvestModal({
         if (!strategyId) return;
         const yearStart = `${new Date().getFullYear()}-01-01`;
         const { data } = await supabase
-          .from("strategies_returns_c")
+          .from("strategy_returns_effective_c")
           .select("strategy_id, as_of_date, \"1d_pct\"")
           .eq("strategy_id", strategyId)
           .gte("as_of_date", yearStart)
