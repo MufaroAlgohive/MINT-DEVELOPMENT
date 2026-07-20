@@ -28,6 +28,7 @@ const InvestAmountPage = ({ onBack, strategy, onContinue, paymentMethod, startWi
   const [showMandateModal, setShowMandateModal] = useState(false);
   const [feeExpanded, setFeeExpanded] = useState(false);
   const [giftEnabled, setGiftEnabled] = useState(startWithGiftOpen);
+  const [giftSheetOpen, setGiftSheetOpen] = useState(startWithGiftOpen);
 
   useEffect(() => {
     if (minimumInvestment && minimumInvestment > 0) {
@@ -298,7 +299,8 @@ const InvestAmountPage = ({ onBack, strategy, onContinue, paymentMethod, startWi
 
         <GiftToggleV2
           enabled={giftEnabled}
-          onToggle={setGiftEnabled}
+          onToggle={(val) => { setGiftEnabled(val); if (!val) setGiftSheetOpen(false); }}
+          onSheetOpenChange={setGiftSheetOpen}
           onDone={onGiftDone}
           security={{ id: currentStrategy.id, symbol: currentStrategy.name, name: currentStrategy.name }}
           assetType="strategy"
@@ -309,8 +311,8 @@ const InvestAmountPage = ({ onBack, strategy, onContinue, paymentMethod, startWi
 
         <div className="mt-4" />
 
-        {/* Continue Button or Onboarding Block */}
-        {!giftEnabled && !isLoadingStatus && !isFullyOnboarded ? (
+        {/* Continue Button or Onboarding Block — show when gift mode is off OR sheet is closed */}
+        {(!giftEnabled || !giftSheetOpen) && !isLoadingStatus && !isFullyOnboarded ? (
           <div className="w-full rounded-2xl border border-rose-200 bg-rose-50 p-4 text-center">
             <h3 className="text-sm font-semibold text-rose-800 mb-2">
               Onboarding Required
@@ -332,7 +334,7 @@ const InvestAmountPage = ({ onBack, strategy, onContinue, paymentMethod, startWi
               Complete Onboarding
             </button>
           </div>
-        ) : !giftEnabled && (
+        ) : (!giftEnabled || !giftSheetOpen) && (
           <button
             type="button"
             onClick={handleContinue}

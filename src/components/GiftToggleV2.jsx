@@ -253,6 +253,7 @@ export default function GiftToggleV2({
   enabled,
   onToggle,
   onDone,
+  onSheetOpenChange, // (isOpen: bool) => void — called when sheet opens or closes
   security,
   totalCostCents,
   amountDisplay,
@@ -268,7 +269,9 @@ export default function GiftToggleV2({
 
   // Sheet open state — separate from `enabled` so closing the sheet doesn't turn off gift mode
   const [sheetOpen, setSheetOpen] = useState(false);
-  useEffect(() => { if (enabled) setSheetOpen(true); }, [enabled]);
+  const openSheet  = () => { setSheetOpen(true);  onSheetOpenChange?.(true);  };
+  const closeSheet = () => { setSheetOpen(false); onSheetOpenChange?.(false); };
+  useEffect(() => { if (enabled) openSheet(); }, [enabled]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [step, setStep] = useState("picker");
   const [inputMode, setInputMode] = useState("mint");
@@ -481,7 +484,7 @@ export default function GiftToggleV2({
 
   function handleClose() {
     resetForm();
-    setSheetOpen(false);
+    closeSheet();
     // Do NOT call onToggle(false) — closing the sheet keeps gift mode on
   }
 
