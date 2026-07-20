@@ -180,6 +180,11 @@ const SwipeableBalanceCard = ({
   // True when the user has fewer snapshot rows than the window requires (new investor).
   // In this case 5D/M fall through to displayReturn (all-time P&L) rather than showing a misleading value.
   const [parentMDInsufficientData, setParentMDInsufficientData] = useState(false);
+  // D-tab snapshot data — fetched from client_strategy_returns_c to match portfolio tab exactly
+  const [parentDayPnlCents, setParentDayPnlCents] = useState(null);
+  const [parentDayLastBasketCents, setParentDayLastBasketCents] = useState(null);
+  const [parentDayPrevBasketCents, setParentDayPrevBasketCents] = useState(null);
+  const [parentDayLastSnapshotDate, setParentDayLastSnapshotDate] = useState(null);
   const [childSnapshotCount, setChildSnapshotCount] = useState(null);
   const [childLivePriceMap, setChildLivePriceMap] = useState({});
   const [yearStartBasketCents, setYearStartBasketCents] = useState(null);
@@ -354,7 +359,7 @@ const SwipeableBalanceCard = ({
   // scoped to selected strategy/asset when one is chosen.
   const holdingsForD = useMemo(() => {
     const individual = dbData.holdings.filter(
-      h => !h.isStrategy && Number(h.avg_fill || 0) > 0 && !!h.Fill_date
+      h => !h.isStrategy && Number(h.avg_fill || 0) > 0
     );
     if (selectedStrategyId) return individual.filter(h => (h.strategyId || h.strategy_id) === selectedStrategyId);
     if (selectedAsset && !selectedAsset.isStrategy) return individual.filter(h => h.security_id === selectedAsset.security_id);
@@ -1079,6 +1084,60 @@ const SwipeableBalanceCard = ({
     return () => { clearInterval(id); };
   }, [activeTab, childMode, holdingsForD]);
 
+  // ── D tab: fetch 1d_pnl + last-2 basket_values from client_strategy_returns_c ──
+  // Mirrors exactly how NewPortfolioPage.jsx reads snapshotRows["1d_pnl"] for the D badge.
+  // This replaces the homeTodayMetrics 1d_abs calculation which has wrong-sign issues for JSE stocks.
+  useEffect(() => {
+    if (activeTab !== "d" || childMode || !userId) {
+      setParentDayPnlCents(null);
+      setParentDayLastBasketCents(null);
+      setParentDayPrevBasketCents(null);
+      setParentDayLastSnapshotDate(null);
+      return;
+    }
+    const strategyIds = parentStrategyKey ? parentStrategyKey.split(",").filter(Boolean) : [];
+    if (!strategyIds.length) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        let total1dPnlCents = 0;
+        let totalLastBasket = 0;
+        let totalPrevBasket = 0;
+        let lastDate = null;
+        let hasData = false;
+        await Promise.all(strategyIds.map(async (sid) => {
+          const { data } = await supabase
+            .from("client_strategy_returns_c")
+            .select("as_of_date, basket_value, 1d_pnl")
+            .eq("user_id", userId)
+            .eq("strategy_id", sid)
+            .is("family_member", null)
+            .order("as_of_date", { ascending: false })
+            .limit(2);
+          if (!data?.length) return;
+          const last = data[0];
+          const prev = data[1];
+          if (last?.["1d_pnl"] != null) {
+            total1dPnlCents += Number(last["1d_pnl"]);
+            totalLastBasket += Number(last.basket_value || 0);
+            if (prev) totalPrevBasket += Number(prev.basket_value || 0);
+            if (!lastDate || last.as_of_date > lastDate) lastDate = last.as_of_date;
+            hasData = true;
+          }
+        }));
+        if (!cancelled && hasData) {
+          setParentDayPnlCents(total1dPnlCents);
+          setParentDayLastBasketCents(totalLastBasket);
+          setParentDayPrevBasketCents(totalPrevBasket);
+          setParentDayLastSnapshotDate(lastDate);
+        }
+      } catch (e) {
+        console.warn("[SwipeableBalanceCard] D-tab snapshot fetch error:", e.message);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [activeTab, childMode, userId, parentStrategyKey]);
+
   // NOTE: a client-side trigger to /api/parent-live-returns used to live here, but
   // that endpoint was never implemented — it 404'd on every render (fire-and-forget)
   // and did nothing. Parent YTD/period returns are computed client-side from
@@ -1114,6 +1173,12 @@ const SwipeableBalanceCard = ({
         if (!latestRow) { setIntradayChartData([]); setIntradayLoading(false); return; }
         const tradingDay = latestRow.timestamp.slice(0, 10);
 
+        // Don't show a previous day's intraday session labelled as "Today" — if
+        // the most recent data is from a prior calendar day (market not yet open)
+        // return nothing so the D tab shows no chart instead of stale data.
+        const _todayUTC = new Date().toISOString().slice(0, 10);
+        if (tradingDay !== _todayUTC) { setIntradayChartData([]); setIntradayLoading(false); return; }
+
         // Paginate in batches of 1000 to bypass Supabase server-side row cap
         const PAGE = 1000;
         let intradayRows = [];
@@ -1137,12 +1202,23 @@ const SwipeableBalanceCard = ({
         if (cancelled) return;
         if (!intradayRows.length) { setIntradayChartData([]); setIntradayLoading(false); return; }
 
-        // Derive yesterday's closing price per security from the latest 1d_abs value:
-        // yesterday_close = current_price - 1d_abs (1d_abs = today's change vs yesterday's close)
         const latestBySecId = {};
         for (const row of intradayRows) {
           latestBySecId[row.security_id] = row;
         }
+
+        // Use snapshot basket_value as baseline — same logic as NewPortfolioPage's intraday chart.
+        // This avoids Yahoo Finance's unreliable 1d_abs sign for JSE stocks.
+        // snapshotHasToday → EOD already ran today, yesterday's close is prevBasket.
+        // Otherwise → lastBasket IS yesterday's close (EOD hasn't run yet for today).
+        const snapshotHasToday = parentDayLastSnapshotDate === _todayUTC;
+        const snapshotBaseline = parentDayLastBasketCents != null
+          ? ((snapshotHasToday && parentDayPrevBasketCents)
+              ? parentDayPrevBasketCents / 100
+              : parentDayLastBasketCents / 100)
+          : null;
+
+        // Fallback: cost basis from holdings (last resort)
         const totalCostBasis = holdingsForD.reduce((sum, h) => {
           const avgFillCents = Number(h.avg_fill || 0);
           const avgFillRands = avgFillCents / 100;
@@ -1150,12 +1226,8 @@ const SwipeableBalanceCard = ({
           const expectedRands = expectedRaw > 0 ? (expectedRaw > avgFillRands * 5 ? expectedRaw / 100 : expectedRaw) : 0;
           return sum + (expectedRands > 0 ? expectedRands : avgFillRands) * Math.abs(Number(h.quantity || 0));
         }, 0);
-        const baselineRands = securityIds.reduce((sum, sid) => {
-          const row = latestBySecId[sid];
-          if (!row) return sum;
-          const yesterdayCloseCents = Number(row.current_price) - Number(row["1d_abs"] || 0);
-          return sum + (yesterdayCloseCents / 100) * (qtyMap[sid] || 0);
-        }, 0) || totalCostBasis;
+
+        const baselineRands = snapshotBaseline ?? totalCostBasis;
 
         // Group into 5-minute buckets
         const bucketMap = new Map();
@@ -1205,7 +1277,7 @@ const SwipeableBalanceCard = ({
     })();
 
     return () => { cancelled = true; };
-  }, [activeTab, childMode, holdingsForD, intradayTick]);
+  }, [activeTab, childMode, holdingsForD, intradayTick, parentDayLastBasketCents, parentDayPrevBasketCents, parentDayLastSnapshotDate]);
 
   useEffect(() => {
     let chartCancelled = false;
@@ -1756,11 +1828,23 @@ const SwipeableBalanceCard = ({
   // user invested entirely this year → YTD = All-time = displayReturn. Never use chart periodReturn for YTD.
   const useParentYtdTab = !childMode && activeTab === "ytd";
 
-  // D tab uses today's intraday P&L from the live price poll
-  const useHomeTodayD = activeTab === "d" && !childMode && homeTodayMetrics != null;
+  // D tab badge — prefer snapshot 1d_pnl (same source as portfolio tab) over the
+  // 1d_abs-based homeTodayMetrics, which has wrong-sign issues for JSE stocks.
+  const parentDayPnlRands = parentDayPnlCents !== null ? parentDayPnlCents / 100 : null;
+  const parentDayPct = (() => {
+    if (parentDayPnlRands === null) return 0;
+    const base = (parentDayPrevBasketCents && parentDayPrevBasketCents > 0)
+      ? parentDayPrevBasketCents / 100
+      : (parentDayLastBasketCents && parentDayLastBasketCents > 0 ? parentDayLastBasketCents / 100 : 0);
+    return base > 0 ? (parentDayPnlRands / base) * 100 : 0;
+  })();
+  // useHomeTodayD: snapshot data takes priority; falls back to homeTodayMetrics while snapshot loads
+  const useHomeTodayD = activeTab === "d" && !childMode && (parentDayPnlRands !== null || homeTodayMetrics != null);
+  const _homeDPnl = parentDayPnlRands !== null ? parentDayPnlRands : homeTodayMetrics?.todayPnl ?? 0;
+  const _homeDPct = parentDayPnlRands !== null ? parentDayPct : homeTodayMetrics?.todayPct ?? 0;
 
   const activeReturn = useHomeTodayD
-    ? homeTodayMetrics.todayPnl
+    ? _homeDPnl
     : useChildLiveYtd
       ? childLiveMetrics.pnl
       : useParentLiveYtd
@@ -1776,7 +1860,7 @@ const SwipeableBalanceCard = ({
 
   const activeReturnPct = displayBigValue > 0
     ? (useHomeTodayD
-        ? Math.abs(homeTodayMetrics.todayPct).toFixed(1)
+        ? Math.abs(_homeDPct).toFixed(1)
         : (useChildLiveYtd
             ? Math.abs(childLiveMetrics.pct).toFixed(1)
             : (useParentMD && parentMDLivePct !== null

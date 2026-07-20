@@ -1391,14 +1391,15 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                         <div className="flex gap-1">
                           {[
                             { id: "D", label: "D" },
-                            { id: "5d", label: "5D" },
-                            { id: "m", label: "M" },
+                            { id: "5d", label: "5D", hidden: true },
+                            { id: "m", label: "M", hidden: true },
                             { id: "ytd", label: "YTD" },
+                            { id: "all", label: "All" },
                           ].map((filter) => (
                             <button
                               key={filter.id}
                               onClick={() => setTimeFilter(filter.id)}
-                              className={`px-3 h-9 rounded-full text-sm font-bold transition-all ${timeFilter === filter.id
+                              className={`px-3 h-9 rounded-full text-sm font-bold transition-all ${filter.hidden ? "hidden" : ""} ${timeFilter === filter.id
                                   ? "bg-slate-700/80 text-white shadow-lg backdrop-blur-md border border-white/20"
                                   : "text-slate-400 hover:text-slate-600 hover:bg-slate-200/30"
                                 }`}
@@ -1474,6 +1475,7 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
                                   {timeFilter === "5d" && <span className="text-[10px] text-slate-400 font-medium">5 days</span>}
                                   {timeFilter === "m" && <span className="text-[10px] text-slate-400 font-medium">1 month</span>}
                                   {timeFilter === "ytd" && <span className="text-[10px] text-slate-400 font-medium">YTD</span>}
+                                  {timeFilter === "all" && <span className="text-[10px] text-slate-400 font-medium">All time</span>}
                                 </div>
                               )}
                             </>
