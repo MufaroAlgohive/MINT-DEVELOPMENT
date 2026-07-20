@@ -732,27 +732,7 @@ export default function GiftStrategyPickerPage({ onBack, onNavigate, autoOpenWis
                 </p>
               </motion.div>
 
-              {/* Child market CTA — only shown when NOT already in child market mode */}
-              {!childMarketMode && (
-                <motion.button
-                  type="button"
-                  initial={{ opacity: 0, y: 6 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.4, delay: 0.25 }}
-                  onClick={() => setShowChildMarketPrompt(true)}
-                  className="flex w-full items-center gap-2 rounded-2xl bg-white/10 border border-white/10 px-3.5 py-2.5 mb-1 text-left hover:bg-white/15 transition active:scale-[0.98]"
-                >
-                  <Baby size={13} className="text-violet-300 flex-shrink-0" />
-                  <p className="text-[11px] text-white/70 flex-1">
-                    Browsing for a child?{" "}
-                    <span className="font-semibold text-violet-300 underline underline-offset-2">
-                      View Child Strategies
-                    </span>
-                  </p>
-                </motion.button>
-              )}
-
-              {/* Category pills */}
+              {/* Category pills + Child Strategies pill */}
               <div className="flex gap-2 overflow-x-auto scrollbar-hide pt-2 pb-1">
                 {sectors.map((sector, i) => (
                   <motion.div
@@ -768,6 +748,19 @@ export default function GiftStrategyPickerPage({ onBack, onNavigate, autoOpenWis
                     />
                   </motion.div>
                 ))}
+                {!childMarketMode && (
+                  <motion.button
+                    type="button"
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.35, delay: 0.25 + sectors.length * 0.05 }}
+                    onClick={() => setShowChildMarketPrompt(true)}
+                    className="flex-shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-semibold whitespace-nowrap transition-all bg-violet-500/30 text-violet-200 hover:bg-violet-500/45 border border-violet-400/30"
+                  >
+                    <Baby size={12} className="flex-shrink-0" />
+                    Child Strategies
+                  </motion.button>
+                )}
               </div>
             </>
           )}
