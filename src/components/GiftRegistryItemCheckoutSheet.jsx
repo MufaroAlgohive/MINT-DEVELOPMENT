@@ -95,13 +95,10 @@ export default function GiftRegistryItemCheckoutSheet({ item, registryId, onSucc
   const [showKycPrompt, setShowKycPrompt] = useState(false);
   const reserveTriggered = useRef(false);
 
-  // UI max: how many shares are still available to gift.
-  // Default to a generous cap (99) so the server validates the actual limit —
-  // the reserve endpoint will return SOLD_OUT if the user goes over what's left.
-  const remaining = item.target_quantity != null
-    ? Math.max(0, item.target_quantity - (item.filled_quantity ?? 0))
-    : 99;
-  const maxQty = Math.max(minQty + 1, remaining);
+  // UI max: always allow up to 999 — the server's reserve endpoint returns
+  // SOLD_OUT if the user exceeds actual capacity, so we don't need to replicate
+  // that logic here. A tight local cap was incorrectly blocking valid quantities.
+  const maxQty = 999;
 
   const {
     ISIN_FEE_PER_ASSET,

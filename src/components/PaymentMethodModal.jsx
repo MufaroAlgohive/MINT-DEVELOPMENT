@@ -448,7 +448,11 @@ const PaymentMethodModal = ({
                         {formatAmount(bufferedBase)}
                       </p>
                     )}
-                    <p className="text-xs text-slate-400 mt-0.5">{localQty} share{localQty !== 1 ? "s" : ""}</p>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      {localQty} {numAssets > 0
+                        ? (localQty !== 1 ? "baskets" : "basket")
+                        : (localQty !== 1 ? "shares" : "share")}
+                    </p>
                   </div>
                   <button
                     onClick={() => handleQtyChange(localQty + 1)}
