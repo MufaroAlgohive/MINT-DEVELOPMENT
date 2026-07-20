@@ -159,7 +159,21 @@ export default async function handler(req, res) {
     return res.status(200).send(html);
   }
 
-  // Last resort: redirect to home; App.jsx handles deep links via hash/state
-  res.setHeader('Location', '/');
-  return res.status(302).send('');
+  // Last resort: serve a minimal HTML that preserves the registry token in
+  // localStorage before redirecting to /, so App.jsx can still open the
+  // correct wishlist after the SPA boots (same mechanism as the full path).
+  return res.status(200).send(`<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>${esc(title)}</title>
+  ${ogTags}
+  <script>
+    try { localStorage.setItem('mint_pending_registry_token', ${JSON.stringify(token)}); } catch(e) {}
+    window.location.replace('/');
+  </script>
+</head>
+<body></body>
+</html>`);
 }
