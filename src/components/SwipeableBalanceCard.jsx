@@ -185,6 +185,9 @@ const SwipeableBalanceCard = ({
   const [parentDayLastBasketCents, setParentDayLastBasketCents] = useState(null);
   const [parentDayPrevBasketCents, setParentDayPrevBasketCents] = useState(null);
   const [parentDayLastSnapshotDate, setParentDayLastSnapshotDate] = useState(null);
+  // D-tab: individual stock holdings fetched directly from stock_holdings_c for strategy users
+  // (dbData.holdings only has isStrategy=true aggregates for parent users, so holdingsForD is empty)
+  const [homeDirectStratHoldings, setHomeDirectStratHoldings] = useState([]);
   const [childSnapshotCount, setChildSnapshotCount] = useState(null);
   const [childLivePriceMap, setChildLivePriceMap] = useState({});
   const [yearStartBasketCents, setYearStartBasketCents] = useState(null);
@@ -1084,6 +1087,39 @@ const SwipeableBalanceCard = ({
     return () => { clearInterval(id); };
   }, [activeTab, childMode, holdingsForD]);
 
+  // ── D tab: fetch individual stock holdings from stock_holdings_c for strategy users ──
+  // Mirrors NewPortfolioPage's directStratHoldings fetch. dbData.holdings only has
+  // isStrategy=true aggregate rows for parent users, so holdingsForD is empty; we
+  // need the actual per-security rows to build the intraday chart.
+  useEffect(() => {
+    if (activeTab !== "d" || childMode || !userId) {
+      setHomeDirectStratHoldings([]);
+      return;
+    }
+    const strategyIds = parentStrategyKey ? parentStrategyKey.split(",").filter(Boolean) : [];
+    if (!strategyIds.length) { setHomeDirectStratHoldings([]); return; }
+    let cancelled = false;
+    (async () => {
+      try {
+        const results = await Promise.all(strategyIds.map(sid =>
+          supabase
+            .from("stock_holdings_c")
+            .select("security_id, quantity, avg_fill, Expected_fill, strategy_id, last_price")
+            .eq("user_id", userId)
+            .is("family_member_id", null)
+            .eq("strategy_id", sid)
+            .gt("avg_fill", 0)
+            .eq("Status", "active")
+            .then(({ data }) => data || [])
+        ));
+        if (!cancelled) setHomeDirectStratHoldings(results.flat());
+      } catch (e) {
+        console.warn("[SwipeableBalanceCard] D-tab holdings fetch error:", e.message);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [activeTab, childMode, userId, parentStrategyKey]);
+
   // ── D tab: fetch 1d_pnl + last-2 basket_values from client_strategy_returns_c ──
   // Mirrors exactly how NewPortfolioPage.jsx reads snapshotRows["1d_pnl"] for the D badge.
   // This replaces the homeTodayMetrics 1d_abs calculation which has wrong-sign issues for JSE stocks.
@@ -1150,11 +1186,20 @@ const SwipeableBalanceCard = ({
   // match the home card's existing recharts schema (dataKey="v", tooltip key "d").
   useEffect(() => {
     if (activeTab !== "d") { setIntradayChartData(null); return; }
-    if (childMode || holdingsForD.length === 0) { setIntradayChartData([]); setIntradayLoading(false); return; }
+    if (childMode) { setIntradayChartData([]); setIntradayLoading(false); return; }
 
-    const securityIds = [...new Set(holdingsForD.map(h => h.security_id).filter(Boolean))];
+    // For strategy/parent users dbData.holdings only has isStrategy=true rows so holdingsForD
+    // is empty. Fall back to homeDirectStratHoldings (fetched directly from stock_holdings_c).
+    const sourceHoldings = holdingsForD.length > 0 ? holdingsForD : homeDirectStratHoldings;
+    if (sourceHoldings.length === 0) {
+      // Still loading homeDirectStratHoldings — show skeleton, don't blank the chart yet
+      setIntradayLoading(true);
+      return;
+    }
+
+    const securityIds = [...new Set(sourceHoldings.map(h => h.security_id).filter(Boolean))];
     const qtyMap = {};
-    holdingsForD.forEach(h => { qtyMap[h.security_id] = Math.abs(Number(h.quantity || 0)); });
+    sourceHoldings.forEach(h => { qtyMap[h.security_id] = Math.abs(Number(h.quantity || 0)); });
 
     let cancelled = false;
     setIntradayLoading(true);
@@ -1219,7 +1264,7 @@ const SwipeableBalanceCard = ({
           : null;
 
         // Fallback: cost basis from holdings (last resort)
-        const totalCostBasis = holdingsForD.reduce((sum, h) => {
+        const totalCostBasis = sourceHoldings.reduce((sum, h) => {
           const avgFillCents = Number(h.avg_fill || 0);
           const avgFillRands = avgFillCents / 100;
           const expectedRaw = Number(h.Expected_fill || 0);
@@ -1277,7 +1322,7 @@ const SwipeableBalanceCard = ({
     })();
 
     return () => { cancelled = true; };
-  }, [activeTab, childMode, holdingsForD, intradayTick, parentDayLastBasketCents, parentDayPrevBasketCents, parentDayLastSnapshotDate]);
+  }, [activeTab, childMode, holdingsForD, homeDirectStratHoldings, intradayTick, parentDayLastBasketCents, parentDayPrevBasketCents, parentDayLastSnapshotDate]);
 
   useEffect(() => {
     let chartCancelled = false;
