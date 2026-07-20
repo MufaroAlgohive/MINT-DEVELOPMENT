@@ -85,7 +85,7 @@ function KycRequiredModal({ onClose }) {
 export default function GiftRegistryItemCheckoutSheet({ item, registryId, onSuccess, onClose }) {
   const minQty = item.min_tranche_quantity ?? calcMinTrancheForAsset(item.price_snapshot_cents);
 
-  const [step, setStep] = useState("quantity"); // "quantity" | "reserving" | "message"
+  const [step, setStep] = useState("reserving"); // "reserving" | "message"
   const [quantity, setQuantity] = useState(minQty);
   const [gifterMessage, setGifterMessage] = useState("");
   const [loading, setLoading] = useState(false);
@@ -128,7 +128,16 @@ export default function GiftRegistryItemCheckoutSheet({ item, registryId, onSucc
     return { baseAmount, bufferedBase, brokerAmount, isinTotal, walletTxFee, ozowTxFee, walletTotal, ozowTotal };
   }, [quantity, priceCents, numAssets, CASH_BUFFER_RATE, BROKER_FEE_RATE, ISIN_FEE_PER_ASSET, WALLET_TRANSACTION_FEE_RATE, OZOW_TRANSACTION_FEE_RATE]);
 
-  async function handleReserve() {
+  // Re-reserve with a new quantity (called from PaymentMethodModal when user taps +/−).
+  // The server auto-releases any existing HELD reservation for this user+item, so no
+  // explicit cancel step is needed before calling this.
+  async function handleRereserve(newQty) {
+    setQuantity(newQty);
+    setReserved(null);
+    await handleReserve(newQty);
+  }
+
+  async function handleReserve(qty = quantity) {
     setLoading(true);
     setError(null);
     try {
@@ -147,7 +156,7 @@ export default function GiftRegistryItemCheckoutSheet({ item, registryId, onSucc
       const res = await fetch("/api/gift-registry/reserve", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ itemId: item.id, quantity, registryId }),
+        body: JSON.stringify({ itemId: item.id, quantity: qty, registryId }),
       });
       const json = await res.json();
       if (!res.ok) {
@@ -191,14 +200,13 @@ export default function GiftRegistryItemCheckoutSheet({ item, registryId, onSucc
     }
   }
 
-  // Reserve once the user has confirmed their quantity and we enter the "reserving" step.
+  // Reserve automatically as soon as the sheet opens.
   useEffect(() => {
-    if (step !== "reserving") return;
     if (reserveTriggered.current) return;
     reserveTriggered.current = true;
     handleReserve();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step]);
+  }, []);
 
   async function handleWalletPayment(totalAmount) {
     setLoading(true);
@@ -321,75 +329,6 @@ export default function GiftRegistryItemCheckoutSheet({ item, registryId, onSucc
           <div className="w-full max-w-md bg-white rounded-t-3xl px-6 pt-6 pb-10 shadow-2xl">
             <div className="w-10 h-1 bg-gray-200 rounded-full mx-auto mb-5" />
 
-            {/* ── Step 0: Quantity picker ── */}
-            {step === "quantity" && (() => {
-              const totalRands = (quantity * (item.price_snapshot_cents ?? 0) / 100) * 1.08;
-              const formattedTotal = `R\u00A0${totalRands.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-              return (
-                <>
-                  {/* Item header */}
-                  <div className="flex items-center gap-3 mb-6">
-                    {item.logo_url ? (
-                      <img src={item.logo_url} className="w-10 h-10 rounded-xl border border-gray-100" alt={item.name} />
-                    ) : (
-                      <div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center">
-                        <span className="text-purple-700 font-bold">{(item.name || "?")[0]}</span>
-                      </div>
-                    )}
-                    <div>
-                      <p className="font-semibold text-gray-800">{item.name || item.isin}</p>
-                      <p className="text-xs text-gray-400">How many shares would you like to gift?</p>
-                    </div>
-                  </div>
-
-                  {/* +/− picker card — matches the Investment Amount design */}
-                  <div className="bg-white rounded-2xl border border-slate-100 shadow-sm px-5 py-5 flex items-center justify-between mb-6">
-                    {/* Minus button */}
-                    <button
-                      onClick={() => setQuantity(q => Math.max(minQty, q - 1))}
-                      disabled={quantity <= minQty}
-                      className="w-12 h-12 rounded-2xl border border-slate-200 bg-white flex items-center justify-center text-slate-600 text-xl font-medium active:scale-95 transition disabled:opacity-30"
-                      aria-label="Decrease quantity"
-                    >
-                      −
-                    </button>
-
-                    {/* Label + value */}
-                    <div className="flex-1 text-center px-3">
-                      <p className="text-xs font-semibold text-slate-500 mb-1">Investment Amount</p>
-                      <p className="text-2xl font-bold text-slate-900 tracking-tight">{formattedTotal}</p>
-                      <p className="text-xs text-slate-400 mt-0.5">{quantity} share{quantity !== 1 ? "s" : ""}</p>
-                    </div>
-
-                    {/* Plus button */}
-                    <button
-                      onClick={() => setQuantity(q => Math.min(maxQty, q + 1))}
-                      disabled={quantity >= maxQty}
-                      className="w-12 h-12 rounded-2xl bg-[#6B21A8] flex items-center justify-center text-white text-xl font-medium active:scale-95 transition disabled:opacity-30"
-                      aria-label="Increase quantity"
-                    >
-                      +
-                    </button>
-                  </div>
-
-                  <div className="flex gap-3">
-                    <button
-                      onClick={onClose}
-                      className="flex-1 py-3 rounded-2xl border border-gray-200 text-sm text-gray-500 font-medium"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      onClick={() => setStep("reserving")}
-                      className="flex-1 py-3 rounded-2xl bg-[#6B21A8] text-white text-sm font-semibold"
-                    >
-                      Continue
-                    </button>
-                  </div>
-                </>
-              );
-            })()}
-
             {/* ── Step 1: Reserving the item ── */}
             {step === "reserving" && (
               <>
@@ -511,6 +450,12 @@ export default function GiftRegistryItemCheckoutSheet({ item, registryId, onSucc
         onSelectOzow={handleOzowPayment}
         onEFTConfirm={() => {}}
         onSelectEFT={() => {}}
+        initialQuantity={quantity}
+        minQty={minQty}
+        maxQty={maxQty}
+        pricePerUnitCents={item.price_snapshot_cents ?? 0}
+        numAssets={numAssets}
+        onQuantityChange={handleRereserve}
       />
     </>
   );

@@ -22,6 +22,13 @@ const PaymentMethodModal = ({
   childFirstName,
   childWalletBalanceCents,
   fees,
+  // Optional quantity-picker props (gift registry use case)
+  initialQuantity,
+  minQty = 1,
+  maxQty = 99,
+  pricePerUnitCents,   // when set, modal manages quantity and recomputes fees live
+  numAssets = 0,
+  onQuantityChange,    // async (newQty) => void  — called when user taps +/−
 }) => {
   const [eftExpanded, setEftExpanded] = useState(false);
   const [copied, setCopied] = useState(null);
@@ -31,10 +38,28 @@ const PaymentMethodModal = ({
   const [ozowLoading, setOzowLoading] = useState(false);
   const [confirmStep, setConfirmStep] = useState(null); // null | 'wallet' | 'ozow'
   const [walletConfirming, setWalletConfirming] = useState(false);
-  const { WALLET_TRANSACTION_FEE_RATE, OZOW_TRANSACTION_FEE_RATE, TRANSACTION_FEE_RATE, AUM_FEE_RATE } = useFees();
-  const bufferedBase = fees?.bufferedBase ?? (baseAmount || amount || 0) * 1.08;
-  const brokerFee = fees?.brokerAmount ?? bufferedBase * 0.0025;
-  const isinTotal = fees?.isinTotal ?? 0;
+  const [localQty, setLocalQty] = useState(initialQuantity ?? 1);
+  const [rereserving, setRereserving] = useState(false);
+  const { WALLET_TRANSACTION_FEE_RATE, OZOW_TRANSACTION_FEE_RATE, TRANSACTION_FEE_RATE, AUM_FEE_RATE,
+          BROKER_FEE_RATE, CASH_BUFFER_RATE, ISIN_FEE_PER_ASSET } = useFees();
+
+  // Sync localQty when initialQuantity changes (e.g. after re-reservation)
+  useEffect(() => {
+    if (initialQuantity != null) setLocalQty(initialQuantity);
+  }, [initialQuantity]);
+
+  // When pricePerUnitCents is provided, recompute fees from localQty live;
+  // otherwise fall back to the pre-computed props (existing callers unchanged).
+  const bufferedBase = pricePerUnitCents
+    ? (localQty * pricePerUnitCents / 100) * (1 + CASH_BUFFER_RATE)
+    : (fees?.bufferedBase ?? (baseAmount || amount || 0) * 1.08);
+  const brokerFee = pricePerUnitCents
+    ? bufferedBase * BROKER_FEE_RATE
+    : (fees?.brokerAmount ?? bufferedBase * 0.0025);
+  const isinTotal = pricePerUnitCents
+    ? ISIN_FEE_PER_ASSET * numAssets
+    : (fees?.isinTotal ?? 0);
+
   const walletTxFee = bufferedBase * WALLET_TRANSACTION_FEE_RATE;
   const walletTotal = bufferedBase + brokerFee + isinTotal + walletTxFee;
   const ozowTxFee = bufferedBase * OZOW_TRANSACTION_FEE_RATE;
@@ -42,6 +67,16 @@ const PaymentMethodModal = ({
   const eftTxFee = bufferedBase * TRANSACTION_FEE_RATE;
   const eftTotal = bufferedBase + brokerFee + isinTotal + eftTxFee;
   const pct = (r) => `${(r * 100).toFixed(2).replace(/\.?0+$/, "")}%`;
+
+  // Handle quantity tap: update local display immediately, then re-reserve in background
+  async function handleQtyChange(newQty) {
+    if (newQty < minQty || newQty > maxQty) return;
+    setLocalQty(newQty);
+    if (typeof onQuantityChange === "function") {
+      setRereserving(true);
+      try { await onQuantityChange(newQty); } finally { setRereserving(false); }
+    }
+  }
 
   const handleOzow = async (ozowAmount) => {
     if (ozowLoading) return;
@@ -234,6 +269,40 @@ const PaymentMethodModal = ({
                     <p className="text-[11px] text-violet-600 font-medium">Pay via Wallet</p>
                   </div>
 
+                  {/* ── Quantity picker — only shown for gift registry (pricePerUnitCents provided) ── */}
+                  {pricePerUnitCents > 0 && (
+                    <div className="rounded-2xl border border-slate-100 bg-white shadow-sm px-5 py-4 flex items-center justify-between">
+                      <button
+                        onClick={() => handleQtyChange(localQty - 1)}
+                        disabled={localQty <= minQty || rereserving}
+                        className="w-12 h-12 rounded-2xl border border-slate-200 bg-white flex items-center justify-center text-slate-600 text-xl font-medium active:scale-95 transition disabled:opacity-30"
+                      >
+                        −
+                      </button>
+                      <div className="flex-1 text-center px-3">
+                        <p className="text-xs font-semibold text-slate-500 mb-1">Investment Amount</p>
+                        {rereserving ? (
+                          <div className="flex items-center justify-center gap-2 py-1">
+                            <div className="w-4 h-4 border-2 border-violet-400 border-t-transparent rounded-full animate-spin" />
+                            <span className="text-sm text-slate-400">Updating…</span>
+                          </div>
+                        ) : (
+                          <p className="text-2xl font-bold text-slate-900 tracking-tight">
+                            {formatAmount(bufferedBase)}
+                          </p>
+                        )}
+                        <p className="text-xs text-slate-400 mt-0.5">{localQty} share{localQty !== 1 ? "s" : ""}</p>
+                      </div>
+                      <button
+                        onClick={() => handleQtyChange(localQty + 1)}
+                        disabled={localQty >= maxQty || rereserving}
+                        className="w-12 h-12 rounded-2xl bg-[#6B21A8] flex items-center justify-center text-white text-xl font-medium active:scale-95 transition disabled:opacity-30"
+                      >
+                        +
+                      </button>
+                    </div>
+                  )}
+
                   <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4 space-y-2">
                     <div className="flex justify-between text-xs">
                       <span className="text-slate-500">Investment (incl. 8% reserve)</span>
@@ -315,6 +384,40 @@ const PaymentMethodModal = ({
                     <p className="text-sm font-semibold text-slate-900">{strategyName || "Investment"}</p>
                     <p className="text-[11px] text-violet-600 font-medium">Pay via Ozow instant bank transfer</p>
                   </div>
+
+                  {/* ── Quantity picker — only shown for gift registry ── */}
+                  {pricePerUnitCents > 0 && (
+                    <div className="rounded-2xl border border-slate-100 bg-white shadow-sm px-5 py-4 flex items-center justify-between">
+                      <button
+                        onClick={() => handleQtyChange(localQty - 1)}
+                        disabled={localQty <= minQty || rereserving}
+                        className="w-12 h-12 rounded-2xl border border-slate-200 bg-white flex items-center justify-center text-slate-600 text-xl font-medium active:scale-95 transition disabled:opacity-30"
+                      >
+                        −
+                      </button>
+                      <div className="flex-1 text-center px-3">
+                        <p className="text-xs font-semibold text-slate-500 mb-1">Investment Amount</p>
+                        {rereserving ? (
+                          <div className="flex items-center justify-center gap-2 py-1">
+                            <div className="w-4 h-4 border-2 border-violet-400 border-t-transparent rounded-full animate-spin" />
+                            <span className="text-sm text-slate-400">Updating…</span>
+                          </div>
+                        ) : (
+                          <p className="text-2xl font-bold text-slate-900 tracking-tight">
+                            {formatAmount(bufferedBase)}
+                          </p>
+                        )}
+                        <p className="text-xs text-slate-400 mt-0.5">{localQty} share{localQty !== 1 ? "s" : ""}</p>
+                      </div>
+                      <button
+                        onClick={() => handleQtyChange(localQty + 1)}
+                        disabled={localQty >= maxQty || rereserving}
+                        className="w-12 h-12 rounded-2xl bg-[#6B21A8] flex items-center justify-center text-white text-xl font-medium active:scale-95 transition disabled:opacity-30"
+                      >
+                        +
+                      </button>
+                    </div>
+                  )}
 
                   <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4 space-y-2">
                     <div className="flex justify-between text-xs">
