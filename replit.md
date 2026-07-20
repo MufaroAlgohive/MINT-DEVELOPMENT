@@ -17,13 +17,16 @@
 
 The app was imported from GitHub and set up on Replit. Verified working:
 
-- ✅ `pnpm install` completes cleanly (508 packages)
+- ✅ `npm install` completes cleanly (452 packages)
 - ✅ Express backend starts on port 3001 (`TruID API server running on port 3001`)
 - ✅ Vite dev server starts on port 5000
-- ✅ Supabase anon key wired to frontend (`VITE_SUPABASE_ANON_KEY`)
-- ✅ Supabase service role client initialised on backend (`Supabase admin client initialized (service role)`)
-- ✅ DB health checks pass: `gift_events`, `audit_logs`, `user_sessions`, `login_attempts`, `family_members`, `it_incidents` tables all confirmed
-- ✅ Scheduled jobs registered: EOD price save (17:05 SAST), AUM accrual (21:30 UTC), gift-registry reservation sweeper
+- ✅ Login/welcome screen renders correctly in preview
+- ⚠️ `VITE_SUPABASE_ANON_KEY` secret needs to be re-added — Supabase frontend client won't initialise without it
+- ⚠️ `SUPABASE_SERVICE_ROLE_KEY` secret needs to be re-added — backend admin client requires it for DB operations
+
+**Note on `@capacitor/cli`**: Removed from `devDependencies` because it depends on the `tar` npm package, which is blocked by Replit's security firewall (Critical CVE). The CLI is only needed for mobile builds (`npx cap sync`, `npx cap open ios/android`) — web development is unaffected. Re-add it outside Replit if you need to build for iOS/Android.
+
+**Workflow command**: Changed from `pnpm install && npm run dev` to `npm install && npm run dev` — pnpm also hit the same `tar` CVE block.
 
 **Database**: All data lives in Supabase (hosted Postgres). There is no local PostgreSQL dependency — the `postgresql-16` Replit module was removed because it is unused and would waste resources. `pgPool` in `server/index.cjs` is optional and falls back gracefully when `SUPABASE_DB_URL` is absent.
 
