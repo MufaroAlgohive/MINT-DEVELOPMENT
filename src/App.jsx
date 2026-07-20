@@ -364,9 +364,52 @@ const App = () => {
     if (!pending) return;
     let parsed;
     try { parsed = JSON.parse(pending); } catch { return; }
-    if (!parsed?.transactionRef || !parsed?.strategyId || !parsed?.amount) return;
     ozowRecordedRef.current = true;
     sessionStorage.removeItem("ozow_pending");
+
+    // ── Gift registry Ozow return ─────────────────────────────────────────────
+    // The checkout sheet stored type:"gift_registry" + reservationId + registryId.
+    // Call contribute to consume the reservation and credit the recipient.
+    if (parsed?.type === "gift_registry") {
+      if (!parsed?.reservationId || !parsed?.registryId) {
+        console.error("[ozow-gift-registry] Missing reservationId or registryId in pending", parsed);
+        return;
+      }
+      (async () => {
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          const token = session?.access_token || parsed?.gifterToken;
+          if (!token) { console.error("[ozow-gift-registry] No auth token available"); return; }
+          console.log("[ozow-gift-registry] Finalising contribution after Ozow success", parsed.reservationId);
+          const resp = await fetch("/api/gift-registry/contribute", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+            body: JSON.stringify({
+              reservationId: parsed.reservationId,
+              registryId: parsed.registryId,
+              gifterMessage: parsed.gifterMessage || null,
+              paymentMethod: "ozow",
+              totalAmount: Number(parsed.amount || 0),
+            }),
+          });
+          const result = await resp.json();
+          if (result.success) {
+            console.log("[ozow-gift-registry] Contribution recorded", result.contribution?.id);
+            window.dispatchEvent(new Event("wallet-updated"));
+            window.dispatchEvent(new Event("profile-updated"));
+            window.dispatchEvent(new Event("financial-data-updated"));
+          } else {
+            console.error("[ozow-gift-registry] contribute failed:", result.error);
+          }
+        } catch (err) {
+          console.error("[ozow-gift-registry] error finalising contribution:", err);
+        }
+      })();
+      return;
+    }
+
+    // ── Regular strategy/stock Ozow return ───────────────────────────────────
+    if (!parsed?.transactionRef || !parsed?.strategyId || !parsed?.amount) return;
     (async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();

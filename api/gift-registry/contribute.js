@@ -161,8 +161,57 @@ export default async function handler(req, res) {
     const { user, error: authError } = await authenticateUser(req);
     if (authError || !user) return res.status(401).json({ error: 'Unauthorized' });
 
-    const { reservationId, registryId } = req.body;
+    const { reservationId, registryId, paymentMethod, totalAmount } = req.body;
     if (!reservationId) return res.status(400).json({ error: 'Missing reservationId' });
+
+    console.log(`[gift-registry/contribute] START gifter=${user.id} reservationId=${reservationId} paymentMethod=${paymentMethod} totalAmount=${totalAmount}`);
+
+    // ── WALLET PAYMENT: deduct from gifter's wallet BEFORE consuming reservation ──
+    // This mirrors the wallet deduction in api/record-investment.js. We do it
+    // first so that if the balance is insufficient we can reject without side-effects.
+    let walletRollbackBalance = null;
+    if (paymentMethod === 'wallet') {
+      if (!totalAmount || Number(totalAmount) <= 0) {
+        return res.status(400).json({ error: 'Missing totalAmount for wallet payment' });
+      }
+      const chargeRands = Number(totalAmount);
+
+      console.log(`[gift-registry/contribute] WALLET deduction: gifter=${user.id} chargeRands=R${chargeRands}`);
+
+      const { data: wallet, error: walletErr } = await supabaseAdmin
+        .from('wallets')
+        .select('balance')
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      if (walletErr || !wallet) {
+        console.error('[gift-registry/contribute] WALLET not found for gifter:', user.id, walletErr?.message);
+        return res.status(400).json({ error: 'Wallet not found' });
+      }
+
+      const originalBalance = Number(wallet.balance);
+      if (originalBalance < chargeRands) {
+        console.warn(`[gift-registry/contribute] WALLET insufficient: balance=R${originalBalance} required=R${chargeRands}`);
+        return res.status(400).json({ error: 'Insufficient wallet funds', code: 'INSUFFICIENT_FUNDS', balance: originalBalance, required: chargeRands });
+      }
+
+      const newBalance = originalBalance - chargeRands;
+      const { data: updatedWallet, error: deductErr } = await supabaseAdmin
+        .from('wallets')
+        .update({ balance: newBalance })
+        .eq('user_id', user.id)
+        .eq('balance', originalBalance) // optimistic lock — reject if balance changed concurrently
+        .select('balance')
+        .maybeSingle();
+
+      if (deductErr || !updatedWallet) {
+        console.error('[gift-registry/contribute] WALLET deduction failed (concurrent change?):', deductErr?.message);
+        return res.status(409).json({ error: 'Wallet balance changed — please retry', code: 'WALLET_CONCURRENT_CHANGE' });
+      }
+
+      walletRollbackBalance = originalBalance;
+      console.log(`[gift-registry/contribute] WALLET deducted R${chargeRands} from gifter ${user.id}. New balance: R${newBalance}`);
+    }
 
     // Validate reservation still HELD and not expired
     const { data: reservation } = await supabaseAdmin
@@ -355,6 +404,28 @@ export default async function handler(req, res) {
           ? `Strategy Investment: ${resolvedName}`
           : `Purchased ${resolvedName}`;
 
+        // ── Gifter transaction (debit on their side) ──
+        // Records the payment that left the gifter's wallet/Ozow account.
+        try {
+          const gifterTxRow = {
+            user_id: user.id,
+            direction: 'debit',
+            name: `Gift: ${resolvedName}`,
+            description: `Gifted ${resolvedName} from wishlist "${registryTitle}"`,
+            amount: Math.round(Number(totalAmount || 0) * 100) || investAmountCents,
+            store_reference: `REGISTRY-GIFT-${contribution.id}`,
+            currency: 'ZAR',
+            status: 'posted',
+            transaction_date: now,
+            created_at: now,
+          };
+          if (paymentMethod) gifterTxRow.payment_method = paymentMethod;
+          await supabaseAdmin.from('transactions').insert(gifterTxRow);
+          console.log(`[gift-registry/contribute] gifter tx recorded for ${user.id} method=${paymentMethod}`);
+        } catch (e) {
+          console.warn('[gift-registry/contribute] gifter tx insert:', e.message);
+        }
+
         let recipientTxId = null;
         try {
           const txRow = {
@@ -440,9 +511,24 @@ export default async function handler(req, res) {
       console.error('[gift-registry/contribute] post-payment error:', e.message);
     }
 
+    console.log(`[gift-registry/contribute] SUCCESS gifter=${user.id} contribution=${contribution.id} paymentMethod=${paymentMethod}`);
     return res.status(200).json({ success: true, contribution });
   } catch (e) {
-    console.error('[gift-registry/contribute]', e.message);
+    console.error('[gift-registry/contribute] ERROR:', e.message);
+
+    // Rollback wallet deduction if something failed after we already deducted
+    if (walletRollbackBalance !== null) {
+      try {
+        await supabaseAdmin
+          .from('wallets')
+          .update({ balance: walletRollbackBalance })
+          .eq('user_id', user?.id);
+        console.log(`[gift-registry/contribute] WALLET rollback restored balance to R${walletRollbackBalance} for gifter ${user?.id}`);
+      } catch (rbErr) {
+        console.error('[gift-registry/contribute] WALLET ROLLBACK FAILED — manual fix needed for user', user?.id, rbErr.message);
+      }
+    }
+
     return res.status(500).json({ error: e.message });
   }
 }

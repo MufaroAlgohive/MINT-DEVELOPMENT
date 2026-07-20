@@ -231,6 +231,9 @@ export default function GiftRegistryItemCheckoutSheet({ item, registryId, onSucc
   }
 
   async function handleOzowPayment(ozowAmount) {
+    // Ozow requires a real bank redirect — we initiate the payment here, store the
+    // pending context in sessionStorage, then on return (/?ozow=success) App.jsx
+    // calls /api/gift-registry/contribute to finalise the contribution.
     setLoading(true);
     setError(null);
     try {
@@ -241,28 +244,68 @@ export default function GiftRegistryItemCheckoutSheet({ item, registryId, onSucc
         sessionData = refreshed?.session;
       }
       const token = sessionData?.access_token;
-      const res = await fetch("/api/gift-registry/contribute", {
+      const { data: { user: ozowUser } } = await sb.auth.getUser();
+      const baseUrl = window.location.origin;
+
+      console.log("[gift-registry/checkout] Initiating Ozow for gift registry", { reservationId: reserved, registryId, ozowAmount });
+
+      const resp = await fetch("/api/ozow/initiate", {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          reservationId: reserved,
-          registryId,
-          itemId: item.id,
-          quantity,
-          gifterMessage: gifterMessage.trim() || null,
-          paymentMethod: "ozow",
-          totalAmount: ozowAmount,
+          amount: ozowAmount,
+          strategyName: item.name || item.isin,
+          strategyId: null,         // not a strategy purchase
+          userId: ozowUser?.id || null,
+          userEmail: ozowUser?.email || null,
+          optional4: reserved,      // reservationId — used on return to call contribute
+          optional5: registryId,    // registryId — used on return to call contribute
+          successUrl: `${baseUrl}/?ozow=success`,
+          cancelUrl:  `${baseUrl}/?ozow=cancel`,
+          errorUrl:   `${baseUrl}/?ozow=error`,
         }),
       });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "Payment failed");
-      setShowPayment(false);
-      if (typeof onSuccess === "function") onSuccess(json);
+      const data = await resp.json();
+      if (!data.success || !data.action_url) {
+        throw new Error(data.error || "Failed to initiate Ozow payment");
+      }
+
+      // Persist context so App.jsx can finalise the contribution on return
+      sessionStorage.setItem("ozow_pending", JSON.stringify({
+        type: "gift_registry",
+        transactionRef: data.TransactionReference,
+        reservationId: reserved,
+        registryId,
+        gifterToken: token,         // auth token to call contribute after return
+        gifterMessage: gifterMessage.trim() || null,
+        amount: data.Amount,
+      }));
+
+      console.log("[gift-registry/checkout] Redirecting to Ozow", data.TransactionReference);
+
+      // Build and submit the Ozow POST form
+      const form = document.createElement("form");
+      form.method = "POST";
+      form.action = data.action_url;
+      const skipFields = ["success", "action_url"];
+      Object.entries(data).forEach(([key, value]) => {
+        if (skipFields.includes(key)) return;
+        const input = document.createElement("input");
+        input.type = "hidden";
+        input.name = key;
+        input.value = value;
+        form.appendChild(input);
+      });
+      document.body.appendChild(form);
+      form.submit();
+      document.body.removeChild(form);
     } catch (e) {
+      console.error("[gift-registry/checkout] Ozow initiation failed:", e.message);
       setError(e.message);
-    } finally {
       setLoading(false);
     }
+    // Note: setLoading(false) intentionally omitted on success path —
+    // the page will navigate away to Ozow before it matters.
   }
 
   return (

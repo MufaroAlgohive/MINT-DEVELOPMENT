@@ -6,7 +6,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { amount, strategyName, strategyId, userId, userEmail, successUrl, cancelUrl, errorUrl, notifyUrl } = req.body;
+    const { amount, strategyName, strategyId, userId, userEmail, successUrl, cancelUrl, errorUrl, notifyUrl, optional4, optional5 } = req.body;
 
     const siteCode = process.env.OZOW_SITE_CODE;
     const privateKey = process.env.OZOW_PRIVATE_KEY;
@@ -28,6 +28,8 @@ export default async function handler(req, res) {
     const optional1 = strategyId || "";
     const optional2 = userEmail || "";
     const optional3 = userId || "";
+    const optional4Str = optional4 || "";
+    const optional5Str = optional5 || "";
     const isTest = process.env.OZOW_IS_TEST === "true" ? "true" : "false";
 
     const baseUrl = process.env.APP_URL || "https://app.mymint.co.za";
@@ -50,6 +52,8 @@ export default async function handler(req, res) {
     if (optional1) hashParts.push(optional1);
     if (optional2) hashParts.push(optional2);
     if (optional3) hashParts.push(optional3);
+    if (optional4Str) hashParts.push(optional4Str);
+    if (optional5Str) hashParts.push(optional5Str);
     hashParts.push(
       customer,
       resolvedCancelUrl,
@@ -64,7 +68,7 @@ export default async function handler(req, res) {
 
     console.log(`[ozow/initiate] ref=${transactionRef} amount=${amountStr} strategy=${strategyName} userId=${userId}`);
 
-    return res.json({
+    const responsePayload = {
       success: true,
       action_url: "https://pay.ozow.com",
       SiteCode: siteCode,
@@ -83,7 +87,10 @@ export default async function handler(req, res) {
       NotifyUrl: resolvedNotifyUrl,
       IsTest: isTest,
       HashCheck: hashCheck,
-    });
+    };
+    if (optional4Str) responsePayload.Optional4 = optional4Str;
+    if (optional5Str) responsePayload.Optional5 = optional5Str;
+    return res.json(responsePayload);
   } catch (err) {
     console.error("[ozow/initiate] error:", err);
     return res.status(500).json({ success: false, error: "Failed to initiate Ozow payment." });
