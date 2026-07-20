@@ -22,7 +22,13 @@ async function fetchLatestIntradayPrices(db, securityIds) {
 
 // Create pending stock_holdings_c rows for the wishlist owner after a
 // contribution is paid — mirrors the logic in api/gift/claim-v2.js.
-async function createOwnerHoldings(db, { ownerUserId, item, amountCents, txId }) {
+//
+// ownerFamilyMemberId: when the recipient child has no linked Supabase auth
+// account, pass their family_members.id here. Holdings are then stored under
+// the parent's user_id but tagged with family_member_id so they appear on
+// ChildDashboardPage (which filters by family_member_id) rather than on the
+// parent's personal dashboard (which filters family_member_id IS NULL).
+async function createOwnerHoldings(db, { ownerUserId, ownerFamilyMemberId, item, amountCents, txId }) {
   try {
     if (item.instrument_type === 'BASKET') {
       const { data: strategy } = await db
@@ -62,7 +68,7 @@ async function createOwnerHoldings(db, { ownerUserId, item, amountCents, txId })
           if (!sec?.last_price) continue;
           const qty = Math.max(1, Math.round((h.weight || 1) * scale));
           try {
-            await db.from('stock_holdings_c').insert({
+            const holdingRow = {
               user_id: ownerUserId,
               security_id: sec.id,
               quantity: qty,
@@ -74,7 +80,9 @@ async function createOwnerHoldings(db, { ownerUserId, item, amountCents, txId })
               Status: 'active',
               transaction_id: txId || null,
               Expected_fill: intradayPrices[sec.id] ?? null,
-            });
+            };
+            if (ownerFamilyMemberId) holdingRow.family_member_id = ownerFamilyMemberId;
+            await db.from('stock_holdings_c').insert(holdingRow);
             created++;
           } catch (e) {
             console.warn(`[gift-registry/contribute] holding insert ${h.symbol}:`, e.message);
@@ -123,7 +131,7 @@ async function createOwnerHoldings(db, { ownerUserId, item, amountCents, txId })
       const qty = Math.max(1, Math.floor((amountCents / 100) / (sec.last_price / 100)));
       const intradayPrices = await fetchLatestIntradayPrices(db, [sec.id]);
 
-      await db.from('stock_holdings_c').insert({
+      const holdingRow = {
         user_id: ownerUserId,
         security_id: sec.id,
         quantity: qty,
@@ -134,7 +142,9 @@ async function createOwnerHoldings(db, { ownerUserId, item, amountCents, txId })
         Status: 'active',
         transaction_id: txId || null,
         Expected_fill: intradayPrices[sec.id] ?? null,
-      });
+      };
+      if (ownerFamilyMemberId) holdingRow.family_member_id = ownerFamilyMemberId;
+      await db.from('stock_holdings_c').insert(holdingRow);
       return 1;
     }
   } catch (e) {
@@ -295,17 +305,32 @@ export default async function handler(req, res) {
       const registryTitle = reg?.title || 'your wishlist';
       const shareToken = reg?.share_token || '';
 
-      // Resolve actual investment recipient: child account if CHILD registry
+      // Resolve actual investment recipient: child account if CHILD registry.
+      // If the child has a linked Supabase auth account (linked_user_id set),
+      // route directly to their own user_id.
+      // If not (linked_user_id is null), use the parent's user_id but set
+      // family_member_id to the child's family_members row — the pattern that
+      // ChildDashboardPage uses (filters by family_member_id, not user_id) to
+      // separate child investments from the parent's personal holdings.
       let recipientUserId = ownerUserId;
+      let recipientFamilyMemberId = null;
       if (reg?.beneficiary_type === 'CHILD' && reg?.beneficiary_ref) {
         const { data: famMember } = await supabaseAdmin
           .from('family_members')
-          .select('linked_user_id')
+          .select('id, linked_user_id, first_name')
           .eq('id', reg.beneficiary_ref)
           .maybeSingle();
         if (famMember?.linked_user_id) {
+          // Child has their own auth account — route directly to it
           recipientUserId = famMember.linked_user_id;
-          console.log(`[gift-registry/contribute] CHILD registry — routing holdings to child user ${recipientUserId}`);
+          console.log(`[gift-registry/contribute] CHILD registry — routing to child account ${recipientUserId}`);
+        } else if (famMember?.id) {
+          // Child has no linked account — use parent user_id + family_member_id
+          // so holdings appear on ChildDashboardPage but NOT on parent's dashboard
+          recipientFamilyMemberId = famMember.id;
+          console.log(`[gift-registry/contribute] CHILD registry — child (${famMember.first_name}) has no linked account, using family_member_id=${famMember.id} under parent ${ownerUserId}`);
+        } else {
+          console.warn(`[gift-registry/contribute] CHILD registry — family_member not found for ref=${reg.beneficiary_ref}, falling back to parent`);
         }
       }
 
@@ -332,7 +357,7 @@ export default async function handler(req, res) {
 
         let recipientTxId = null;
         try {
-          const txInsert = await supabaseAdmin.from('transactions').insert({
+          const txRow = {
             user_id: recipientUserId,
             direction: 'debit',
             name: txName,
@@ -343,14 +368,21 @@ export default async function handler(req, res) {
             status: 'posted',
             transaction_date: now,
             created_at: now,
-          }).select('id').single();
+          };
+          // Tag with child's family_member_id when they have no linked account
+          if (recipientFamilyMemberId) txRow.family_member_id = recipientFamilyMemberId;
+          const txInsert = await supabaseAdmin.from('transactions').insert(txRow).select('id').single();
           recipientTxId = txInsert.data?.id || null;
         } catch (e) {
           console.warn('[gift-registry/contribute] recipient tx insert:', e.message);
         }
 
         const created = await createOwnerHoldings(supabaseAdmin, {
-          ownerUserId: recipientUserId, item, amountCents: investAmountCents, txId: recipientTxId,
+          ownerUserId: recipientUserId,
+          ownerFamilyMemberId: recipientFamilyMemberId,
+          item,
+          amountCents: investAmountCents,
+          txId: recipientTxId,
         });
         console.log(`[gift-registry/contribute] created ${created} pending holding(s) for recipient ${recipientUserId}`);
 
