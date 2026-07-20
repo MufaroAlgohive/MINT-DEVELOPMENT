@@ -269,8 +269,8 @@ const PaymentMethodModal = ({
                     <p className="text-[11px] text-violet-600 font-medium">Pay via Wallet</p>
                   </div>
 
-                  {/* ── Quantity picker — only shown for gift registry when range > 1 share ── */}
-                  {pricePerUnitCents > 0 && maxQty > minQty && (
+                  {/* ── Quantity picker — shown for gift registry checkout ── */}
+                  {pricePerUnitCents > 0 && (
                     <div className="rounded-2xl border border-slate-100 bg-white shadow-sm px-5 py-4 flex items-center justify-between">
                       <button
                         onClick={() => handleQtyChange(localQty - 1)}
@@ -385,8 +385,8 @@ const PaymentMethodModal = ({
                     <p className="text-[11px] text-violet-600 font-medium">Pay via Ozow instant bank transfer</p>
                   </div>
 
-                  {/* ── Quantity picker — only shown for gift registry when range > 1 share ── */}
-                  {pricePerUnitCents > 0 && maxQty > minQty && (
+                  {/* ── Quantity picker — shown for gift registry checkout ── */}
+                  {pricePerUnitCents > 0 && (
                     <div className="rounded-2xl border border-slate-100 bg-white shadow-sm px-5 py-4 flex items-center justify-between">
                       <button
                         onClick={() => handleQtyChange(localQty - 1)}

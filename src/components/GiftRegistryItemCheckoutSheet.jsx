@@ -95,8 +95,13 @@ export default function GiftRegistryItemCheckoutSheet({ item, registryId, onSucc
   const [showKycPrompt, setShowKycPrompt] = useState(false);
   const reserveTriggered = useRef(false);
 
-  // Max quantity: don't let user gift more than what's still unfunded
-  const maxQty = Math.max(minQty, (item.target_quantity ?? 9999) - (item.filled_quantity ?? 0));
+  // UI max: how many shares are still available to gift.
+  // Default to a generous cap (99) so the server validates the actual limit —
+  // the reserve endpoint will return SOLD_OUT if the user goes over what's left.
+  const remaining = item.target_quantity != null
+    ? Math.max(0, item.target_quantity - (item.filled_quantity ?? 0))
+    : 99;
+  const maxQty = Math.max(minQty + 1, remaining);
 
   const {
     ISIN_FEE_PER_ASSET,
