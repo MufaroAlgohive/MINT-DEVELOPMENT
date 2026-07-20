@@ -7,7 +7,7 @@ import { getMarketsSecuritiesWithMetrics, getSecurityPrices, clearMarketDataCach
 import { useRealtimePrices } from "../lib/useRealtimePrices";
 import { getStrategiesWithMetrics, getPublicStrategies, formatChangePct, formatChangeAbs, getChangeColor } from "../lib/strategyData.js";
 import { useProfile } from "../lib/useProfile";
-import { TrendingUp, Search, SlidersHorizontal, X, ChevronRight, Bookmark, PlayCircle, Gift, Heart, Baby } from "lucide-react";
+import { TrendingUp, Search, SlidersHorizontal, X, ChevronRight, Bookmark, HelpCircle, Gift, Heart } from "lucide-react";
 import WishlistModal from "../components/WishlistModal.jsx";
 import WishlistPickerSheet from "../components/WishlistPickerSheet.jsx";
 import WishlistToast from "../components/WishlistToast.jsx";
@@ -25,6 +25,7 @@ import { formatCurrency } from "../lib/formatCurrency";
 import { normalizeSymbol, getHoldingsArray, getHoldingSymbol, buildHoldingsBySymbol, getStrategyHoldingsSnapshot, calculateMinInvestment, calculateMinInvestmentSync, getAdjustedShares, enrichSecuritiesWithIntradayPrices } from "../lib/strategyUtils";
 import MintBasketsExplainer, { BASKETS_EXPLAINER_KEY } from "../components/MintBasketsExplainer.jsx";
 import { symbolToHue, generateSparkline, CompactSecurityRow, SecuritySparklineCard, CollapsibleSection } from "../components/SecurityCards.jsx";
+import { hasSeenAnimation } from "../lib/animationSeen.js";
 
 const sortOptions = ["Market Cap", "Dividend Yield", "P/E Ratio", "1M Performance", "YTD Performance"];
 
@@ -189,8 +190,14 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
   const basketsTabRef = useRef(null);
   useEffect(() => {
     if (viewMode === "openstrategies" && !childFilter) {
-      const alreadySeen = localStorage.getItem(BASKETS_EXPLAINER_KEY) === "true";
-      setShowBasketsExplainer(!alreadySeen);
+      // Source of truth is the DB (`animation` table); localStorage is only a
+      // fast cache inside hasSeenAnimation. Once seen (on any device), the
+      // explainer never auto-plays again.
+      let cancelled = false;
+      hasSeenAnimation("home_baskets_explainer", BASKETS_EXPLAINER_KEY).then((seen) => {
+        if (!cancelled) setShowBasketsExplainer(!seen);
+      });
+      return () => { cancelled = true; };
     } else {
       setShowBasketsExplainer(false);
     }
@@ -655,7 +662,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
 
         // Fetch latest returns for each strategy from strategies_returns_c
         const { data: returns, error } = await supabase
-          .from("strategies_returns_c")
+          .from("strategy_returns_effective_c")
           .select("strategy_id, ytd_pct, as_of_date")
           .in("strategy_id", strategyIds)
           .order("as_of_date", { ascending: false });
@@ -1007,7 +1014,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
         const yearStart = `${currentYear}-01-01`;
 
         const { data: dailyReturns, error } = await supabase
-          .from("strategies_returns_c")
+          .from("strategy_returns_effective_c")
           .select("strategy_id, as_of_date, \"1d_pct\"")
           .eq("strategy_id", strategyId)
           .gte("as_of_date", yearStart)
@@ -1475,7 +1482,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                 aria-label="Watch tutorial"
                 className="group flex-shrink-0 flex items-center justify-center h-8 w-8 rounded-full bg-white/10 hover:bg-white/20 active:scale-95 transition-all"
               >
-                <PlayCircle className="h-4 w-4 text-white/70 group-hover:text-white transition-colors" />
+                <HelpCircle className="h-4 w-4 text-white/70 group-hover:text-white transition-colors" />
               </button>
             </div>
           )}

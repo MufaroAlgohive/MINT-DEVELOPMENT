@@ -148,7 +148,7 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest, onNavigateToOnboarding,
 
           // Fetch latest returns data from strategies_returns_c
           const { data: returnsData, error: returnsError } = await supabase
-            .from("strategies_returns_c")
+            .from("strategy_returns_effective_c")
             .select("strategy_id, as_of_date, \"5d_pct\", \"1m_pct\", \"6m_pct\", ytd_pct, all_pct")
             .eq("strategy_id", resolvedId)
             .order("as_of_date", { ascending: false })
@@ -330,14 +330,14 @@ const FactsheetPage = ({ onBack, strategy, onOpenInvest, onNavigateToOnboarding,
 
         const [{ data: dailyReturns, error: dailyError }, { data: q3Data }] = await Promise.all([
           supabase
-            .from("strategies_returns_c")
+            .from("strategy_returns_effective_c")
             .select("strategy_id, as_of_date, \"1d_pct\", ytd_pct, \"1m_pct\"")
             .eq("strategy_id", strategyId)
             .gte("as_of_date", yearStart)
             .lte("as_of_date", yearEnd)
             .order("as_of_date", { ascending: true }),
           supabase
-            .from("strategies_returns_c")
+            .from("strategy_returns_effective_c")
             .select("\"1d_pct\"")
             .eq("strategy_id", strategyId)
             .gte("as_of_date", ninetyDaysAgo)

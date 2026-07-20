@@ -3,6 +3,7 @@ import { supabase } from "./supabase";
 import { higherOfCostPerShareRands, fetchStrategyCashCents } from "./strategyValuation";
 import { getStrategyPriceHistory } from "./strategyData";
 import { registerCacheResetCallback } from "./userCacheReset.js";
+import { fetchApprovedReturns, clearApprovedReturnsCache } from "./approvedReturns.js";
 
 // Cost basis per share in Rands for a snapshot/holding row.
 // Prefers Expected_fill (the price the client saw at click time, in rands) over
@@ -23,6 +24,7 @@ const _cachedStrategiesDataMap = {};
 
 export function clearUserStrategiesCache() {
   Object.keys(_cachedStrategiesDataMap).forEach(k => delete _cachedStrategiesDataMap[k]);
+  clearApprovedReturnsCache();
 }
 
 registerCacheResetCallback(clearUserStrategiesCache);
@@ -101,7 +103,7 @@ export const useUserStrategies = (familyMemberId = null) => {
         ? activeQuery.eq("family_member_id", familyMemberId)
         : activeQuery.is("family_member_id", null);
 
-      const [allReturnsResult, strategiesResult, residualResult, closedResult, activeResult] = await Promise.all([
+      const [allReturnsResult, strategiesResult, residualResult, closedResult, activeResult, approvedReturns] = await Promise.all([
         returnsQuery.order("as_of_date", { ascending: false }),
         supabase
           .from("strategies_c")
@@ -110,6 +112,7 @@ export const useUserStrategies = (familyMemberId = null) => {
         residualQuery,
         closedQuery,
         activeQuery,
+        fetchApprovedReturns(session, familyMemberId),
       ]);
 
       /* Value positions straight from holdings (NOT the EOD returns snapshot):
@@ -174,7 +177,18 @@ export const useUserStrategies = (familyMemberId = null) => {
         return;
       }
 
-      const allReturns = allReturnsResult.data || [];
+      const approvedClientRows = approvedReturns?.client_returns || [];
+      const approvedStrategyIds = new Set(approvedClientRows.map((row) => row.strategy_id));
+      const allReturns = [
+        ...approvedClientRows.slice().reverse().map((row) => ({
+          ...row,
+          basket_value: row.complete_nav_cents,
+          ytd_pct: row.gross_strategy_twr_pct,
+          inception_pnl: row.strategy_pnl_cents,
+          approved_repair: true,
+        })),
+        ...(allReturnsResult.data || []).filter((row) => !approvedStrategyIds.has(row.strategy_id)),
+      ];
 
       const residualRandsByStrategy = {};
       (residualResult?.data || []).forEach((row) => {
@@ -228,7 +242,10 @@ export const useUserStrategies = (familyMemberId = null) => {
         const positionsVal = Number((positionsByStrategy[strategyId] || 0).toFixed(2));
         const investedBase = Number((costBasisByStrategy[strategyId] || 0).toFixed(2));
         /* Portfolio value = live positions + cash element (residual + buffer). */
-        const currentVal = Number((positionsVal + cashElement).toFixed(2));
+        const approvedRow = returnsRow.approved_repair ? returnsRow : null;
+        const currentVal = approvedRow
+          ? Number((Number(approvedRow.complete_nav_cents || 0) / 100).toFixed(2))
+          : Number((positionsVal + cashElement).toFixed(2));
         /* P&L = realised (locked in from rebalance sells) + unrealised (paper
            gain on the CURRENT open positions). A rebalance just converts
            unrealised → realised, so the TOTAL stays stable across rebalances —
@@ -241,8 +258,12 @@ export const useUserStrategies = (familyMemberId = null) => {
            exactly as before — backward compatible.) */
         const realizedPnl = Number((realizedRandsByStrategy[strategyId] || 0).toFixed(2));
         const unrealizedPnl = Number((positionsVal - investedBase).toFixed(2));
-        const totalPnl = Number((unrealizedPnl + realizedPnl).toFixed(2));
-        const invested = Number((currentVal - totalPnl).toFixed(2));
+        const totalPnl = approvedRow
+          ? Number((Number(approvedRow.strategy_pnl_cents || 0) / 100).toFixed(2))
+          : Number((unrealizedPnl + realizedPnl).toFixed(2));
+        const invested = approvedRow
+          ? Number((Number(approvedRow.opening_performance_nav_cents || 0) / 100).toFixed(2))
+          : Number((currentVal - totalPnl).toFixed(2));
         const changePct = invested > 0 ? (totalPnl / invested) * 100 : 0;
         const ytdPctDecimal = returnsRow.ytd_pct != null ? returnsRow.ytd_pct / 100 : null;
 
@@ -461,6 +482,52 @@ export const useStrategyChartData = (strategyId, timeFilter = "W", purchaseDate 
       if (resolvedUserId && supabase) {
         try {
           const now = new Date();
+          const MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+          const DAY_NAMES_SHORT = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+          // Build a P&L chart from an ascending [{as_of_date, pnl_cents}] series,
+          // window-relative to the first point (so 5D/M show the change over the
+          // window, ALL shows the full trajectory from ~0).
+          const buildChart = (pts) => {
+            const base = pts.length ? (pts[0].pnl_cents || 0) : 0;
+            const out = [{ day: null, value: 0, fullDate: null }];
+            pts.forEach(row => {
+              const [y, m, d] = row.as_of_date.split("-").map(Number);
+              const dow = new Date(y, m - 1, d).getDay();
+              out.push({
+                day: `${d} ${MONTH_NAMES[m - 1]} '${String(y).slice(-2)}`,
+                value: Number(((row.pnl_cents - base) / 100).toFixed(2)),
+                fullDate: `${DAY_NAMES_SHORT[dow]}, ${d} ${MONTH_NAMES[m - 1]} ${y}`,
+              });
+            });
+            return out;
+          };
+          const windowFilter = (rowsAsc) => {
+            if (timeFilter === "D") return rowsAsc.slice(-2);
+            if (timeFilter === "5d") return rowsAsc.slice(-5);
+            if (timeFilter === "m") { const f = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate()).toISOString().split("T")[0]; return rowsAsc.filter(r => r.as_of_date >= f); }
+            if (timeFilter === "ytd") { const f = `${now.getFullYear()}-01-01`; return rowsAsc.filter(r => r.as_of_date >= f); }
+            return rowsAsc; // all
+          };
+
+          // Canonical source first: /api/returns/approved carries the repaired /
+          // published personal chain. Plot cumulative performance P&L
+          // (inception_pnl_cents) so the line matches the headline return and is
+          // free of fee/cash-timing noise. Falls through to the legacy table only
+          // when the owner has no canonical rows.
+          try {
+            const { data: { session: chartSession } } = await supabase.auth.getSession();
+            const approved = await fetchApprovedReturns(chartSession, familyMemberId);
+            const canonical = (approved?.client_returns || [])
+              .filter(r => r.strategy_id === strategyId && r.as_of_date)
+              .map(r => ({ as_of_date: String(r.as_of_date).slice(0, 10), pnl_cents: Number(r.inception_pnl_cents ?? r.strategy_pnl_cents ?? 0) }))
+              .sort((a, b) => (a.as_of_date < b.as_of_date ? -1 : 1));
+            if (canonical.length > 0) {
+              setChartData(buildChart(windowFilter(canonical)));
+              setLoading(false);
+              return;
+            }
+          } catch (_) { /* fall through to legacy */ }
+
           let query = supabase
             .from("client_strategy_returns_c")
             .select("as_of_date, basket_value")
@@ -488,24 +555,8 @@ export const useStrategyChartData = (strategyId, timeFilter = "W", purchaseDate 
 
           if (!error && rows && rows.length > 0) {
             const ascending = [...rows].reverse();
-            const firstBasket = ascending[0].basket_value || 0;
-
-            const MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-            const DAY_NAMES_SHORT = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
-
-            const formatted = [{ day: null, value: 0, fullDate: null }];
-            ascending.forEach(row => {
-              const [y, m, d] = row.as_of_date.split("-").map(Number);
-              const dow = new Date(y, m - 1, d).getDay();
-              const pnl = Number(((row.basket_value - firstBasket) / 100).toFixed(2));
-              formatted.push({
-                day: `${d} ${MONTH_NAMES[m - 1]} '${String(y).slice(-2)}`,
-                value: pnl,
-                fullDate: `${DAY_NAMES_SHORT[dow]}, ${d} ${MONTH_NAMES[m - 1]} ${y}`,
-              });
-            });
-
-            setChartData(formatted);
+            // Legacy semantics preserved: P&L relative to the first basket in window.
+            setChartData(buildChart(ascending.map(r => ({ as_of_date: r.as_of_date, pnl_cents: Number(r.basket_value || 0) }))));
             setLoading(false);
             return;
           }

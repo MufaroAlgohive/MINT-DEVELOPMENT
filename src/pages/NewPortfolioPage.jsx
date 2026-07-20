@@ -2,6 +2,7 @@ import React, { useState, useMemo, useRef, useEffect, useCallback } from "react"
 import { motion, AnimatePresence } from "framer-motion";
 import { Bell, Eye, EyeOff, ChevronDown, ChevronRight, ChevronLeft, ArrowLeft, TrendingUp, TrendingDown, Plus, ArrowUpRight, HelpCircle } from "lucide-react";
 import SpotlightTour from "../components/SpotlightTour";
+import { hasSeenAnimation, markAnimationSeen } from "../lib/animationSeen.js";
 
 // First-timer walkthrough for the Portfolio page. Steps whose section isn't on
 // the page (e.g. no goals yet) are skipped automatically by SpotlightTour.
@@ -562,20 +563,35 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
     setShowTour(false);
   }, [clearTourStartTimer, isActive, isDocumentVisible]);
 
+  // DB-backed "seen once" check for the portfolio walkthrough. The `animation`
+  // table is the source of truth (localStorage is only a fast cache inside
+  // hasSeenAnimation), so the tour never replays across devices / storage clears.
+  const tourSeenRef = useRef(false);
+  const [tourSeenResolved, setTourSeenResolved] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    hasSeenAnimation("portfolio_tour", PF_TOUR_SEEN_KEY).then((seen) => {
+      if (cancelled) return;
+      tourSeenRef.current = seen;
+      setTourSeenResolved(true);
+    });
+    return () => { cancelled = true; };
+  }, []);
+
   // First-visit walkthrough: auto-plays EXACTLY ONCE ever. It's marked "seen"
-  // the instant it opens (not on finish) — so if the user switches tabs mid-tour
-  // it still never auto-plays again; after that the ? button is the only way to
-  // replay it. Only scheduled while the portfolio tab is actually visible.
+  // (in the DB) the instant it opens (not on finish) — so if the user switches
+  // tabs mid-tour it still never auto-plays again; after that the ? button is the
+  // only way to replay it. Only scheduled while the portfolio tab is visible.
   useEffect(() => {
     clearTourStartTimer();
     if (!isActive || !isDocumentVisible || showTour) return;
     if (holdingsLoading || !onWithdraw || allStrategyHoldings.length === 0) return;
-    let seen = false;
-    try { seen = localStorage.getItem(PF_TOUR_SEEN_KEY) === "1"; } catch {}
-    if (seen) return;
+    if (!tourSeenResolved) return;   // wait for the DB "seen" check to resolve
+    if (tourSeenRef.current) return; // already seen (DB or local cache)
     tourStartTimerRef.current = setTimeout(() => {
       if (isActive && document.visibilityState === "visible") {
-        try { localStorage.setItem(PF_TOUR_SEEN_KEY, "1"); } catch {} // consume the one auto-play now
+        tourSeenRef.current = true;
+        markAnimationSeen("portfolio_tour", PF_TOUR_SEEN_KEY); // consume the one auto-play now
         setShowTour(true);
       }
       tourStartTimerRef.current = null;
@@ -589,11 +605,13 @@ const NewPortfolioPage = ({ onOpenNotifications, onOpenInvest, onOpenStrategies,
     isDocumentVisible,
     onWithdraw,
     showTour,
+    tourSeenResolved,
   ]);
 
   const closeTour = useCallback(() => {
     setShowTour(false);
-    try { localStorage.setItem(PF_TOUR_SEEN_KEY, "1"); } catch {}
+    tourSeenRef.current = true;
+    markAnimationSeen("portfolio_tour", PF_TOUR_SEEN_KEY);
   }, []);
 
   // ── direct strategy holdings ──────────────────────────────────────────────

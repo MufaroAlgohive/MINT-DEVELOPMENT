@@ -220,7 +220,7 @@ export default async function handler(req, res) {
     let returnsMap = {};
     if (strategyIds.length > 0) {
       const { data: returnsRows } = await db
-        .from("strategies_returns_c")
+        .from("strategy_returns_effective_c")
         .select("strategy_id, as_of_date, ytd_pct, 5d_pct, 1m_pct, 6m_pct")
         .in("strategy_id", strategyIds)
         .order("as_of_date", { ascending: false });
