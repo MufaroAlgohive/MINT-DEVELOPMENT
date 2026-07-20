@@ -123,6 +123,10 @@ export const calculateMinInvestmentSync = (strategy, holdingsBySymbol) => {
     // Price map is populated but none matched this strategy's symbols — fall back to DB value
     return strategy?.min_investment ? Math.round(strategy.min_investment / 100) : null;
   }
+  // Continuity (liquidated) cash is part of the lot: a buyer funds securities PLUS
+  // this cash and holds the full strategy value (securities + continuity = complete
+  // value). continuity_cash_cents is attached from strategy_returns_effective_c.
+  total += Number(strategy?.continuity_cash_cents || 0) / 100;
   return Math.round(total);
 };
 

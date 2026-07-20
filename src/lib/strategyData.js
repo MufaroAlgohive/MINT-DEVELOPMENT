@@ -38,7 +38,7 @@ export const getStrategiesWithMetrics = async () => {
         .order("name", { ascending: true }),
       supabase
         .from("strategy_returns_effective_c")
-        .select("strategy_id, as_of_date, ytd_pct, \"5d_pct\", \"1m_pct\", \"6m_pct\"")
+        .select("strategy_id, as_of_date, ytd_pct, \"5d_pct\", \"1m_pct\", \"6m_pct\", continuity_cash_cents")
         .order("as_of_date", { ascending: false }),
     ]);
 
@@ -77,6 +77,7 @@ export const getStrategiesWithMetrics = async () => {
         r_3m: null,
         r_6m: ret ? ret["6m_pct"] / 100 : null,
         r_ytd: ret ? ret.ytd_pct / 100 : null,
+        continuity_cash_cents: ret?.continuity_cash_cents ?? 0,
         r_1y: null,
       };
     });
@@ -125,7 +126,7 @@ export const getPublicStrategies = async () => {
         .order("name", { ascending: true }),
       supabase
         .from("strategy_returns_effective_c")
-        .select("strategy_id, as_of_date, ytd_pct")
+        .select("strategy_id, as_of_date, ytd_pct, continuity_cash_cents")
         .order("as_of_date", { ascending: false }),
     ]);
 
@@ -154,6 +155,7 @@ export const getPublicStrategies = async () => {
         ...strategy,
         latest_metric: ret,
         r_ytd: ret ? ret.ytd_pct / 100 : null,
+        continuity_cash_cents: ret?.continuity_cash_cents ?? 0,
         as_of_date: ret?.as_of_date || null,
       };
     });
@@ -191,7 +193,7 @@ export const getStrategyById = async (strategyId) => {
         .single(),
       supabase
         .from("strategy_returns_effective_c")
-        .select("strategy_id, as_of_date, ytd_pct, \"5d_pct\", \"1m_pct\", \"6m_pct\"")
+        .select("strategy_id, as_of_date, ytd_pct, \"5d_pct\", \"1m_pct\", \"6m_pct\", continuity_cash_cents")
         .eq("strategy_id", strategyId)
         .order("as_of_date", { ascending: false })
         .limit(1)
