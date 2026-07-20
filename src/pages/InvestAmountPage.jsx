@@ -304,6 +304,7 @@ const InvestAmountPage = ({ onBack, strategy, onContinue, paymentMethod, startWi
           assetType="strategy"
           totalCostCents={Math.round(fees.totalCost * 100)}
           amountDisplay={formatCurrency(fees.totalCost, currency)}
+          fees={fees}
         />
 
         <div className="mt-4" />

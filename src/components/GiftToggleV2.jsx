@@ -4,6 +4,12 @@ import { Gift, Copy, Check, AlertCircle, X, Search, Hash, User, ChevronLeft, Che
 import { motion, AnimatePresence, useMotionValue, animate } from "framer-motion";
 import { supabase } from "../lib/supabase";
 import { isAdminPreview } from "../lib/adminPreview";
+import { useFees } from "../lib/useFees";
+
+function formatZAR(val) {
+  if (val == null || isNaN(val)) return "R0.00";
+  return "R\u00a0" + Number(val).toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
 
 const CONFETTI_COLORS = ["#7c3aed","#a78bfa","#f59e0b","#10b981","#ef4444","#3b82f6","#ec4899","#f97316"];
 async function fetchBeneficiaries() {
@@ -251,7 +257,19 @@ export default function GiftToggleV2({
   totalCostCents,
   amountDisplay,
   assetType = "stock",
+  fees, // optional: { bufferedBase, brokerAmount, isinTotal, transactionAmount, totalCost }
 }) {
+  const { BROKER_FEE_RATE, TRANSACTION_FEE_RATE, AUM_FEE_RATE, CASH_BUFFER_RATE } = useFees();
+  const pct = (r) => `${(r * 100).toFixed(2).replace(/\.?0+$/, "")}%`;
+
+  // Wallet balance for confirm screen
+  const [walletBalance, setWalletBalance] = useState(null);
+  const [walletLoading, setWalletLoading] = useState(false);
+
+  // Sheet open state — separate from `enabled` so closing the sheet doesn't turn off gift mode
+  const [sheetOpen, setSheetOpen] = useState(false);
+  useEffect(() => { if (enabled) setSheetOpen(true); }, [enabled]);
+
   const [step, setStep] = useState("picker");
   const [inputMode, setInputMode] = useState("mint");
   const [firstName, setFirstName] = useState("");
@@ -302,6 +320,10 @@ export default function GiftToggleV2({
   useEffect(() => {
     if (enabled) fetchBeneficiaries().then(setBeneficiaries);
   }, [enabled]);
+
+  // Keep a live ref so stale-closure callbacks can see current beneficiaries
+  const beneficiariesRef = useRef(beneficiaries);
+  useEffect(() => { beneficiariesRef.current = beneficiaries; }, [beneficiaries]);
 
   const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipientEmail.trim());
   const canProceed = firstName.trim() && lastName.trim() && emailValid;
@@ -364,6 +386,14 @@ export default function GiftToggleV2({
         setEmailSearchError(data.error || "Lookup failed");
       } else {
         setEmailSearchResult(data); // { found: bool, user?: {...} }
+        // Auto-mark as saved if already in beneficiaries list
+        if (data.found && data.user?.email) {
+          const alreadySaved = beneficiariesRef.current.some(
+            b => b.email?.toLowerCase() === data.user.email.toLowerCase()
+          );
+          setBeneficiarySaved(alreadySaved);
+          if (alreadySaved) setShowAddBeneficiaryPrompt(false);
+        }
       }
     } catch {
       if (reqId !== emailReqIdRef.current) return;
@@ -451,7 +481,8 @@ export default function GiftToggleV2({
 
   function handleClose() {
     resetForm();
-    onToggle?.(false);
+    setSheetOpen(false);
+    // Do NOT call onToggle(false) — closing the sheet keeps gift mode on
   }
 
   function handleSelectBeneficiary(b) {
@@ -489,6 +520,12 @@ export default function GiftToggleV2({
         setMintSearchError(data.error || "User not found");
       } else if (data.user) {
         setMintSearchResult(data.user);
+        // Auto-mark as saved if already in beneficiaries list
+        const alreadySaved = beneficiariesRef.current.some(
+          b => b.email?.toLowerCase() === data.user.email?.toLowerCase()
+        );
+        setBeneficiarySaved(alreadySaved);
+        setShowAddBeneficiaryPrompt(false);
       } else {
         setMintSearchError("No user found with that Mint number");
       }
@@ -527,6 +564,12 @@ export default function GiftToggleV2({
         setIdSearchError(data.error || "User not found");
       } else if (data.user) {
         setIdSearchResult(data.user);
+        // Auto-mark as saved if already in beneficiaries list
+        const alreadySaved = beneficiariesRef.current.some(
+          b => b.email?.toLowerCase() === data.user.email?.toLowerCase()
+        );
+        setBeneficiarySaved(alreadySaved);
+        setShowAddBeneficiaryPrompt(false);
       } else {
         setIdSearchError("No user found with that ID number");
       }
@@ -603,6 +646,28 @@ export default function GiftToggleV2({
     }
   }
 
+  // Fetch wallet balance when the confirm screen is shown
+  useEffect(() => {
+    if (step !== "confirming") return;
+    let cancelled = false;
+    setWalletLoading(true);
+    (async () => {
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const userId = sessionData?.session?.user?.id;
+        if (!userId) return;
+        const { data } = await supabase
+          .from("wallets")
+          .select("balance")
+          .eq("user_id", userId)
+          .single();
+        if (!cancelled && data) setWalletBalance(Number(data.balance)); // stored in Rands
+      } catch {}
+      if (!cancelled) setWalletLoading(false);
+    })();
+    return () => { cancelled = true; };
+  }, [step]);
+
   function handleCopy() {
     navigator.clipboard.writeText(giftCode).then(() => {
       setCopied(true);
@@ -670,7 +735,7 @@ export default function GiftToggleV2({
       {/* ── BOTTOM SHEET ── rendered via portal so CSS transforms on parent containers
            (e.g. AdultInvestModal sliding off-screen) don't clip fixed-positioned overlays */}
       {createPortal(<AnimatePresence>
-        {enabled && step !== "success" && (
+        {enabled && sheetOpen && step !== "success" && (
           <>
             {/* Backdrop — above AdultInvestModal (z:9998/9999)
                 CRITICAL: pointerEvents must live inside initial/animate/exit
@@ -1429,16 +1494,79 @@ export default function GiftToggleV2({
                         <X size={16} />
                       </button>
                     </div>
+
                     <div className="flex-1 overflow-y-auto px-5 pb-10 space-y-4">
-                      <div className="flex items-start gap-2.5 p-3 rounded-xl bg-amber-50 border border-amber-100">
-                        <AlertCircle size={14} className="text-amber-600 shrink-0 mt-0.5" />
-                        <p className="text-[11px] text-amber-700">Your wallet will be debited immediately once you confirm.</p>
+                      {/* Asset header */}
+                      <div className="flex flex-col items-center gap-1 pb-1">
+                        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-violet-100 mb-1">
+                          <Gift className="h-7 w-7 text-violet-600" />
+                        </div>
+                        <p className="text-sm font-bold text-slate-900">{security?.name || security?.symbol}</p>
+                        <p className="text-[11px] font-semibold text-violet-600">Pay via Wallet</p>
                       </div>
+
+                      {/* Fee breakdown — shown when fees are provided */}
+                      {fees ? (
+                        <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 space-y-2">
+                          <div className="flex justify-between items-center">
+                            <span className="text-[11px] text-slate-500">Investment (incl. {Math.round(CASH_BUFFER_RATE * 100)}% reserve)</span>
+                            <span className="text-[12px] font-semibold text-slate-800">{formatZAR(fees.bufferedBase)}</span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-[11px] text-slate-500">Brokerage fee ({pct(BROKER_FEE_RATE)})</span>
+                            <span className="text-[12px] font-semibold text-slate-800">{formatZAR(fees.brokerAmount)}</span>
+                          </div>
+                          {fees.isinTotal > 0 && (
+                            <div className="flex justify-between items-center">
+                              <span className="text-[11px] text-slate-500">Custody fee</span>
+                              <span className="text-[12px] font-semibold text-slate-800">{formatZAR(fees.isinTotal)}</span>
+                            </div>
+                          )}
+                          <div className="flex justify-between items-center">
+                            <span className="text-[11px] text-slate-500">Transaction fee ({pct(TRANSACTION_FEE_RATE)}) — Wallet</span>
+                            <span className="text-[12px] font-semibold text-slate-800">{formatZAR(fees.transactionAmount)}</span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-[11px] text-slate-400">AUM fee ({pct(AUM_FEE_RATE)} p.a.)</span>
+                            <span className="text-[11px] text-slate-400 italic">monthly from cash</span>
+                          </div>
+                          <div className="border-t border-slate-200 mt-1 pt-2 flex justify-between items-center">
+                            <span className="text-[13px] font-bold text-slate-700">Total to Deduct</span>
+                            <span className="text-[14px] font-bold text-violet-700">{amountDisplay}</span>
+                          </div>
+                        </div>
+                      ) : amountDisplay ? (
+                        <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 flex justify-between items-center">
+                          <span className="text-sm font-bold text-slate-700">Amount</span>
+                          <span className="text-sm font-bold text-violet-700">{amountDisplay}</span>
+                        </div>
+                      ) : null}
+
+                      {/* Wallet balance + remaining */}
+                      <div className="rounded-xl border border-slate-100 bg-white px-4 py-3 space-y-2">
+                        <div className="flex justify-between items-center">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Wallet Balance</span>
+                          <span className="text-[12px] font-bold text-slate-700">
+                            {walletLoading ? "…" : walletBalance != null ? formatZAR(walletBalance) : "—"}
+                          </span>
+                        </div>
+                        {walletBalance != null && totalCostCents != null && (
+                          <div className="flex justify-between items-center">
+                            <span className="text-[10px] font-semibold text-slate-400">Remaining after gift</span>
+                            <span className={`text-[12px] font-bold ${walletBalance - totalCostCents / 100 < 0 ? "text-red-500" : "text-emerald-600"}`}>
+                              {formatZAR(Math.max(0, walletBalance - totalCostCents / 100))}
+                            </span>
+                          </div>
+                        )}
+                        {walletBalance != null && totalCostCents != null && walletBalance < totalCostCents / 100 && (
+                          <p className="text-[10px] text-red-500 font-medium pt-0.5">⚠ Insufficient wallet balance to complete this gift.</p>
+                        )}
+                      </div>
+
+                      {/* Recipient details */}
                       <div className="bg-slate-50 rounded-xl p-4 space-y-2.5">
                         <Row label="To" value={`${firstName} ${lastName}`} />
                         <Row label="Email" value={recipientEmail.trim().toLowerCase()} />
-                        <Row label="Asset" value={security?.name || security?.symbol} />
-                        {amountDisplay && <Row label="Amount" value={amountDisplay} bold />}
                         {message && (
                           <div className="pt-2 border-t border-slate-200">
                             <p className="text-[11px] text-slate-400 mb-0.5">Message</p>
@@ -1446,10 +1574,19 @@ export default function GiftToggleV2({
                           </div>
                         )}
                       </div>
+
                       {error && <p className="text-xs text-red-500 flex items-center gap-1.5"><AlertCircle size={11} />{error}</p>}
+
                       <div className="flex gap-2 pt-1">
                         <button type="button" onClick={() => setStep("form")} className="flex-1 rounded-xl border border-slate-200 bg-white py-3 text-sm font-semibold text-slate-600 active:scale-[0.98] transition-all">Edit</button>
-                        <button type="button" onClick={handleConfirm} disabled={isAdminPreview()} className={`flex-1 rounded-xl bg-gradient-to-r from-[#1a1a2e] to-[#44296b] py-3 text-sm font-semibold text-white active:scale-[0.98] transition-all shadow-lg${isAdminPreview() ? " opacity-40 cursor-not-allowed pointer-events-none" : ""}`}>Confirm & Send</button>
+                        <button
+                          type="button"
+                          onClick={handleConfirm}
+                          disabled={isAdminPreview() || (walletBalance != null && walletBalance < (totalCostCents ?? 0) / 100)}
+                          className={`flex-1 rounded-xl bg-gradient-to-r from-[#1a1a2e] to-[#44296b] py-3 text-sm font-semibold text-white active:scale-[0.98] transition-all shadow-lg${(isAdminPreview() || (walletBalance != null && walletBalance < (totalCostCents ?? 0) / 100)) ? " opacity-40 cursor-not-allowed pointer-events-none" : ""}`}
+                        >
+                          Confirm &amp; Send
+                        </button>
                       </div>
                     </div>
                   </div>
