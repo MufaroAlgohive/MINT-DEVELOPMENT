@@ -13504,12 +13504,14 @@ app.patch('/api/incidents/:id', async (req, res) => {
 // Reads live values from app_settings('fees') so the UI always shows what the
 // CRM has set, instead of falling back to hardcoded defaults.
 const FEE_CONSTANTS_DEFAULT = {
-  EXECUTION_RESERVE_RATE: 0.08,
-  BROKER_FEE_RATE:        0.0025,
-  ISIN_FEE_PER_ASSET:     69,
-  TRANSACTION_FEE_RATE:   0.038,
-  REB_BROKERAGE_RATE:     0.005,
-  REB_CUSTODY_FEE:        69,
+  EXECUTION_RESERVE_RATE:      0.08,
+  BROKER_FEE_RATE:             0.0025,
+  ISIN_FEE_PER_ASSET:          69,
+  TRANSACTION_FEE_RATE:        0.038,
+  WALLET_TRANSACTION_FEE_RATE: 0.01,
+  OZOW_TRANSACTION_FEE_RATE:   0.038,
+  REB_BROKERAGE_RATE:          0.005,
+  REB_CUSTODY_FEE:             69,
 };
 let _feeCfgCache = null;
 let _feeCfgCacheAt = 0;
@@ -13526,12 +13528,14 @@ async function getServerFeeConfig() {
     if (j && typeof j === 'object') {
       const num = (v, d) => (v == null || v === '' || isNaN(Number(v)) ? d : Number(v));
       _feeCfgCache = {
-        EXECUTION_RESERVE_RATE: num(j.executionReserveRate, FEE_CONSTANTS_DEFAULT.EXECUTION_RESERVE_RATE),
-        BROKER_FEE_RATE:        num(j.brokerFeeRate,        FEE_CONSTANTS_DEFAULT.BROKER_FEE_RATE),
-        ISIN_FEE_PER_ASSET:     num(j.isinFeePerAsset,      FEE_CONSTANTS_DEFAULT.ISIN_FEE_PER_ASSET),
-        TRANSACTION_FEE_RATE:   num(j.transactionFeeRate,   FEE_CONSTANTS_DEFAULT.TRANSACTION_FEE_RATE),
-        REB_BROKERAGE_RATE:     num(j.rebBrokerageRate,     FEE_CONSTANTS_DEFAULT.REB_BROKERAGE_RATE),
-        REB_CUSTODY_FEE:        num(j.rebCustodyFee,        FEE_CONSTANTS_DEFAULT.REB_CUSTODY_FEE),
+        EXECUTION_RESERVE_RATE:      num(j.executionReserveRate,      FEE_CONSTANTS_DEFAULT.EXECUTION_RESERVE_RATE),
+        BROKER_FEE_RATE:             num(j.brokerFeeRate,             FEE_CONSTANTS_DEFAULT.BROKER_FEE_RATE),
+        ISIN_FEE_PER_ASSET:          num(j.isinFeePerAsset,           FEE_CONSTANTS_DEFAULT.ISIN_FEE_PER_ASSET),
+        TRANSACTION_FEE_RATE:        num(j.transactionFeeRate,        FEE_CONSTANTS_DEFAULT.TRANSACTION_FEE_RATE),
+        WALLET_TRANSACTION_FEE_RATE: num(j.walletTransactionFeeRate,  FEE_CONSTANTS_DEFAULT.WALLET_TRANSACTION_FEE_RATE),
+        OZOW_TRANSACTION_FEE_RATE:   num(j.ozowTransactionFeeRate,    FEE_CONSTANTS_DEFAULT.OZOW_TRANSACTION_FEE_RATE),
+        REB_BROKERAGE_RATE:          num(j.rebBrokerageRate,          FEE_CONSTANTS_DEFAULT.REB_BROKERAGE_RATE),
+        REB_CUSTODY_FEE:             num(j.rebCustodyFee,             FEE_CONSTANTS_DEFAULT.REB_CUSTODY_FEE),
       };
       _feeCfgCacheAt = now;
       return _feeCfgCache;
@@ -13549,13 +13553,15 @@ app.get('/api/fees-config', async (req, res) => {
     return res.json({
       success: true,
       fees: {
-        ISIN_FEE_PER_ASSET:     c.ISIN_FEE_PER_ASSET,
-        BROKER_FEE_RATE:        c.BROKER_FEE_RATE,
-        TRANSACTION_FEE_RATE:   c.TRANSACTION_FEE_RATE,
-        EXECUTION_RESERVE_RATE: c.EXECUTION_RESERVE_RATE,
-        CASH_BUFFER_RATE:       c.EXECUTION_RESERVE_RATE,
-        REB_BROKERAGE_RATE:     c.REB_BROKERAGE_RATE,
-        REB_CUSTODY_FEE:        c.REB_CUSTODY_FEE,
+        ISIN_FEE_PER_ASSET:          c.ISIN_FEE_PER_ASSET,
+        BROKER_FEE_RATE:             c.BROKER_FEE_RATE,
+        TRANSACTION_FEE_RATE:        c.TRANSACTION_FEE_RATE,
+        WALLET_TRANSACTION_FEE_RATE: c.WALLET_TRANSACTION_FEE_RATE,
+        OZOW_TRANSACTION_FEE_RATE:   c.OZOW_TRANSACTION_FEE_RATE,
+        EXECUTION_RESERVE_RATE:      c.EXECUTION_RESERVE_RATE,
+        CASH_BUFFER_RATE:            c.EXECUTION_RESERVE_RATE,
+        REB_BROKERAGE_RATE:          c.REB_BROKERAGE_RATE,
+        REB_CUSTODY_FEE:             c.REB_CUSTODY_FEE,
       },
     });
   } catch (err) {
