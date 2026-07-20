@@ -728,7 +728,7 @@ export default function GiftStrategyPickerPage({ onBack, onNavigate, autoOpenWis
                 <p className="text-xs text-white/60 leading-relaxed">
                   {childMarketMode
                     ? "Showing child-friendly strategies only. Your account stays active."
-                    : "Pick a basket to gift. Recipient claims with SA ID + code."}
+                    : "A MINT Gift is a real investment — stocks held directly in the recipient's name, not a voucher. They keep the shares and watch them grow."}
                 </p>
               </motion.div>
 
