@@ -5,12 +5,26 @@
 - **Workflow**: `Start application` — runs `npm run dev`, which starts the Express backend (port 3001) and the Vite dev server (port 5000) concurrently.
 - **Preview**: Open port 5000 in the Replit preview pane.
 - **Required secrets** (set via Replit Secrets):
-  - `VITE_SUPABASE_ANON_KEY` — Supabase public anon key (frontend)
-  - `SUPABASE_SERVICE_ROLE_KEY` — Supabase service role key (backend admin)
-  - `SESSION_SECRET` — Express session secret
+  - `VITE_SUPABASE_ANON_KEY` — Supabase public anon key (frontend) ✅ configured
+  - `SUPABASE_SERVICE_ROLE_KEY` — Supabase service role key (backend admin) ✅ configured
+  - `SESSION_SECRET` — Express session secret ✅ configured
 - **Optional secrets** (features degrade gracefully without them): `RESEND_API_KEY`, `PAYSTACK_SECRET_KEY`, `OZOW_PRIVATE_KEY`, `OZOW_SITE_CODE`, `ANTHROPIC_API_KEY`, `BROKER_API_KEY`, `TRUID_WEBHOOK_SECRET`, `CRON_SECRET`
 - `EXPERIAN_MOCK=true` is already set — KYC runs in mock mode for development.
 - Dependencies: installed automatically by the workflow via `pnpm install` before `npm run dev`.
+
+## Setup Status (last verified 2026-07-20)
+
+The app was imported from GitHub and set up on Replit. Verified working:
+
+- ✅ `pnpm install` completes cleanly (508 packages)
+- ✅ Express backend starts on port 3001 (`TruID API server running on port 3001`)
+- ✅ Vite dev server starts on port 5000
+- ✅ Supabase anon key wired to frontend (`VITE_SUPABASE_ANON_KEY`)
+- ✅ Supabase service role client initialised on backend (`Supabase admin client initialized (service role)`)
+- ✅ DB health checks pass: `gift_events`, `audit_logs`, `user_sessions`, `login_attempts`, `family_members`, `it_incidents` tables all confirmed
+- ✅ Scheduled jobs registered: EOD price save (17:05 SAST), AUM accrual (21:30 UTC), gift-registry reservation sweeper
+
+**Database**: All data lives in Supabase (hosted Postgres). There is no local PostgreSQL dependency — the `postgresql-16` Replit module was removed because it is unused and would waste resources. `pgPool` in `server/index.cjs` is optional and falls back gracefully when `SUPABASE_DB_URL` is absent.
 
 ## Overview
 Mint Auth is a React authentication application built with Vite, Tailwind CSS, and Framer Motion. It provides a secure user authentication experience, featuring a complete signup flow with robust password validation, OTP email verification, and advanced security measures like biometric authentication and PIN lock screens. The application integrates with various third-party services for KYC, bank linking, and real-time market data, aiming to deliver a seamless and feature-rich financial management platform for managing personal finances and investments.
