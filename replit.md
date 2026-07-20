@@ -5,6 +5,7 @@
 - **Workflow**: `Start application` — runs `npm run dev`, which starts the Express backend (port 3001) and the Vite dev server (port 5000) concurrently.
 - **Preview**: Open port 5000 in the Replit preview pane.
 - **Required secrets** (set via Replit Secrets):
+  - `VITE_SUPABASE_URL` — Supabase project URL ✅ configured
   - `VITE_SUPABASE_ANON_KEY` — Supabase public anon key (frontend) ✅ configured
   - `SUPABASE_SERVICE_ROLE_KEY` — Supabase service role key (backend admin) ✅ configured
   - `SESSION_SECRET` — Express session secret ✅ configured
