@@ -217,17 +217,17 @@ function SwipeableRow({ b, onSelect, onDeleteRequest, index, isLast }) {
 
         {/* Name + detail */}
         <div className="flex-1 min-w-0 pl-0.5">
-          <p className="text-[13.5px] font-semibold text-slate-800 leading-snug truncate">
+          <p className="text-[13.5px] font-semibold text-slate-800 leading-snug truncate uppercase">
             {b.firstName} {b.lastName}
           </p>
           <div className="flex items-center gap-1.5 mt-[3px]">
             {b.mintNumber ? (
               <>
                 <span className="inline-flex items-center px-1.5 py-[1.5px] rounded bg-violet-100 text-[8.5px] font-bold text-violet-600 uppercase tracking-wider">MINT</span>
-                <span className="text-[11px] text-slate-400 font-mono truncate">{b.mintNumber}</span>
+                <span className="text-[11px] text-slate-400 font-mono truncate uppercase">{b.mintNumber}</span>
               </>
             ) : (
-              <span className="text-[11px] text-slate-400 truncate">{b.email}</span>
+              <span className="text-[11px] text-slate-400 truncate uppercase">{b.email}</span>
             )}
           </div>
         </div>
@@ -691,7 +691,17 @@ export default function GiftToggleV2({
       " on " + d.toLocaleDateString("en-ZA", { weekday: "short", day: "numeric", month: "short" });
   }
 
-  const filteredBeneficiaries = beneficiaries.filter(b => {
+  // Deduplicate by email (case-insensitive) — same person added via Mint number, ID, or email
+  // should only appear once. Keep the first occurrence (list is ordered by used_at desc).
+  const seenEmails = new Set();
+  const dedupedBeneficiaries = beneficiaries.filter(b => {
+    const key = (b.email || "").toLowerCase().trim();
+    if (!key || seenEmails.has(key)) return false;
+    seenEmails.add(key);
+    return true;
+  });
+
+  const filteredBeneficiaries = dedupedBeneficiaries.filter(b => {
     if (!beneficiarySearch.trim()) return true;
     const q = beneficiarySearch.toLowerCase();
     return (
