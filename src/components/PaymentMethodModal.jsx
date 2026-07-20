@@ -269,13 +269,13 @@ const PaymentMethodModal = ({
                     <p className="text-[11px] text-violet-600 font-medium">Pay via Wallet</p>
                   </div>
 
-                  {/* ── Quantity picker — only shown for gift registry (pricePerUnitCents provided) ── */}
-                  {pricePerUnitCents > 0 && (
+                  {/* ── Quantity picker — only shown for gift registry when range > 1 share ── */}
+                  {pricePerUnitCents > 0 && maxQty > minQty && (
                     <div className="rounded-2xl border border-slate-100 bg-white shadow-sm px-5 py-4 flex items-center justify-between">
                       <button
                         onClick={() => handleQtyChange(localQty - 1)}
                         disabled={localQty <= minQty || rereserving}
-                        className="w-12 h-12 rounded-2xl border border-slate-200 bg-white flex items-center justify-center text-slate-600 text-xl font-medium active:scale-95 transition disabled:opacity-30"
+                        className="w-12 h-12 rounded-2xl border border-slate-200 bg-white flex items-center justify-center text-slate-600 text-xl font-medium active:scale-95 transition disabled:opacity-30 disabled:cursor-not-allowed"
                       >
                         −
                       </button>
@@ -296,7 +296,7 @@ const PaymentMethodModal = ({
                       <button
                         onClick={() => handleQtyChange(localQty + 1)}
                         disabled={localQty >= maxQty || rereserving}
-                        className="w-12 h-12 rounded-2xl bg-[#6B21A8] flex items-center justify-center text-white text-xl font-medium active:scale-95 transition disabled:opacity-30"
+                        className="w-12 h-12 rounded-2xl bg-[#6B21A8] flex items-center justify-center text-white text-xl font-medium active:scale-95 transition disabled:opacity-30 disabled:cursor-not-allowed"
                       >
                         +
                       </button>
@@ -385,13 +385,13 @@ const PaymentMethodModal = ({
                     <p className="text-[11px] text-violet-600 font-medium">Pay via Ozow instant bank transfer</p>
                   </div>
 
-                  {/* ── Quantity picker — only shown for gift registry ── */}
-                  {pricePerUnitCents > 0 && (
+                  {/* ── Quantity picker — only shown for gift registry when range > 1 share ── */}
+                  {pricePerUnitCents > 0 && maxQty > minQty && (
                     <div className="rounded-2xl border border-slate-100 bg-white shadow-sm px-5 py-4 flex items-center justify-between">
                       <button
                         onClick={() => handleQtyChange(localQty - 1)}
                         disabled={localQty <= minQty || rereserving}
-                        className="w-12 h-12 rounded-2xl border border-slate-200 bg-white flex items-center justify-center text-slate-600 text-xl font-medium active:scale-95 transition disabled:opacity-30"
+                        className="w-12 h-12 rounded-2xl border border-slate-200 bg-white flex items-center justify-center text-slate-600 text-xl font-medium active:scale-95 transition disabled:opacity-30 disabled:cursor-not-allowed"
                       >
                         −
                       </button>
@@ -412,7 +412,7 @@ const PaymentMethodModal = ({
                       <button
                         onClick={() => handleQtyChange(localQty + 1)}
                         disabled={localQty >= maxQty || rereserving}
-                        className="w-12 h-12 rounded-2xl bg-[#6B21A8] flex items-center justify-center text-white text-xl font-medium active:scale-95 transition disabled:opacity-30"
+                        className="w-12 h-12 rounded-2xl bg-[#6B21A8] flex items-center justify-center text-white text-xl font-medium active:scale-95 transition disabled:opacity-30 disabled:cursor-not-allowed"
                       >
                         +
                       </button>
