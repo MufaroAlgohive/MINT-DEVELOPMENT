@@ -106,7 +106,11 @@ export default function GiftRegistryItemCheckoutSheet({ item, registryId, onSucc
 
   // price_snapshot_cents is the raw base price (BEFORE 8% markup), in cents
   const priceCents = item.price_snapshot_cents ?? 0;
-  const numAssets = item.total_holdings || item.holdings_snapshot?.length || 1;
+  // Single securities have no basket holdings — isinTotal must be 0, same as AdultInvestModal
+  // (which uses holdingsData.length || 0). Only BASKET items carry a per-ISIN custody fee.
+  const numAssets = item.instrument_type === 'BASKET'
+    ? (item.total_holdings || item.holdings_snapshot?.length || 1)
+    : 0;
 
   // Identical fee logic to AdultInvestModal / PaymentMethodModal
   const fees = useMemo(() => {
