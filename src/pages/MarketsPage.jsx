@@ -348,7 +348,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
         const strat = publicStrategiesWithMetrics.find(s => s.id === stratId);
         setWishlistPickerIsKid(strat ? strat.is_kid_strategy === true : false);
       } else {
-        setWishlistPickerIsKid(false); // stocks/securities are never kid strategies
+        setWishlistPickerIsKid(null); // single securities — not a strategy at all, bypass child guard
       }
       // Show the wishlist picker so the user can choose a category
       setWishlistPickerKey(itemKey);
