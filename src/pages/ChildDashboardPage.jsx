@@ -8,8 +8,9 @@ import {
   ArrowLeft, ArrowUpRight, ArrowDownLeft, X,
   Wallet, BarChart3, ChevronRight, ChevronDown, ChevronUp,
   RefreshCw, Search, Star, AlertCircle, Check, ClipboardList,
-  BookOpen, LayoutGrid, ArrowDownToLine, Target, FileSignature, Plus,
+  BookOpen, LayoutGrid, ArrowDownToLine, Target, FileSignature, Plus, Heart, Gift,
 } from "lucide-react";
+import GiftRegistryCreateSheet from "../components/GiftRegistryCreateSheet.jsx";
 import NotificationBell from "../components/NotificationBell";
 import FamilyDropdown from "../components/FamilyDropdown";
 import Navbar from "../components/Navbar";
@@ -1903,7 +1904,7 @@ function CompleteProfileModal({ child, parentProfile, onUpdate, onClose }) {
 
 // --- Main Page ---------------------------------------------------------------
 
-export default function ChildDashboardPage({ child: initialChild, onBack, onOpenFactsheet, onTabChange, onWithdraw }) {
+export default function ChildDashboardPage({ child: initialChild, onBack, onOpenFactsheet, onTabChange, onWithdraw, onOpenNotifications }) {
   const { profile } = useProfile();
   const isMounted = useRef(true);
   const [child, setChild] = useState(initialChild);
@@ -1936,6 +1937,11 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
   const [kycNotice, setKycNotice] = useState("");
   const [activeChildTab, setActiveChildTab] = useState("home");
   const [childNewsArticleId, setChildNewsArticleId] = useState(null);
+
+  // Wishlist state
+  const [showChildWishlistCreate, setShowChildWishlistCreate] = useState(false);
+  const [childWishlists, setChildWishlists] = useState([]);
+  const [childWishlistsLoading, setChildWishlistsLoading] = useState(false);
 
   useEffect(() => {
     if (childNewsArticleId) {
@@ -1984,6 +1990,37 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
   useEffect(() => {
     fetchChildFriendlyStrategies();
   }, []);
+
+  // Fetch wishlists created for this child
+  useEffect(() => {
+    if (!child?.id) return;
+    setChildWishlistsLoading(true);
+    (async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const token = session?.access_token;
+        const res = await fetch("/api/gift-registry/my-registries", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const json = await res.json();
+        const all = json.registries || [];
+        const childFirstNameLower = (child.first_name || '').toLowerCase().trim();
+        setChildWishlists(all.filter(r =>
+          r.beneficiary_ref === child.id ||
+          // Fallback for legacy records created before beneficiary_ref was stored:
+          // match by display name when beneficiary_ref was never set
+          (r.beneficiary_ref === null &&
+            r.beneficiary_type === 'CHILD' &&
+            childFirstNameLower &&
+            (r.beneficiary_display_name || '').toLowerCase().trim().startsWith(childFirstNameLower))
+        ));
+      } catch (e) {
+        console.error("[ChildDashboard] Failed to fetch child wishlists:", e.message);
+      } finally {
+        setChildWishlistsLoading(false);
+      }
+    })();
+  }, [child?.id, showChildWishlistCreate]);
 
   async function fetchChildFriendlyStrategies() {
     if (!supabase) return;
@@ -2657,6 +2694,12 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
     }, {})
   ); // [[strategyId, [card, card?]], ...]
 
+  // Pending single-security gift holdings — received but not yet broker-filled.
+  // Shown as a "Pending Gift" card so the child can see what was gifted to them.
+  const pendingShareHoldings = holdings.filter(
+    h => !h.strategy_id && !isHoldingFilled(h) && h.security_id
+  );
+
   // Best performing INDIVIDUAL assets — only holdings without a strategy_id.
   // Strategy holdings get surfaced through their own strategy card / detail modal instead.
   const bestAssets = [...holdings]
@@ -2896,7 +2939,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
             </div>
 
             {/* Notification bell */}
-            <NotificationBell onClick={() => {}} />
+            <NotificationBell onClick={onOpenNotifications || (() => {})} />
           </header>
 
           {activeChildTab !== "portfolio" && (
@@ -2965,11 +3008,12 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
 
           {/* Quick Actions — always visible */}
           {activeChildTab !== "portfolio" && <motion.div variants={item}>
-            <div className="grid grid-cols-3 gap-2 text-[11px] font-medium">
+            <div className="grid grid-cols-4 gap-2 text-[11px] font-medium">
               {[
                 { label: "Invest", icon: LayoutGrid, onClick: openInvestModal, disabled: isAdminPreview() },
                 { label: "Deposit", icon: ArrowDownToLine, onClick: openTransferModal, disabled: openingTransfer || isAdminPreview() },
                 { label: "Goals", icon: Target, onClick: () => setShowGoalsModal(true) },
+                { label: "Wishlist", icon: Heart, onClick: () => setShowChildWishlistCreate(true) },
               ].map((btn, i) => {
                 const Icon = btn.icon;
                 return (
@@ -3329,6 +3373,44 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
             )}
           </motion.div>}
 
+          {/* -- Pending Gift Shares — home tab only — shows gifted single securities awaiting broker fill -- */}
+          {activeChildTab === "home" && pendingShareHoldings.length > 0 && (
+            <motion.div variants={item}>
+              <div className="flex items-center gap-2 mb-3 px-1">
+                <div className="h-2 w-2 rounded-full bg-violet-400 animate-pulse" />
+                <p className="text-[11px] font-bold uppercase tracking-widest text-slate-500">
+                  Pending Gift{pendingShareHoldings.length !== 1 ? "s" : ""}
+                </p>
+              </div>
+              <div className="space-y-2">
+                {pendingShareHoldings.map(h => (
+                  <div
+                    key={h.id}
+                    className="flex items-center gap-3 rounded-2xl bg-white border border-violet-100 shadow-sm p-4"
+                    style={{ background: "linear-gradient(135deg,#fdfbff 0%,#f5f0ff 100%)" }}
+                  >
+                    <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center overflow-hidden rounded-xl bg-violet-50 ring-1 ring-violet-100">
+                      {h.logo_url
+                        ? <img src={h.logo_url} alt={h.symbol} className="h-9 w-9 object-contain" />
+                        : <span className="text-[10px] font-bold text-violet-600">{(h.symbol || "?").substring(0, 3)}</span>}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-bold text-slate-900 truncate">{h.symbol || h.name || "Share"}</p>
+                      <p className="text-[10px] text-slate-500 truncate">{h.name || ""}</p>
+                      {h.quantity > 0 && (
+                        <p className="text-[10px] text-violet-500 font-semibold mt-0.5">{h.quantity} share{h.quantity !== 1 ? "s" : ""} · gifted 🎁</p>
+                      )}
+                    </div>
+                    <div className="text-right flex-shrink-0">
+                      <p className="text-sm font-bold text-violet-700">Pending</p>
+                      <p className="text-[10px] text-violet-400">Awaiting fill</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+          )}
+
           {/* -- Best Performing Assets — home tab only -- */}
           {activeChildTab === "home" && (loading ? (
             <motion.div variants={item}>
@@ -3435,6 +3517,65 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
             )}
           </motion.div>}
 
+          {/* -- Child Wishlists — home tab only -- */}
+          {activeChildTab === "home" && <motion.div variants={item}>
+            <div className="flex items-center justify-between gap-2 mb-3 px-1">
+              <div className="flex items-center gap-2">
+                <div className="h-2 w-2 rounded-full bg-violet-400" />
+                <p className="text-[11px] font-bold uppercase tracking-widest text-slate-500">Wishlists</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowChildWishlistCreate(true)}
+                className="text-[11px] font-bold text-violet-600 active:opacity-70"
+              >
+                + New
+              </button>
+            </div>
+            {childWishlistsLoading ? (
+              <div className="h-14 rounded-2xl bg-slate-100 animate-pulse" />
+            ) : childWishlists.length === 0 ? (
+              <button
+                type="button"
+                onClick={() => setShowChildWishlistCreate(true)}
+                className="w-full flex items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-slate-200 py-5 text-sm font-medium text-slate-400 hover:border-violet-300 hover:bg-violet-50 transition-all active:scale-98"
+              >
+                <Heart size={15} className="text-violet-300" />
+                Create a wishlist for {child?.first_name || "this child"}
+              </button>
+            ) : (
+              <div className="space-y-2">
+                {childWishlists.map(reg => {
+                  const activeItems = (reg.items || []).filter(i => i.status !== "REMOVED");
+                  return (
+                    <div
+                      key={reg.id}
+                      className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm"
+                    >
+                      <div className="flex h-9 w-9 items-center justify-center rounded-full bg-violet-50 flex-shrink-0">
+                        <Heart size={16} className="text-violet-500 fill-violet-100" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-slate-800 truncate">{reg.title}</p>
+                        <p className="text-[11px] text-slate-400">
+                          {activeItems.length === 0 ? "No items yet" : `${activeItems.length} ${activeItems.length === 1 ? "item" : "items"}`}
+                        </p>
+                      </div>
+                      <Gift size={14} className="text-slate-300 flex-shrink-0" />
+                    </div>
+                  );
+                })}
+                <button
+                  type="button"
+                  onClick={() => setShowChildWishlistCreate(true)}
+                  className="w-full flex items-center justify-center gap-1.5 rounded-2xl border border-dashed border-slate-200 py-3 text-[12px] font-semibold text-slate-400 hover:border-violet-300 hover:text-violet-500 transition-all"
+                >
+                  <Plus size={12} /> Add wishlist
+                </button>
+              </div>
+            )}
+          </motion.div>}
+
           {/* -- Account Info — home tab only -- */}
           {activeChildTab === "home" && <motion.div variants={item}>
             <div className="flex items-center gap-2 mb-3 px-1">
@@ -3503,6 +3644,19 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
           />
         )}
       </div>
+
+      {/* -- Create Wishlist for child -- */}
+      <GiftRegistryCreateSheet
+        open={showChildWishlistCreate}
+        onClose={() => setShowChildWishlistCreate(false)}
+        preselectedChild={child}
+        onSaved={() => {
+          setShowChildWishlistCreate(false);
+          // Re-trigger the wishlists fetch by toggling state
+          setChildWishlists([]);
+          setChildWishlistsLoading(true);
+        }}
+      />
 
       {/* -- Markets/Invest tab — conditionally rendered to reset state on close -- */}
       {activeChildTab === "markets" && (

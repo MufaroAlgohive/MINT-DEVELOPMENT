@@ -891,11 +891,6 @@ const SwipeableBalanceCard = ({
             : (dbData.totalInvested || 0);
           const costBasisCents = Math.round(costBasisRands * 100);
           setParentYearStartBasketCents(costBasisCents > 0 ? costBasisCents : null);
-          console.log("[PERIOD_DEBUG parent] YTD/ALL cost-basis:", {
-            activeTab,
-            selectedStrategyId,
-            costBasisRands,
-          });
           return;
         }
 
@@ -983,9 +978,6 @@ const SwipeableBalanceCard = ({
         // Need at least rowLimit + 1 trading days (anchor + rowLimit days up to and including today).
         if (tradingDates.length < rowLimit + 1) {
           setParentMDInsufficientData(true);
-          console.log("[PERIOD_DEBUG parent] M/5D insufficient trading-day rows:", {
-            activeTab, rowLimit, tradingRows: tradingDates.length,
-          });
           return;
         }
 
@@ -1000,14 +992,6 @@ const SwipeableBalanceCard = ({
         //   anchorTotalCents = positions + buffer + (residual if rebalance ≤ anchor date).
         //   This makes both sides cash-comparable so the delta reflects only price moves.
         setParentSnapshotStartBasketCents(anchorTotalCents);
-        console.log("[PERIOD_DEBUG parent] M/5D cash-adjusted anchor:", {
-          activeTab, anchorDate,
-          anchorBasketRands: anchorBasketCents / 100,
-          anchorCashRands: anchorCashCents / 100,
-          anchorTotalRands: anchorTotalCents / 100,
-          tradingDatesCount: tradingDates.length,
-          residualDate: earliestResidualDateStr,
-        });
 
       } catch (e) {
         console.warn("[SwipeableBalanceCard] parentMode snapshot error:", e.message);
@@ -1577,25 +1561,6 @@ const SwipeableBalanceCard = ({
             ? 0                      // Basket data not yet fetched — R0, no stale chart fallback
             : ((!parentMDInsufficientData && isPeriodTab && activeTab !== "all" && periodReturn !== null) ? periodReturn : displayReturn);
 
-  // Debug log — fires on every relevant render so values can be compared in console
-  if (!childMode && activeTab !== "all" && activeTab !== "d") {
-    console.log("[PERIOD_DEBUG parent] RENDER:", {
-      activeTab,
-      parentYearStartBasketCents,
-      yearStartRands: parentYearStartBasketCents != null ? parentYearStartBasketCents / 100 : null,
-      parentSnapshotStartBasketCents,
-      startBasketRands: parentSnapshotStartBasketCents != null ? parentSnapshotStartBasketCents / 100 : null,
-      displayMarketValue,
-      displayBigValue,
-      displayReturn,
-      parentYtdReturn: useParentLiveYtd ? parentYtdReturn : "n/a (no prior-year anchor)",
-      parentMDLivePnl,
-      useParentLiveYtd,
-      useParentMD,
-      useParentYtdTab,
-      activeReturn,
-    });
-  }
 
   const activeReturnPct = displayBigValue > 0
     ? (useChildLiveYtd

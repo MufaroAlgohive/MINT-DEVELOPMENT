@@ -48,6 +48,54 @@ async function ensureGiftRegistryTables(pgPool, supabaseAdmin) {
   } catch (e) {
     console.error('[gift-registry] Health check threw:', e.message);
   }
+
+  // Auto-repair: fix orphaned child registries where beneficiary_ref was never set
+  // (these were created with old code that used a non-existent family_member_id column,
+  //  leaving beneficiary_ref = NULL and making them invisible on the child's dashboard)
+  try {
+    const { data: orphaned } = await supabaseAdmin
+      .from('gift_events')
+      .select('id, creator_user_id, beneficiary_display_name')
+      .eq('beneficiary_type', 'CHILD')
+      .is('beneficiary_ref', null);
+
+    if (orphaned?.length) {
+      console.log(`[gift-registry] Found ${orphaned.length} orphaned child registries — attempting auto-repair`);
+      for (const reg of orphaned) {
+        const { data: members } = await supabaseAdmin
+          .from('family_members')
+          .select('id, first_name, last_name')
+          .eq('primary_user_id', reg.creator_user_id)
+          .eq('relationship', 'child');
+
+        if (!members?.length) continue;
+
+        const displayName = (reg.beneficiary_display_name || '').toLowerCase().trim();
+        const match = members.find(m => {
+          const fn = (m.first_name || '').toLowerCase().trim();
+          const full = `${m.first_name || ''} ${m.last_name || ''}`.toLowerCase().trim();
+          return displayName === fn || displayName === full ||
+            displayName.startsWith(fn) || fn.startsWith(displayName.split(' ')[0]);
+        });
+
+        if (match) {
+          const { error: upErr } = await supabaseAdmin
+            .from('gift_events')
+            .update({ beneficiary_ref: match.id })
+            .eq('id', reg.id);
+          if (!upErr) {
+            console.log(`[gift-registry] Repaired registry ${reg.id} → beneficiary_ref=${match.id} (${match.first_name})`);
+          } else {
+            console.warn(`[gift-registry] Could not repair registry ${reg.id}:`, upErr.message);
+          }
+        }
+      }
+    } else {
+      console.log('[gift-registry] No orphaned child registries found — data is clean');
+    }
+  } catch (e) {
+    console.warn('[gift-registry] Auto-repair threw:', e.message);
+  }
 }
 
 // ─── Auth helper ─────────────────────────────────────────────────────────────
@@ -68,13 +116,47 @@ async function isKycComplete(userId, supabaseAdmin) {
   try {
     const { data, error } = await supabaseAdmin
       .from('user_onboarding')
-      .select('kyc_status')
+      .select('kyc_status, sumsub_raw')
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle();
-    const result = !error && !!data && ['approved', 'onboarding_complete', 'verified'].includes(data.kyc_status);
-    console.log(`[gift-registry] isKycComplete userId=${userId} kyc_status=${data?.kyc_status} error=${error?.message} result=${result}`);
+
+    if (error || !data) {
+      console.log(`[gift-registry] isKycComplete userId=${userId} result=false (no row or query error: ${error?.message})`);
+      return false;
+    }
+
+    // Mirror exactly the logic used by /api/onboarding/status so the server
+    // never rejects a user the frontend considers fully onboarded.
+
+    // "onboarding_complete" is the definitive completed-flow marker.
+    if (data.kyc_status === 'onboarding_complete') {
+      console.log(`[gift-registry] isKycComplete userId=${userId} kyc_status=onboarding_complete result=true`);
+      return true;
+    }
+
+    const kycDone = ['approved', 'onboarding_complete', 'verified'].includes(data.kyc_status);
+    let raw = {};
+    try { raw = typeof data.sumsub_raw === 'string' ? JSON.parse(data.sumsub_raw) : (data.sumsub_raw || {}); } catch {}
+
+    const signed = !!raw?.signed_at || !!raw?.account_agreement_signed;
+
+    // Grandfathering: KYC-approved + signature = all onboarding steps treated as done.
+    if (kycDone && signed) {
+      console.log(`[gift-registry] isKycComplete userId=${userId} kyc_status=${data.kyc_status} grandfathered=true result=true`);
+      return true;
+    }
+
+    // Non-grandfathered: every step must be individually complete.
+    const taxDone      = !!raw?.tax_details_saved;
+    const bankDone     = !!raw?.bank_details_saved;
+    const mandateDone  = !!raw?.mandate_data?.agreedMandate || !!raw?.mandate_accepted;
+    const riskDone     = !!raw?.risk_disclosure_accepted;
+    const sofDone      = !!raw?.source_of_funds_accepted;
+    const termsDone    = !!raw?.terms_accepted;
+    const result = kycDone && taxDone && bankDone && mandateDone && riskDone && sofDone && termsDone && signed;
+    console.log(`[gift-registry] isKycComplete userId=${userId} kyc_status=${data.kyc_status} result=${result}`);
     return result;
   } catch (e) {
     console.warn(`[gift-registry] isKycComplete THREW userId=${userId} err=${e.message}`);
@@ -96,13 +178,14 @@ async function getLatestPriceCents(isin, supabaseAdmin) {
 
   if (intraday?.current_price) return intraday.current_price; // already in cents
 
-  const { data: sec } = await supabaseAdmin
-    .from('securities_c')
-    .select('last_price')
-    .eq('isin', isin)
-    .single();
+  // Try by isin column first; fall back to symbol for JSE stocks where isin is null
+  const { data: byIsin } = await supabaseAdmin
+    .from('securities_c').select('last_price').eq('isin', isin).maybeSingle();
+  if (byIsin?.last_price) return byIsin.last_price;
 
-  return sec?.last_price || 0; // cents
+  const { data: bySym } = await supabaseAdmin
+    .from('securities_c').select('last_price').eq('symbol', isin).maybeSingle();
+  return bySym?.last_price || 0; // cents
 }
 
 // ─── Shared item enrichment helper ────────────────────────────────────────────
@@ -117,22 +200,29 @@ async function enrichItems(items, supabaseAdmin) {
 
   if (shareItems.length) {
     const isins = shareItems.map(i => i.isin);
-    const { data: securities } = await supabaseAdmin
-      .from('securities_c').select('isin, name, logo_url, last_price').in('isin', isins);
-    const secMap = Object.fromEntries((securities || []).map(s => [s.isin, s]));
+    // Query by isin AND by symbol in parallel — many JSE stocks have isin=null in
+    // securities_c and are only indexed by their symbol (e.g. "BHG.JO").
+    const [{ data: byIsin }, { data: bySymbol }] = await Promise.all([
+      supabaseAdmin.from('securities_c').select('isin, symbol, name, logo_url, last_price').in('isin', isins),
+      supabaseAdmin.from('securities_c').select('isin, symbol, name, logo_url, last_price').in('symbol', isins),
+    ]);
+    // Merge: symbol match first so it's overridden by a real isin match when both exist
+    const secMap = {};
+    for (const s of (bySymbol || [])) if (s.symbol) secMap[s.symbol] = s;
+    for (const s of (byIsin   || [])) if (s.isin)   secMap[s.isin]   = s;
     shareItems.forEach(item => {
+      const sec = secMap[item.isin];
       enrichedMap[item.id] = {
         ...item,
-        name: secMap[item.isin]?.name || item.isin,
-        logo_url: secMap[item.isin]?.logo_url || null,
-        price_snapshot_cents: item.price_snapshot_cents || secMap[item.isin]?.last_price || 0,
+        name: sec?.name || item.isin,
+        logo_url: sec?.logo_url || null,
+        price_snapshot_cents: item.price_snapshot_cents || sec?.last_price || 0,
       };
     });
   }
 
   if (basketItems.length) {
     const strategyIds = basketItems.map(i => i.isin);
-
     // Only select columns that actually exist in strategies_c.
     // r_ytd / ytd_as_of_date live in strategies_returns_c — fetched separately below.
     const { data: strategies, error: stratErr } = await supabaseAdmin
@@ -156,18 +246,28 @@ async function enrichItems(items, supabaseAdmin) {
       (s.holdings || []).map(h => h.ticker || h.symbol || h).filter(Boolean)
     );
     const uniqueTickers = [...new Set(allTickers)];
-    const { data: secs } = uniqueTickers.length
-      ? await supabaseAdmin.from('securities_c').select('symbol, name, logo_url, last_price').in('symbol', uniqueTickers)
+    // Include both raw tickers (e.g. "STX40.JO") and normalized without exchange suffix
+    // (e.g. "STX40") so the lookup works regardless of which format securities_c uses.
+    const normalizedTickers = uniqueTickers.map(t => t.split('.')[0]).filter(Boolean);
+    const allQueryTickers = [...new Set([...uniqueTickers, ...normalizedTickers])];
+    const { data: secs } = allQueryTickers.length
+      ? await supabaseAdmin.from('securities_c').select('symbol, name, logo_url, last_price').in('symbol', allQueryTickers)
       : { data: [] };
-    const secBySymbol = Object.fromEntries((secs || []).map(s => [s.symbol, s]));
+    // Build a bidirectional map: both "STX40.JO" and "STX40" point to the same row.
+    const secBySymbol = {};
+    for (const s of (secs || [])) {
+      secBySymbol[s.symbol] = s;
+      const norm = s.symbol.split('.')[0];
+      if (norm && !secBySymbol[norm]) secBySymbol[norm] = s;
+    }
     const stratMap = Object.fromEntries((strategies || []).map(s => [s.id, s]));
 
     basketItems.forEach(item => {
       const strategy = stratMap[item.isin];
-      if (!strategy) { enrichedMap[item.id] = { ...item, name: item.isin }; return; }
+      if (!strategy) { enrichedMap[item.id] = { ...item, name: 'Investment Basket' }; return; }
       const holdings = Array.isArray(strategy.holdings) ? strategy.holdings : [];
       const holdingsSnapshot = holdings
-        .map(h => { const t = h.ticker || h.symbol || String(h); return { symbol: t, name: secBySymbol[t]?.name || t, logo_url: secBySymbol[t]?.logo_url || null }; })
+        .map(h => { const t = h.ticker || h.symbol || String(h); const sec = secBySymbol[t] || secBySymbol[t.split('.')[0]]; return { symbol: t, name: sec?.name || t, logo_url: sec?.logo_url || null }; })
         .sort((a, b) => (b.logo_url ? 1 : 0) - (a.logo_url ? 1 : 0))
         .slice(0, 5);
 
@@ -175,8 +275,10 @@ async function enrichItems(items, supabaseAdmin) {
       // last_price is in cents; display layer applies /100 × 1.08 for the Rand figure.
       const livePriceCents = holdings.reduce((sum, h) => {
         const ticker = h.ticker || h.symbol || String(h);
-        const shares = Number(h.shares || h.quantity || 1);
-        return sum + shares * (secBySymbol[ticker]?.last_price || 0);
+        const shares = Number(h.shares || h.quantity || h.weight || 1);
+        // Look up by raw ticker first, then normalized (strips exchange suffix, e.g. ".JO")
+        const sec = secBySymbol[ticker] || secBySymbol[ticker.split('.')[0]];
+        return sum + shares * (sec?.last_price || 0);
       }, 0);
       // Fall back to stored DB min_investment (in cents) if live data is unavailable
       const effectivePriceCents = livePriceCents > 0
@@ -187,8 +289,8 @@ async function enrichItems(items, supabaseAdmin) {
 
       enrichedMap[item.id] = {
         ...item,
-        name: strategy.name,
-        short_name: strategy.short_name,
+        name: strategy.name || strategy.short_name || 'Investment Basket',
+        short_name: strategy.short_name || strategy.name || null,
         logo_url: null,
         holdings_snapshot: holdingsSnapshot,
         total_holdings: holdings.length,
@@ -224,6 +326,45 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
     try {
       const user = await getUser(req, supabaseAdmin);
       if (!user) return res.status(401).json({ error: 'Unauthorized' });
+
+      // When a childFamilyMemberId is provided the caller is rendering a specific
+      // child's dashboard.  Hearts must only reflect items in THAT child's registries
+      // so that Amara's liked items don't bleed into Will Smith's heart state.
+      // In child-context mode we skip reading/writing parent metadata entirely.
+      const childFamilyMemberId = req.query.childFamilyMemberId || null;
+
+      if (childFamilyMemberId) {
+        // Build confirmed set scoped to this child's registries only
+        let registryQuery = supabaseAdmin
+          .from('gift_events')
+          .select('id')
+          .eq('creator_user_id', user.id)
+          .eq('beneficiary_ref', childFamilyMemberId)
+          .not('status', 'in', '(CANCELLED,EXPIRED)');
+        const { data: childRegistries } = await registryQuery;
+        const childRegistryIds = (childRegistries || []).map(r => r.id);
+
+        const childSet = new Set();
+        if (childRegistryIds.length) {
+          const { data: items } = await supabaseAdmin
+            .from('gift_registry_items')
+            .select('isin, instrument_type')
+            .in('gift_event_id', childRegistryIds)
+            .in('status', ['OPEN', 'PARTIALLY_FILLED']);
+          for (const it of items || []) {
+            if (it.instrument_type === 'BASKET') {
+              childSet.add(`strategy:${it.isin}`);
+              childSet.add(`gift:${it.isin}`);
+            } else {
+              childSet.add(it.isin);
+            }
+          }
+        }
+        // Return child-scoped keys; watchlist is always global (parent pref)
+        const prefs = user.user_metadata?.gift_wishlist_prefs || {};
+        return res.json({ wishlistedKeys: Array.from(childSet), watchlist: prefs.watchlist || [] });
+      }
+
       const prefs = user.user_metadata?.gift_wishlist_prefs || {};
       const storedKeys = prefs.keys || [];
 
@@ -231,10 +372,13 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
       // storage — items can be added to a registry through flows that never touch
       // storage (e.g. "like it, then create a new wishlist"). So we always compute
       // the confirmed set directly from the DB rather than filtering storedKeys.
+      // For the parent's own view, exclude child-owned registries so a child's
+      // liked items don't show as hearted on the parent's own markets page.
       const { data: myRegistries } = await supabaseAdmin
         .from('gift_events')
         .select('id')
         .eq('creator_user_id', user.id)
+        .is('beneficiary_ref', null)
         .not('status', 'in', '(CANCELLED,EXPIRED)');
       const registryIds = (myRegistries || []).map(r => r.id);
 
@@ -301,7 +445,7 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
       const user = await getUser(req, supabaseAdmin);
       if (!user) return res.status(401).json({ error: 'Unauthorized' });
 
-      const { occasion, customOccasion, beneficiaryType, beneficiaryDisplayName, title, eventDate, expiryAt, message } = req.body;
+      const { occasion, customOccasion, beneficiaryType, beneficiaryDisplayName, title, eventDate, expiryAt, message, familyMemberId } = req.body;
       console.log(`[gift-registry] CREATE start: user=${user.id} occasion=${occasion} beneficiaryType=${beneficiaryType} title=${title} eventDate=${eventDate} expiryAt=${expiryAt}`);
 
       if (!occasion || !beneficiaryType || !beneficiaryDisplayName || !title || !eventDate || !expiryAt) {
@@ -318,6 +462,7 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
           custom_occasion: customOccasion || null,
           beneficiary_type: beneficiaryType,
           beneficiary_display_name: beneficiaryDisplayName,
+          beneficiary_ref: familyMemberId || null,
           title,
           event_date: eventDate,
           expiry_at: expiryAt,
@@ -346,11 +491,27 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
       const user = await getUser(req, supabaseAdmin);
       if (!user) return res.status(401).json({ error: 'Unauthorized' });
 
-      const { data, error } = await supabaseAdmin
+      // Check if this user is a linked child account
+      const { data: familyRow } = await supabaseAdmin
+        .from('family_members')
+        .select('id')
+        .eq('linked_user_id', user.id)
+        .eq('relationship', 'child')
+        .maybeSingle();
+
+      let query = supabaseAdmin
         .from('gift_events')
-        .select(`*, items:gift_registry_items(*)`)
-        .eq('creator_user_id', user.id)
-        .order('created_at', { ascending: false });
+        .select(`*, items:gift_registry_items(*)`);
+
+      if (familyRow?.id) {
+        // Child: own registries OR ones the parent created for them — nothing else
+        query = query.or(`creator_user_id.eq.${user.id},beneficiary_ref.eq.${familyRow.id}`);
+      } else {
+        // Parent / regular user: all registries they created
+        query = query.eq('creator_user_id', user.id);
+      }
+
+      const { data, error } = await query.order('created_at', { ascending: false });
 
       if (error) {
         console.error(`[gift-registry] my-registries: Supabase error code=${error.code} msg=${error.message}`);
@@ -370,9 +531,13 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
 
       let secMap = {};
       if (shareIsins.length) {
-        const { data: securities } = await supabaseAdmin
-          .from('securities_c').select('isin, name, logo_url').in('isin', shareIsins);
-        secMap = Object.fromEntries((securities || []).map(s => [s.isin, s]));
+        // Query by isin AND symbol — JSE stocks often have isin=null in securities_c
+        const [{ data: byIsin }, { data: bySymbol }] = await Promise.all([
+          supabaseAdmin.from('securities_c').select('isin, symbol, name, logo_url').in('isin', shareIsins),
+          supabaseAdmin.from('securities_c').select('isin, symbol, name, logo_url').in('symbol', shareIsins),
+        ]);
+        for (const s of (bySymbol || [])) if (s.symbol) secMap[s.symbol] = s;
+        for (const s of (byIsin   || [])) if (s.isin)   secMap[s.isin]   = s;
         console.log(`[gift-registry] my-registries: secMap resolved=${Object.keys(secMap).length}/${shareIsins.length}`);
       }
 
@@ -392,7 +557,7 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
         }
         strategyMap = Object.fromEntries((strategies || []).map(s => {
           const holdingsSnap = (s.holdings || [])
-            .map(h => { const t = h.ticker || h.symbol || String(h); return { symbol: t, name: secBySymbol[t]?.name || t, logo_url: secBySymbol[t]?.logo_url || null }; })
+            .map(h => { const t = h.ticker || h.symbol || String(h); const sec = secBySymbol[t] || secBySymbol[t.split('.')[0]]; return { symbol: t, name: sec?.name || t, logo_url: sec?.logo_url || null }; })
             .sort((a, b) => (b.logo_url ? 1 : 0) - (a.logo_url ? 1 : 0))
             .slice(0, 5);
           return [s.id, { name: s.name, holdingsSnap }];
@@ -419,7 +584,7 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
             if (item.instrument_type === 'BASKET') {
               return {
                 ...item,
-                name: strategyMap[item.isin]?.name || item.isin,
+                name: strategyMap[item.isin]?.name || 'Investment Basket',
                 logo_url: null,
                 holdings_snapshot: strategyMap[item.isin]?.holdingsSnap || [],
               };
@@ -441,6 +606,35 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
   });
 
   // ── Specific-path GET routes BEFORE wildcard GET /:id ──────────────────────
+
+  // GET /api/gift-registry/public/:token/my-contributions — item IDs gifted by the authed user for this registry
+  // MUST be registered before /public/:token to avoid route shadowing in Express 5.
+  app.get('/api/gift-registry/public/:token/my-contributions', async (req, res) => {
+    try {
+      const user = await getUser(req, supabaseAdmin);
+      if (!user) return res.json({ itemIds: [] }); // unauthenticated — return empty, not error
+
+      const { data: registry, error: regErr } = await supabaseAdmin
+        .from('gift_events')
+        .select('id')
+        .eq('share_token', req.params.token)
+        .single();
+
+      if (regErr || !registry) return res.json({ itemIds: [] });
+
+      const { data: contribs } = await supabaseAdmin
+        .from('gift_contributions')
+        .select('registry_item_id')
+        .eq('gifter_user_id', user.id)
+        .eq('gift_event_id', registry.id)
+        .eq('status', 'PAID');
+
+      const itemIds = [...new Set((contribs || []).map(c => c.registry_item_id).filter(Boolean))];
+      return res.json({ itemIds });
+    } catch (e) {
+      return res.json({ itemIds: [] });
+    }
+  });
 
   // GET /api/gift-registry/public/:token — public view (no auth required)
   app.get('/api/gift-registry/public/:token', async (req, res) => {
@@ -527,34 +721,6 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
       return res.json({ registry });
     } catch (e) {
       return res.status(500).json({ error: e.message });
-    }
-  });
-
-  // GET /api/gift-registry/public/:token/my-contributions — item IDs gifted by the authed user for this registry
-  app.get('/api/gift-registry/public/:token/my-contributions', async (req, res) => {
-    try {
-      const user = await getUser(req, supabaseAdmin);
-      if (!user) return res.json({ itemIds: [] }); // unauthenticated — return empty, not error
-
-      const { data: registry, error: regErr } = await supabaseAdmin
-        .from('gift_events')
-        .select('id')
-        .eq('share_token', req.params.token)
-        .single();
-
-      if (regErr || !registry) return res.json({ itemIds: [] });
-
-      const { data: contribs } = await supabaseAdmin
-        .from('gift_contributions')
-        .select('registry_item_id')
-        .eq('gifter_user_id', user.id)
-        .eq('gift_event_id', registry.id)
-        .eq('status', 'PAID');
-
-      const itemIds = [...new Set((contribs || []).map(c => c.registry_item_id).filter(Boolean))];
-      return res.json({ itemIds });
-    } catch (e) {
-      return res.json({ itemIds: [] });
     }
   });
 
@@ -1090,12 +1256,32 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
 
         // Fetch registry owner + item details (include item instrument_type and isin for holdings)
         const [registryRow, filledItemRow] = await Promise.all([
-          supabaseAdmin.from('gift_events').select('creator_user_id, title').eq('id', registryId).single().then(r => r.data),
+          supabaseAdmin.from('gift_events').select('creator_user_id, title, beneficiary_type, beneficiary_ref, share_token').eq('id', registryId).single().then(r => r.data),
           supabaseAdmin.from('gift_registry_items').select('isin, instrument_type').eq('id', reservedItemId).single().then(r => r.data),
         ]);
 
-        const ownerUserId = registryRow?.creator_user_id;
+        const ownerUserId = registryRow?.creator_user_id; // parent / creator
         const registryTitle = registryRow?.title || 'your wishlist';
+
+        // Resolve actual investment recipient: for CHILD registries the holdings
+        // and transaction must go to the child's own Supabase account (linked_user_id),
+        // not the parent who created the registry.
+        let recipientUserId = ownerUserId;
+        if (registryRow?.beneficiary_type === 'CHILD' && registryRow?.beneficiary_ref) {
+          try {
+            const { data: famMember } = await supabaseAdmin
+              .from('family_members')
+              .select('linked_user_id')
+              .eq('id', registryRow.beneficiary_ref)
+              .maybeSingle();
+            if (famMember?.linked_user_id) {
+              recipientUserId = famMember.linked_user_id;
+              console.log(`[gift-registry] contribute: CHILD registry — routing holdings to child user ${recipientUserId} (not parent ${ownerUserId})`);
+            }
+          } catch (famErr) {
+            console.warn('[gift-registry] contribute: could not resolve child linked_user_id, falling back to creator:', famErr.message);
+          }
+        }
         const itemIsin = filledItemRow?.isin || '';
         const isBasket = filledItemRow?.instrument_type === 'BASKET';
 
@@ -1117,7 +1303,8 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
         // ── 1. Insert pending holdings + transaction for the recipient ──
         // Without a transaction named "Strategy Investment: <name>", the strategy
         // never appears in /api/user/strategies, so the pending card cannot show.
-        if (ownerUserId && isBasket && itemIsin) {
+        // recipientUserId is the child's own account (if CHILD registry), else the creator.
+        if (recipientUserId && isBasket && itemIsin) {
           try {
             const { data: strategy } = await supabaseAdmin.from('strategies_c').select('id, name, holdings').eq('id', itemIsin).maybeSingle();
             const stratHoldings = strategy?.holdings || [];
@@ -1129,14 +1316,14 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
               const secMap = {};
               for (const s of securities || []) secMap[s.symbol] = s;
 
-              // Create a transaction for the owner — this is what /api/user/strategies
+              // Create a transaction for the recipient — this is what /api/user/strategies
               // uses to detect the strategy purchase and surface it as a pending card.
               const now = new Date().toISOString();
               const investAmountCents = reservation.price_lock_cents * qty;
-              let ownerTxId = null;
+              let recipientTxId = null;
               try {
                 const { data: txRow } = await supabaseAdmin.from('transactions').insert({
-                  user_id: ownerUserId,
+                  user_id: recipientUserId,
                   direction: 'debit',
                   name: `Strategy Investment: ${strategyName}`,
                   description: 'Investment received as wishlist gift',
@@ -1147,9 +1334,9 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
                   transaction_date: now,
                   created_at: now,
                 }).select('id').single();
-                ownerTxId = txRow?.id || null;
+                recipientTxId = txRow?.id || null;
               } catch (txErr) {
-                console.warn('[gift-registry] contribute: owner transaction insert:', txErr.message);
+                console.warn('[gift-registry] contribute: recipient transaction insert:', txErr.message);
               }
 
               // Calculate scale: invested amount (base price before markup) vs basket cost
@@ -1168,7 +1355,7 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
                 const holdingQty = Math.max(1, Math.round((h.weight || 1) * scale));
                 try {
                   await supabaseAdmin.from('stock_holdings_c').insert({
-                    user_id: ownerUserId,
+                    user_id: recipientUserId,
                     security_id: sec.id,
                     strategy_id: itemIsin,
                     quantity: holdingQty,
@@ -1177,21 +1364,21 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
                     unrealized_pnl: 0,
                     as_of_date: null,
                     Status: 'active',
-                    transaction_id: ownerTxId || null,
+                    transaction_id: recipientTxId || null,
                   });
                   holdingsInserted++;
                 } catch (he) { console.warn('[gift-registry] contribute: pending holding insert:', he.message); }
               }
-              console.log(`[gift-registry] contribute: ${holdingsInserted} holding(s) + tx ${ownerTxId} created for owner ${ownerUserId} (strategy: ${strategyName})`);
+              console.log(`[gift-registry] contribute: ${holdingsInserted} holding(s) + tx ${recipientTxId} created for recipient ${recipientUserId} (strategy: ${strategyName})`);
 
               // Upsert user_strategies so the strategy is discoverable
               if (holdingsInserted > 0) {
                 try {
-                  const { data: existingUS } = await supabaseAdmin.from('user_strategies').select('id, invested_amount').eq('user_id', ownerUserId).eq('strategy_id', itemIsin).maybeSingle();
+                  const { data: existingUS } = await supabaseAdmin.from('user_strategies').select('id, invested_amount').eq('user_id', recipientUserId).eq('strategy_id', itemIsin).maybeSingle();
                   if (existingUS) {
                     await supabaseAdmin.from('user_strategies').update({ invested_amount: (existingUS.invested_amount || 0) + investAmountCents, updated_at: now }).eq('id', existingUS.id);
                   } else {
-                    await supabaseAdmin.from('user_strategies').insert({ user_id: ownerUserId, strategy_id: itemIsin, invested_amount: investAmountCents, status: 'active', created_at: now, updated_at: now });
+                    await supabaseAdmin.from('user_strategies').insert({ user_id: recipientUserId, strategy_id: itemIsin, invested_amount: investAmountCents, status: 'active', created_at: now, updated_at: now });
                   }
                 } catch (usErr) { console.warn('[gift-registry] contribute: user_strategies upsert:', usErr.message); }
               }
@@ -1199,37 +1386,144 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
           } catch (holdingErr) {
             console.warn('[gift-registry] contribute: pending holdings block error:', holdingErr.message);
           }
+        } else if (recipientUserId && !isBasket && itemIsin) {
+          // ── Single security gift — create one pending holding row ──
+          try {
+            const { data: sec } = await supabaseAdmin
+              .from('securities_c')
+              .select('id, symbol, last_price')
+              .eq('isin', itemIsin)
+              .maybeSingle();
+
+            if (sec?.id) {
+              const now = new Date().toISOString();
+              const investAmountCents = reservation.price_lock_cents * qty;
+
+              // Get intraday price for Expected_fill (what the child sees as fill price)
+              const { data: intraday } = await supabaseAdmin
+                .from('stock_intraday_c')
+                .select('current_price')
+                .eq('security_id', sec.id)
+                .order('timestamp', { ascending: false })
+                .limit(1)
+                .maybeSingle();
+              const expectedFillRands = intraday?.current_price
+                ? Number(intraday.current_price) / 100
+                : (sec.last_price ? sec.last_price / 100 : null);
+
+              // Number of shares the gift amount can buy at current price
+              const sharesQty = sec.last_price > 0
+                ? Math.max(1, Math.floor(investAmountCents / sec.last_price))
+                : qty;
+
+              // Create a transaction so it appears in the child's activity feed
+              let recipientTxId = null;
+              try {
+                const { data: txRow } = await supabaseAdmin.from('transactions').insert({
+                  user_id: recipientUserId,
+                  direction: 'debit',
+                  name: `Purchased ${itemName}`,
+                  description: 'Investment received as wishlist gift',
+                  amount: investAmountCents,
+                  store_reference: `REGISTRY-CONTRIB-${contribution.id}`,
+                  currency: 'ZAR',
+                  status: 'posted',
+                  transaction_date: now,
+                  created_at: now,
+                }).select('id').single();
+                recipientTxId = txRow?.id || null;
+              } catch (txErr) {
+                console.warn('[gift-registry] contribute: single-security tx insert:', txErr.message);
+              }
+
+              // Create pending holding — avg_fill=null signals "pending" to the dashboard
+              try {
+                await supabaseAdmin.from('stock_holdings_c').insert({
+                  user_id: recipientUserId,
+                  security_id: sec.id,
+                  quantity: sharesQty,
+                  avg_fill: null,
+                  market_value: 0,
+                  unrealized_pnl: 0,
+                  as_of_date: null,
+                  Status: 'active',
+                  transaction_id: recipientTxId || null,
+                  Expected_fill: expectedFillRands,
+                });
+                console.log(`[gift-registry] contribute: single-security pending holding created for recipient ${recipientUserId} (${sec.symbol} × ${sharesQty})`);
+              } catch (holdErr) {
+                console.warn('[gift-registry] contribute: single-security holding insert:', holdErr.message);
+              }
+            } else {
+              console.warn('[gift-registry] contribute: single-security — security not found for isin:', itemIsin);
+            }
+          } catch (singleSecErr) {
+            console.warn('[gift-registry] contribute: single-security holdings block error:', singleSecErr.message);
+          }
         }
 
-        // ── 2. Notify the registry owner that someone gifted them ──
-        if (ownerUserId && ownerUserId !== user.id) {
-          const msgPart = gifterMessage ? ` — "${gifterMessage.slice(0, 80)}"` : '';
-          const mintPart = gifterMintNumber ? ` (${gifterMintNumber})` : '';
-          // Fetch share_token so the deep link works
-          const { data: regForToken } = await supabaseAdmin.from('gift_events').select('share_token').eq('id', registryId).maybeSingle();
-          const shareToken = regForToken?.share_token || '';
-          const { error: notifInsertErr } = await supabaseAdmin.from('notifications').insert({
-            user_id: ownerUserId,
+        // ── 2. Notify the gift recipient and parent about the gift ──
+        const shareToken = registryRow?.share_token || '';
+        const msgPart = gifterMessage ? ` — "${gifterMessage.slice(0, 80)}"` : '';
+        const mintPart = gifterMintNumber ? ` (${gifterMintNumber})` : '';
+        const notifPayload = {
+          action: 'OPEN_GIFT_REGISTRY',
+          registry_id: registryId,
+          registry_item_id: reservedItemId,
+          share_token: shareToken,
+          deep_link: shareToken ? `/gift/${shareToken}` : null,
+          gifter_user_id: user.id,
+          gifter_name: gifterName,
+          gifter_mint_number: gifterMintNumber || null,
+          gifter_message: gifterMessage || null,
+        };
+
+        // Notify actual recipient (child's own account, or creator for self-registries)
+        if (recipientUserId && recipientUserId !== user.id) {
+          const { error: recipientNotifErr } = await supabaseAdmin.from('notifications').insert({
+            user_id: recipientUserId,
             title: `${gifterName} gifted you 🎁`,
-            body: `${gifterName}${mintPart} gifted you a ${itemName} from your "${registryTitle}" wishlist. Tap to see what they sent you!`,
+            body: `${gifterName}${mintPart} gifted you ${itemName} from your "${registryTitle}" wishlist!`,
             type: 'system',
-            payload: {
-              action: 'OPEN_GIFT_REGISTRY',
-              registry_id: registryId,
-              registry_item_id: reservedItemId,
-              share_token: shareToken,
-              deep_link: shareToken ? `/gift/${shareToken}` : null,
-              gifter_user_id: user.id,
-              gifter_message: gifterMessage || null,
-            },
+            payload: notifPayload,
           });
-          if (notifInsertErr) {
-            console.error('[gift-registry] contribute: owner notification insert failed:', notifInsertErr.message, notifInsertErr.code);
+          if (recipientNotifErr) {
+            console.error('[gift-registry] contribute: recipient notification failed:', recipientNotifErr.message);
           } else {
-            console.log('[gift-registry] contribute: owner notification sent → user_id=', ownerUserId);
+            console.log('[gift-registry] contribute: recipient notification sent → user_id=', recipientUserId);
           }
-        } else {
-          console.log('[gift-registry] contribute: notification skipped — ownerUserId=', ownerUserId, 'userId=', user.id);
+        }
+
+        // Also notify the parent/creator if the registry is for a child (they want to know too)
+        if (ownerUserId && ownerUserId !== recipientUserId && ownerUserId !== user.id) {
+          const { error: parentNotifErr } = await supabaseAdmin.from('notifications').insert({
+            user_id: ownerUserId,
+            title: `${gifterName} gifted your child 🎁`,
+            body: `${gifterName}${mintPart} gifted ${itemName} to ${registryRow?.beneficiary_display_name || 'your child'} from the "${registryTitle}" wishlist!`,
+            type: 'system',
+            payload: notifPayload,
+          });
+          if (parentNotifErr) {
+            console.error('[gift-registry] contribute: parent notification failed:', parentNotifErr.message);
+          } else {
+            console.log('[gift-registry] contribute: parent notification sent → user_id=', ownerUserId);
+          }
+        }
+
+        // ── 3. Notify the gifter that their gift went through ──
+        if (user.id) {
+          const { error: gifterNotifErr } = await supabaseAdmin.from('notifications').insert({
+            user_id: user.id,
+            title: 'Gift sent! 🎉',
+            body: `You gifted ${itemName} from "${registryTitle}". The recipient will love it!`,
+            type: 'system',
+            payload: notifPayload,
+          });
+          if (gifterNotifErr) {
+            console.error('[gift-registry] contribute: gifter notification failed:', gifterNotifErr.message);
+          } else {
+            console.log('[gift-registry] contribute: gifter confirmation sent → user_id=', user.id);
+          }
         }
 
         // ── 3. If item is now FILLED — thank-you to every gifter ──
@@ -1618,7 +1912,7 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
             }
             const holdings = strategy.holdings || [];
             const holdingsSnapshot = holdings
-              .map(h => { const t = h.ticker || h.symbol || String(h); return { symbol: t, name: secBySymbol[t]?.name || t, logo_url: secBySymbol[t]?.logo_url || null }; })
+              .map(h => { const t = h.ticker || h.symbol || String(h); const sec = secBySymbol[t] || secBySymbol[t.split('.')[0]]; return { symbol: t, name: sec?.name || t, logo_url: sec?.logo_url || null }; })
               .sort((a, b) => (b.logo_url ? 1 : 0) - (a.logo_url ? 1 : 0))
               .slice(0, 5);
             enrichedMap[item.id] = {

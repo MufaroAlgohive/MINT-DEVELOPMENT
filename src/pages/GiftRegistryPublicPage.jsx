@@ -29,8 +29,11 @@ export default function GiftRegistryPublicPage({
   context,
   user,
   isKycComplete,
+  isAuthLoading = false,
   onAuthPrompt,
   onBack,
+  gifterName = null,
+  gifterMintNumber = null,
 }) {
   const { registry, loading, error, reload } = usePublicRegistry(token);
   const [checkoutItem, setCheckoutItem] = useState(null);
@@ -41,6 +44,42 @@ export default function GiftRegistryPublicPage({
 
   const handleItemUpdate = useCallback(() => reload(), [reload]);
   useGiftRegistryRealtime(registry?.id, handleItemUpdate);
+
+  // ── KYC debug: log state whenever it changes so we can trace timing issues
+  useEffect(() => {
+    console.log('[GiftRegistry][KYC_DEBUG] state:', {
+      userId: user?.id ?? null,
+      isKycComplete,
+      isAuthLoading,
+      canGift: !!user && isKycComplete,
+      needsKyc: !!user && !isKycComplete && !isAuthLoading,
+    });
+    if (!user) return;
+    // Also fetch the server-side status so we can compare client vs server
+    (async () => {
+      try {
+        const sb = await supabaseReady;
+        const { data: { session } } = await sb.auth.getSession();
+        if (!session?.access_token) return;
+        const res = await fetch('/api/onboarding/status', {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        });
+        const json = await res.json();
+        console.log('[GiftRegistry][KYC_DEBUG] server onboarding status:', {
+          is_fully_onboarded: json.is_fully_onboarded,
+          kyc_status: json.onboarding?.kyc_status,
+          sumsub_raw_keys: json.onboarding?.sumsub_raw
+            ? Object.keys(typeof json.onboarding.sumsub_raw === 'string'
+                ? JSON.parse(json.onboarding.sumsub_raw)
+                : json.onboarding.sumsub_raw)
+            : null,
+        });
+      } catch (e) {
+        console.warn('[GiftRegistry][KYC_DEBUG] onboarding fetch failed:', e.message);
+      }
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, isKycComplete, isAuthLoading]);
 
   useEffect(() => {
     if (!token || !user) return;
@@ -161,14 +200,36 @@ export default function GiftRegistryPublicPage({
             <div className="w-16" />
           )}
           <span className="text-sm font-semibold text-slate-800">Wishlist</span>
-          <button
-            onClick={handleShare}
-            className="flex items-center gap-1.5 text-sm font-semibold text-slate-600 active:opacity-60"
-            aria-label="Share wishlist"
-          >
-            <Share2 className="w-4 h-4" />
-            Share
-          </button>
+          <div className="flex items-center gap-2">
+            {/* Auth buttons — compact, top-right, only when not logged in */}
+            {!user && !isClosed && (
+              isAuthLoading ? (
+                <div className="w-4 h-4 border-2 border-slate-300 border-t-violet-600 rounded-full animate-spin" />
+              ) : (
+                <>
+                  <button
+                    onClick={() => onAuthPrompt(undefined, "login")}
+                    className="px-3 py-1.5 text-xs font-semibold text-slate-700 border border-slate-300 rounded-lg active:opacity-70 bg-white"
+                  >
+                    Log in
+                  </button>
+                  <button
+                    onClick={() => onAuthPrompt(undefined, "signup")}
+                    className="px-3 py-1.5 text-xs font-semibold text-white bg-slate-900 rounded-lg active:opacity-70"
+                  >
+                    Sign up
+                  </button>
+                </>
+              )
+            )}
+            <button
+              onClick={handleShare}
+              className="flex items-center gap-1 text-sm font-semibold text-slate-600 active:opacity-60"
+              aria-label="Share wishlist"
+            >
+              <Share2 className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -183,8 +244,11 @@ export default function GiftRegistryPublicPage({
         <div className="mx-5 mt-4 rounded-2xl bg-[#6B21A8] px-5 py-4 shadow-md">
           <p className="text-[11px] font-bold text-purple-200 uppercase tracking-widest mb-1">🎁 You received a gift</p>
           <p className="text-[15px] font-bold text-white leading-snug">
-            Someone gifted you from this wishlist
+            {gifterName ? `${gifterName} gifted you from this wishlist` : "Someone gifted you from this wishlist"}
           </p>
+          {gifterMintNumber && (
+            <p className="text-[12px] text-purple-300 font-mono mt-0.5">{gifterMintNumber}</p>
+          )}
           <p className="text-[13px] text-purple-200 mt-1">
             Scroll down to see the gift history and what was sent to you.
           </p>
@@ -271,24 +335,6 @@ export default function GiftRegistryPublicPage({
           </div>
         )}
 
-        {!user && !isClosed && (
-          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm px-5 py-4">
-            <div className="flex gap-3">
-              <button
-                onClick={() => onAuthPrompt(undefined, "login")}
-                className="flex-1 px-4 py-3 bg-slate-900 text-white text-sm font-semibold rounded-xl active:opacity-80"
-              >
-                Log in
-              </button>
-              <button
-                onClick={() => onAuthPrompt(undefined, "signup")}
-                className="flex-1 px-4 py-3 border border-slate-900 text-slate-900 text-sm font-semibold rounded-xl active:opacity-80"
-              >
-                Create account
-              </button>
-            </div>
-          </div>
-        )}
 
         {/* Tabs — owner only. Non-owners (people browsing someone else's shared
             wishlist) only ever get the Items view; gift history is private to
@@ -324,7 +370,7 @@ export default function GiftRegistryPublicPage({
                 onGift={handleGiftTap}
                 isOwner={false}
                 canGift={canGift && !isClosed}
-                needsKyc={!!user && !isKycComplete}
+                needsKyc={!!user && !isKycComplete && !isAuthLoading}
                 onAuthPrompt={onAuthPrompt}
                 alreadyGifted={myGiftedItemIds.has(item.id)}
                 startDate={eventDate}

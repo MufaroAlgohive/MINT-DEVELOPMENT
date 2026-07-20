@@ -12,6 +12,8 @@ import WishlistModal from "../components/WishlistModal.jsx";
 import WishlistPickerSheet from "../components/WishlistPickerSheet.jsx";
 import WishlistToast from "../components/WishlistToast.jsx";
 import ChildInvestModal from "../components/ChildInvestModal.jsx";
+import GiftRegistryCreateSheet from "../components/GiftRegistryCreateSheet.jsx";
+import ChildMarketPromptModal from "../components/ChildMarketPromptModal.jsx";
 import { saveMarketsInvestFilters, loadMarketsInvestFilters, saveMarketsStrategyFilters, loadMarketsStrategyFilters, buildInvestChips, buildChipsFromFilters } from "../lib/usePersistedFilters.js";
 import NotificationBell from "../components/NotificationBell";
 import FamilyDropdown from "../components/FamilyDropdown";
@@ -273,6 +275,13 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
   const [watchlist, setWatchlist] = useState([]);
   const [showWishlistMenu, setShowWishlistMenu] = useState(false);
   const wishlistMenuRef = useRef(null);
+  const [showChildWishlistCreate, setShowChildWishlistCreate] = useState(false);
+  const childData = childFilter && typeof childFilter === "object" ? childFilter : null;
+
+  // Child market prompt — parent browses kid strategies from the wishlist guard
+  const [showChildMarketPrompt, setShowChildMarketPrompt] = useState(false);
+  const [localChildFilter, setLocalChildFilter] = useState(null); // overrides childFilter prop
+  const [wishlistPickerIsKid, setWishlistPickerIsKid] = useState(null);
 
   // Wishlist (heart) state — loaded from Supabase user_metadata, not localStorage
   const [wishlistedKeys, setWishlistedKeys] = useState(new Set());
@@ -282,14 +291,19 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
   const [wishlistToastVisible, setWishlistToastVisible] = useState(false);
   const [wishlistToastRegistryId, setWishlistToastRegistryId] = useState(null);
 
-  // Load wishlisted keys + strategy watchlist from API on mount
+  // Load wishlisted keys + strategy watchlist from API on mount.
+  // When in a child's dashboard context, scope hearts to that child's registries only
+  // so that sibling children's liked items don't bleed into each other's heart state.
   useEffect(() => {
     async function loadPrefs() {
       try {
         const { data } = await supabase.auth.getSession();
         const token = data?.session?.access_token;
         if (!token) return;
-        const res = await fetch("/api/gift-wishlist-prefs", {
+        const url = childData?.id
+          ? `/api/gift-wishlist-prefs?childFamilyMemberId=${encodeURIComponent(childData.id)}`
+          : "/api/gift-wishlist-prefs";
+        const res = await fetch(url, {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (res.ok) {
@@ -302,7 +316,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
       }
     }
     loadPrefs();
-  }, []);
+  }, [childData?.id]);
 
   async function updateWishlistPrefs(patch) {
     try {
@@ -327,6 +341,15 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
       setWishlistedKeys(next);
       updateWishlistPrefs({ wishlistedKeys: [...next] });
     } else {
+      // Determine if the strategy is a kid strategy (for the wishlist picker guard).
+      // Default to false when not found — safer to block than to allow.
+      if (itemKey.startsWith("strategy:")) {
+        const stratId = itemKey.slice(9);
+        const strat = publicStrategiesWithMetrics.find(s => s.id === stratId);
+        setWishlistPickerIsKid(strat ? strat.is_kid_strategy === true : false);
+      } else {
+        setWishlistPickerIsKid(false); // stocks/securities are never kid strategies
+      }
       // Show the wishlist picker so the user can choose a category
       setWishlistPickerKey(itemKey);
     }
@@ -846,7 +869,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
   const filteredStrategies = useMemo(() => {
     // Use publicStrategies for OpenStrategies view
     const results = publicStrategiesWithMetrics.filter((strategy) => {
-      if (childFilter && !strategy.is_kid_strategy) return false;
+      if ((localChildFilter || childFilter) && !strategy.is_kid_strategy) return false;
 
       const matchesName =
         strategiesSearchQuery.length === 0
@@ -909,6 +932,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
   }, [
     publicStrategiesWithMetrics,
     childFilter,
+    localChildFilter,
     strategiesSearchQuery,
     selectedRisks,
     selectedMinInvestment,
@@ -1323,10 +1347,14 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
       <div className="rounded-b-[36px] bg-gradient-to-b from-[#111111] via-[#3b1b7a] to-[#5b21b6] px-4 pb-6 pt-12 text-white md:px-8">
         <div className="mx-auto flex w-full max-w-sm flex-col gap-6 md:max-w-md">
           <header className="flex items-center justify-between text-white">
-            {(onBack || childFilter) ? (
+            {(onBack || childFilter || localChildFilter) ? (
               <button
                 type="button"
-                onClick={onBack || (() => window.dispatchEvent(new CustomEvent("navigate-within-app", { detail: { page: "childDashboard" } })))}
+                onClick={
+                  localChildFilter
+                    ? () => { setLocalChildFilter(null); setViewMode("openstrategies"); }
+                    : onBack || (() => window.dispatchEvent(new CustomEvent("navigate-within-app", { detail: { page: "childDashboard" } })))
+                }
                 aria-label="Back"
                 className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur-sm"
               >
@@ -1348,7 +1376,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                 }
               />
             )}
-            <h1 className="text-sm font-bold tracking-[0.18em] uppercase">{childFilter ? "Child Market" : "Markets"}</h1>
+            <h1 className="text-sm font-bold tracking-[0.18em] uppercase">{(childFilter || localChildFilter) ? "Child Market" : "Markets"}</h1>
             <div className="flex items-center gap-2">
               <div className="relative" ref={wishlistMenuRef}>
                 <button
@@ -1373,7 +1401,12 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                         type="button"
                         onClick={() => {
                           setShowWishlistMenu(false);
-                          window.dispatchEvent(new CustomEvent("navigate-within-app", { detail: { page: "giftRegistryDashboard" } }));
+                          window.dispatchEvent(new CustomEvent("navigate-within-app", {
+                            detail: {
+                              page: "giftRegistryDashboard",
+                              ...(childData ? { childFamilyMemberId: childData.id } : {}),
+                            }
+                          }));
                         }}
                         className="flex w-full items-center gap-2.5 px-4 py-3 text-left text-sm font-medium text-slate-700 hover:bg-slate-50"
                       >
@@ -1385,7 +1418,11 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                         type="button"
                         onClick={() => {
                           setShowWishlistMenu(false);
-                          window.dispatchEvent(new CustomEvent("navigate-within-app", { detail: { page: "giftStrategies", openWishlistCreate: true } }));
+                          if (childData) {
+                            setShowChildWishlistCreate(true);
+                          } else {
+                            window.dispatchEvent(new CustomEvent("navigate-within-app", { detail: { page: "giftStrategies", openWishlistCreate: true } }));
+                          }
                         }}
                         className="flex w-full items-center gap-2.5 px-4 py-3 text-left text-sm font-medium text-slate-700 hover:bg-slate-50"
                       >
@@ -1973,9 +2010,19 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                   }),
               ]
                 .map((sector) => {
-                const sectorStrategies = sector === '__WATCHLIST__'
+                const sectorStrategies = (sector === '__WATCHLIST__'
                   ? filteredStrategies.filter(s => strategyWatchlist.includes(s.id))
-                  : filteredStrategies.filter(s => (s.sector || 'General') === sector);
+                  : filteredStrategies.filter(s => (s.sector || 'General') === sector)
+                ).slice().sort((a, b) => {
+                  // Sort by YTD performance highest → lowest within each category.
+                  // Null/undefined YTD values fall to the end.
+                  const ytdA = a.r_ytd ?? null;
+                  const ytdB = b.r_ytd ?? null;
+                  if (ytdA === null && ytdB === null) return 0;
+                  if (ytdA === null) return 1;
+                  if (ytdB === null) return -1;
+                  return ytdB - ytdA;
+                });
                 
                 if (sectorStrategies.length === 0) return null;
               
@@ -2061,13 +2108,13 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                           {(strategy.tags && strategy.tags.length > 0 ? strategy.tags.slice(0, 2) : [strategy.risk_level || 'Balanced']).map((tag) => (
                             <span
                               key={tag}
-                              className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600"
+                              className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600 uppercase"
                             >
                               {tag}
                             </span>
                           ))}
                           {strategy.is_featured && (
-                            <span className="rounded-full border border-violet-200 bg-violet-50 px-3 py-1 text-xs font-semibold text-violet-600">
+                            <span className="rounded-full border border-violet-200 bg-violet-50 px-3 py-1 text-xs font-semibold text-violet-600 uppercase">
                               Featured
                             </span>
                           )}
@@ -3109,6 +3156,12 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
       {wishlistPickerKey && (
         <WishlistPickerSheet
           itemKey={wishlistPickerKey}
+          isKidStrategy={wishlistPickerIsKid}
+          onGoToChildMarket={() => {
+            setWishlistPickerKey(null);
+            setShowChildMarketPrompt(true);
+          }}
+          childFamilyMemberId={childData?.id || null}
           onClose={() => setWishlistPickerKey(null)}
           onSaved={(savedItemKey, listName, registryId) => {
             const next = new Set([...wishlistedKeys, savedItemKey]);
@@ -3137,6 +3190,27 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
           window.dispatchEvent(new CustomEvent("navigate-within-app", {
             detail: { page: "giftRegistryDashboard", registryId: wishlistToastRegistryId }
           }));
+        }}
+      />
+
+      {/* Child wishlist create sheet — only used when childFilter is a child object */}
+      {childData && (
+        <GiftRegistryCreateSheet
+          open={showChildWishlistCreate}
+          onClose={() => setShowChildWishlistCreate(false)}
+          preselectedChild={childData}
+          onSaved={() => setShowChildWishlistCreate(false)}
+        />
+      )}
+
+      {/* Child market prompt — shown when parent hits the guard from the wishlist picker */}
+      <ChildMarketPromptModal
+        open={showChildMarketPrompt}
+        onClose={() => setShowChildMarketPrompt(false)}
+        onSelectChild={(child) => {
+          setLocalChildFilter(child);
+          setViewMode("openstrategies");
+          setShowChildMarketPrompt(false);
         }}
       />
     </div>

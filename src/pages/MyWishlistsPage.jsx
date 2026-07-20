@@ -24,10 +24,7 @@ function RegistryCard({ registry, onTap, onDelete, deletingId }) {
     : "Gift";
   const occasionColor = OCCASION_COLORS[registry.occasion] || OCCASION_COLORS.CUSTOM;
   const isDeleting = deletingId === registry.id;
-
-  const subtitleParts = [];
-  if (occasionLabel) subtitleParts.push(occasionLabel);
-  subtitleParts.push(items.length === 0 ? "No items yet" : `${items.length} ${items.length === 1 ? "item" : "items"}`);
+  const isChildWishlist = registry.beneficiary_type === "CHILD";
 
   function handleDeleteTap(e) {
     e.stopPropagation();
@@ -64,10 +61,23 @@ function RegistryCard({ registry, onTap, onDelete, deletingId }) {
 
           {/* Title + item count */}
           <div className="flex-1 min-w-0 py-3.5 pr-1">
-            <p className="text-sm font-semibold text-slate-800 truncate leading-snug">
-              {registry.title}
-            </p>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <p className="text-sm font-semibold text-slate-800 truncate leading-snug">
+                {registry.title}
+              </p>
+              {isChildWishlist && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-violet-100 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-violet-700 flex-shrink-0">
+                  <svg className="h-2.5 w-2.5" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z" />
+                  </svg>
+                  Child
+                </span>
+              )}
+            </div>
             <p className="text-[11px] text-slate-400 mt-0.5">
+              {isChildWishlist && registry.beneficiary_display_name
+                ? `${registry.beneficiary_display_name} · `
+                : ""}
               {items.length === 0 ? "No items yet" : `${items.length} ${items.length === 1 ? "item" : "items"}`}
             </p>
           </div>
@@ -164,8 +174,17 @@ function EmptyState({ onCreate }) {
 }
 
 // ─── Page ──────────────────────────────────────────────────────────────────────
-export default function MyWishlistsPage({ onBack, onNavigate }) {
-  const { registries, loading, reload } = useMyRegistries();
+export default function MyWishlistsPage({ onBack, onNavigate, childFamilyMemberId }) {
+  const { registries: allRegistries, loading, reload } = useMyRegistries();
+
+  // When opened from a child's context, show only that child's wishlists.
+  // Also match legacy records where beneficiary_ref was never stored (NULL).
+  const registries = childFamilyMemberId
+    ? allRegistries.filter(r =>
+        r.beneficiary_ref === childFamilyMemberId ||
+        (r.beneficiary_ref === null && r.beneficiary_type === 'CHILD')
+      )
+    : allRegistries;
   const [deletingId, setDeletingId] = useState(null);
   const [error, setError] = useState(null);
 

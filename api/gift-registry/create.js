@@ -9,7 +9,7 @@ export default async function handler(req, res) {
     const { user, error: authError } = await authenticateUser(req);
     if (authError || !user) return res.status(401).json({ error: 'Unauthorized' });
 
-    const { occasion, customOccasion, beneficiaryType, beneficiaryDisplayName, title, eventDate, expiryAt, message } = req.body;
+    const { occasion, customOccasion, beneficiaryType, beneficiaryDisplayName, title, eventDate, expiryAt, message, familyMemberId } = req.body;
     if (!occasion || !beneficiaryType || !beneficiaryDisplayName || !title || !eventDate || !expiryAt) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
@@ -22,6 +22,7 @@ export default async function handler(req, res) {
         custom_occasion: customOccasion || null,
         beneficiary_type: beneficiaryType,
         beneficiary_display_name: beneficiaryDisplayName,
+        beneficiary_ref: familyMemberId || null,
         title,
         event_date: eventDate,
         expiry_at: expiryAt,

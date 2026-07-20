@@ -16,10 +16,23 @@
       "schedule": "30 21 * * *"
     }
   ],
+  "functions": {
+    "api/og-preview.js": {
+      "includeFiles": "dist/index.html"
+    }
+  },
   "rewrites": [
     {
       "source": "/api/:path*",
       "destination": "/api/:path*"
+    },
+    {
+      "source": "/registry/:token",
+      "destination": "/api/og-preview?token=:token"
+    },
+    {
+      "source": "/gift/:token",
+      "destination": "/api/og-preview?token=:token"
     },
     {
       "source": "/((?!api/).*)",

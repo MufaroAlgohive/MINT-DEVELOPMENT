@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Heart, Plus, Check, ArrowRight, Lock } from "lucide-react";
+import { X, Heart, Plus, Check, ArrowRight, Lock, Baby, AlertTriangle } from "lucide-react";
 import WishlistPreviewGrid from "./WishlistPreviewGrid.jsx";
 
 const CARD_GRADIENTS = [
@@ -15,12 +15,13 @@ const CARD_GRADIENTS = [
 
 const year = new Date().getFullYear();
 
-export default function WishlistPickerSheet({ itemKey, onClose, onSaved, onCreateNew }) {
+export default function WishlistPickerSheet({ itemKey, onClose, onSaved, onCreateNew, childFamilyMemberId, isKidStrategy, onGoToChildMarket }) {
   const [wishlists, setWishlists] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(null);
   const [savedId, setSavedId] = useState(null);
   const [errorMsg, setErrorMsg] = useState(null);
+  const [childGuardActive, setChildGuardActive] = useState(false);
 
   // Step-1 form state (shown when no wishlists exist)
   const [name, setName] = useState(`My Wishlist ${year}`);
@@ -45,18 +46,31 @@ export default function WishlistPickerSheet({ itemKey, onClose, onSaved, onCreat
             if (res.ok) {
               const { registries } = await res.json();
               if (Array.isArray(registries)) {
-                const registryLists = registries.map((r) => ({
+                let registryLists = registries.map((r) => ({
                   id: r.id,
                   name: r.title,
                   status: r.status,
                   isClosed: ['CANCELLED', 'EXPIRED'].includes(r.status),
                   preview_logos: Array.isArray(r.preview_logos) ? r.preview_logos : null,
+                  beneficiaryType: r.beneficiary_type || null,
+                  beneficiaryRef: r.beneficiary_ref || null,
+                  beneficiaryName: r.beneficiary_display_name || null,
                   items: (r.items || []).filter((i) => i.isin && i.status !== 'REMOVED').map((i) => ({
                     isin: i.isin,
                     name: i.name || i.isin,
                     logo_url: i.logo_url || null,
                   })),
                 }));
+
+                // When opened from a child's dashboard, only show that child's wishlists
+                if (childFamilyMemberId) {
+                  registryLists = registryLists.filter((r) =>
+                    r.beneficiaryRef === childFamilyMemberId ||
+                    // Fallback for legacy records with NULL beneficiary_ref
+                    (r.beneficiaryRef === null && r.beneficiaryType === 'CHILD')
+                  );
+                }
+
                 setWishlists(registryLists);
                 setLoading(false);
                 return;
@@ -73,7 +87,7 @@ export default function WishlistPickerSheet({ itemKey, onClose, onSaved, onCreat
       setLoading(false);
     }
     load();
-  }, []);
+  }, [childFamilyMemberId]);
 
   // Auto-focus input when empty-state form is shown
   useEffect(() => {
@@ -82,6 +96,9 @@ export default function WishlistPickerSheet({ itemKey, onClose, onSaved, onCreat
     }
   }, [wishlists.length]);
 
+  // Reset guard when item key changes (new strategy being wishlisted)
+  useEffect(() => { setChildGuardActive(false); }, [itemKey]);
+
   async function handlePick(list) {
     if (saving) return;
     if (list.isClosed) {
@@ -89,6 +106,17 @@ export default function WishlistPickerSheet({ itemKey, onClose, onSaved, onCreat
       setTimeout(() => setErrorMsg(null), 3200);
       return;
     }
+
+    // Guard: prevent adding a non-child strategy to a child's wishlist.
+    // isKidStrategy !== true catches false, null, and undefined — safer to block.
+    // Skip the inline card and go straight to the Child Market prompt.
+    if (list.beneficiaryType === "CHILD" && isKidStrategy !== true) {
+      onClose?.();
+      onGoToChildMarket?.();
+      return;
+    }
+
+    setChildGuardActive(false);
     setErrorMsg(null);
     setSaving(list.id);
     try {
@@ -216,6 +244,52 @@ export default function WishlistPickerSheet({ itemKey, onClose, onSaved, onCreat
                 <p className="text-[11px] text-slate-400 mt-0.5">Pick a category or create a new one</p>
               </div>
 
+              {/* Child strategy guard — shown when parent tries to add a non-child strategy to a child wishlist */}
+              <AnimatePresence>
+                {childGuardActive && (
+                  <motion.div
+                    key="child-guard"
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    transition={{ duration: 0.22 }}
+                    className="mx-5 mb-3 flex-shrink-0"
+                  >
+                    <div className="rounded-2xl bg-amber-50 border border-amber-200 p-4">
+                      <div className="flex items-start gap-2.5 mb-3">
+                        <AlertTriangle size={16} className="text-amber-600 mt-0.5 flex-shrink-0" />
+                        <div>
+                          <p className="text-[13px] font-bold text-amber-900 leading-tight">
+                            Child strategies only
+                          </p>
+                          <p className="text-xs text-amber-700 mt-1 leading-relaxed">
+                            This wishlist belongs to a child. Only child-friendly strategies can be added to it — please browse the Child Market to find the right one.
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setChildGuardActive(false);
+                          onClose?.();
+                          onGoToChildMarket?.();
+                        }}
+                        className="w-full py-2.5 rounded-xl bg-[#6B21A8] text-white text-xs font-bold transition active:scale-[0.97]"
+                      >
+                        Browse Child Strategies →
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setChildGuardActive(false)}
+                        className="w-full mt-2 py-2 text-xs text-slate-500 font-medium"
+                      >
+                        Choose a different wishlist
+                      </button>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
               {/* Wishlist grid */}
               <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-5 pb-3">
                 <div className="grid grid-cols-2 gap-3">
@@ -229,24 +303,15 @@ export default function WishlistPickerSheet({ itemKey, onClose, onSaved, onCreat
                         whileTap={{ scale: list.isClosed ? 1 : 0.95 }}
                         onClick={() => handlePick(list)}
                         disabled={!!saving}
-                        className="relative rounded-2xl p-4 text-left shadow-sm overflow-hidden"
+                        className="relative rounded-2xl p-3.5 text-left shadow-sm overflow-hidden flex flex-col gap-2"
                         style={{
                           minHeight: 110,
                           background: `linear-gradient(135deg, ${fromColor}, ${toColor})`,
                           opacity: list.isClosed ? 0.55 : 1,
                         }}
                       >
-                        {/* Asset mosaic preview — prefer strategy snapshot logos */}
-                        <WishlistPreviewGrid
-                          items={
-                            Array.isArray(list.preview_logos) && list.preview_logos.length > 0
-                              ? list.preview_logos
-                              : Array.isArray(list.items) ? list.items : []
-                          }
-                        />
-
                         {list.isClosed && (
-                          <div className="absolute inset-0 z-10" style={{ background: "rgba(0,0,0,0.25)" }} />
+                          <div className="absolute inset-0 z-10 rounded-2xl" style={{ background: "rgba(0,0,0,0.25)" }} />
                         )}
 
                         <AnimatePresence>
@@ -264,26 +329,45 @@ export default function WishlistPickerSheet({ itemKey, onClose, onSaved, onCreat
                           )}
                         </AnimatePresence>
 
-                        {/* Text content — sits above the mosaic via z-index */}
-                        <div className="relative z-10 flex flex-col h-full justify-between">
-                          <div className="flex items-start justify-between mb-2">
-                            {list.isClosed ? (
-                              <Lock size={14} className="text-white/80 drop-shadow" />
-                            ) : (
-                              <Heart size={16} className="fill-white/70 text-white/70 drop-shadow" />
+                        {/* Row 1: icon + badges */}
+                        <div className="relative z-10 flex items-center justify-between">
+                          {list.isClosed ? (
+                            <Lock size={13} className="text-white/80 drop-shadow" />
+                          ) : (
+                            <Heart size={14} className="fill-white/70 text-white/70 drop-shadow" />
+                          )}
+                          <div className="flex items-center gap-1">
+                            {!childFamilyMemberId && list.beneficiaryType === 'CHILD' && list.beneficiaryName && (
+                              <span className="flex items-center gap-0.5 rounded-full bg-white/20 backdrop-blur-sm px-1.5 py-0.5 text-[9px] font-bold text-white/90 drop-shadow leading-none">
+                                <Baby size={8} className="flex-shrink-0" />
+                                {list.beneficiaryName.split(' ')[0]}
+                              </span>
                             )}
                             {isSaving && !isSaved && (
                               <div className="h-4 w-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />
                             )}
                           </div>
-                          <div>
-                            <p className="text-[13px] font-bold text-white leading-tight line-clamp-2 pr-1 drop-shadow">{list.name}</p>
-                            <p className="text-[11px] text-white/80 mt-0.5 drop-shadow">
-                              {list.isClosed
-                                ? "Closed"
-                                : `${list.items?.filter(i => i.status !== 'REMOVED')?.length || list.items?.length || 0} ${((list.items?.filter(i => i.status !== 'REMOVED')?.length || list.items?.length || 0) === 1) ? "item" : "items"}`}
-                            </p>
-                          </div>
+                        </div>
+
+                        {/* Row 2: logo strip — normal flow, no overlap with text */}
+                        <div className="relative z-10">
+                          <WishlistPreviewGrid
+                            items={
+                              Array.isArray(list.preview_logos) && list.preview_logos.length > 0
+                                ? list.preview_logos
+                                : Array.isArray(list.items) ? list.items : []
+                            }
+                          />
+                        </div>
+
+                        {/* Row 3: name + count */}
+                        <div className="relative z-10 mt-auto">
+                          <p className="text-[12px] font-bold text-white leading-tight line-clamp-1 drop-shadow">{list.name}</p>
+                          <p className="text-[10px] text-white/80 mt-0.5 drop-shadow">
+                            {list.isClosed
+                              ? "Closed"
+                              : `${list.items?.filter(i => i.status !== 'REMOVED')?.length || list.items?.length || 0} ${((list.items?.filter(i => i.status !== 'REMOVED')?.length || list.items?.length || 0) === 1) ? "item" : "items"}`}
+                          </p>
                         </div>
                       </motion.button>
                     );

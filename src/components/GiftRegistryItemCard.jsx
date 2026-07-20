@@ -92,7 +92,7 @@ export default function GiftRegistryItemCard({
       })}`
     : null;
 
-  const displayName = item.short_name || item.name || item.isin;
+  const displayName = item.short_name || item.name || (isBasket ? 'Investment Basket' : item.isin);
   const ytdPositive = (item.r_ytd || 0) >= 0;
   const holdingsSnapshot = item.holdings_snapshot || [];
 
@@ -305,7 +305,10 @@ export default function GiftRegistryItemCard({
             <p className="font-semibold text-slate-900 text-sm truncate">
               {item.name || item.isin}
             </p>
-            <p className="text-xs text-slate-400">{item.isin}</p>
+            {/* Only show isin for real securities (not basket UUIDs) */}
+            {item.isin && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(item.isin) && (
+              <p className="text-xs text-slate-400">{item.isin}</p>
+            )}
           </div>
         </div>
 

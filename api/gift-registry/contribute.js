@@ -1,8 +1,6 @@
 import { supabaseAdmin, authenticateUser } from '../_lib/supabase.js';
-import { createPool } from '../_lib/pgPool.js';
 
-// Fetch the latest intraday price (in rands) per security_id —
-// same helper used by record-investment.js and claim-v2.js.
+// Fetch the latest intraday price (in rands) per security_id
 async function fetchLatestIntradayPrices(db, securityIds) {
   if (!securityIds || !securityIds.length) return {};
   const ids = [...new Set(securityIds.filter(Boolean))];
@@ -16,7 +14,6 @@ async function fetchLatestIntradayPrices(db, securityIds) {
       .limit(1)
       .maybeSingle();
     if (data?.current_price != null) {
-      // stock_intraday_c.current_price is stored in cents; return rands.
       out[id] = Number(data.current_price) / 100;
     }
   }));
@@ -24,12 +21,10 @@ async function fetchLatestIntradayPrices(db, securityIds) {
 }
 
 // Create pending stock_holdings_c rows for the wishlist owner after a
-// contribution is paid — mirrors the logic in api/gift/claim-v2.js so
-// the holding shows as a pending purple card on their dashboard immediately.
+// contribution is paid — mirrors the logic in api/gift/claim-v2.js.
 async function createOwnerHoldings(db, { ownerUserId, item, amountCents, txId }) {
   try {
     if (item.instrument_type === 'BASKET') {
-      // Strategy basket — look up constituent holdings from strategies_c
       const { data: strategy } = await db
         .from('strategies_c')
         .select('id, name, holdings')
@@ -87,7 +82,6 @@ async function createOwnerHoldings(db, { ownerUserId, item, amountCents, txId })
         }
       }
 
-      // Upsert user_strategies so the strategy shows in their portfolio
       if (created > 0) {
         const nowTs = new Date().toISOString();
         const { data: existingUS } = await db
@@ -115,7 +109,6 @@ async function createOwnerHoldings(db, { ownerUserId, item, amountCents, txId })
 
       return created;
     } else {
-      // Individual share — look up security by ISIN
       const { data: sec } = await db
         .from('securities_c')
         .select('id, symbol, last_price')
@@ -161,8 +154,14 @@ export default async function handler(req, res) {
     const { reservationId, registryId } = req.body;
     if (!reservationId) return res.status(400).json({ error: 'Missing reservationId' });
 
+    // Validate reservation still HELD and not expired
     const { data: reservation } = await supabaseAdmin
-      .from('gift_reservations').select('*').eq('id', reservationId).eq('gifter_user_id', user.id).eq('status', 'HELD').single();
+      .from('gift_reservations')
+      .select('*')
+      .eq('id', reservationId)
+      .eq('gifter_user_id', user.id)
+      .eq('status', 'HELD')
+      .single();
     if (!reservation) return res.status(404).json({ error: 'Reservation not found or expired' });
     if (new Date(reservation.expires_at) < new Date()) {
       return res.status(410).json({ error: 'Your reservation has expired. Please start again.', code: 'RESERVATION_EXPIRED' });
@@ -172,7 +171,12 @@ export default async function handler(req, res) {
     const gifterEmail = userData?.user?.email || '';
     const idempotencyKey = `${reservationId}:${user.id}`;
 
-    const { data: existing } = await supabaseAdmin.from('gift_contributions').select('id,status').eq('idempotency_key', idempotencyKey).single();
+    // Idempotency check
+    const { data: existing } = await supabaseAdmin
+      .from('gift_contributions')
+      .select('id, status')
+      .eq('idempotency_key', idempotencyKey)
+      .maybeSingle();
     if (existing) return res.status(200).json({ success: true, contribution: existing, duplicate: true });
 
     const livePriceCents = reservation.price_lock_cents;
@@ -186,89 +190,132 @@ export default async function handler(req, res) {
 
     const quotedAmountCents = livePriceCents * reservation.quantity + feeCents;
 
-    // Single atomic transaction: consume reservation + update item + insert contribution
-    const pool = createPool();
-    const pg = await pool.connect();
-    let contribution;
-    try {
-      await pg.query('BEGIN');
+    // Step 1: Atomically consume the reservation (conditional on status=HELD + not expired)
+    const { data: consumed, error: consumeErr } = await supabaseAdmin
+      .from('gift_reservations')
+      .update({ status: 'CONSUMED' })
+      .eq('id', reservationId)
+      .eq('gifter_user_id', user.id)
+      .eq('status', 'HELD')
+      .gt('expires_at', new Date().toISOString())
+      .select('id, quantity, registry_item_id');
 
-      // Idempotency inside transaction
-      const dupCheck = await pg.query(`SELECT id, status FROM gift_contributions WHERE idempotency_key = $1`, [idempotencyKey]);
-      if (dupCheck.rowCount > 0) {
-        await pg.query('ROLLBACK');
-        return res.status(200).json({ success: true, contribution: dupCheck.rows[0], duplicate: true });
-      }
-
-      // Consume reservation with re-validation guard
-      const resUpdate = await pg.query(`
-        UPDATE gift_reservations SET status = 'CONSUMED'
-         WHERE id = $1 AND gifter_user_id = $2 AND status = 'HELD' AND expires_at > now()
-         RETURNING id, quantity, registry_item_id
-      `, [reservationId, user.id]);
-
-      if (resUpdate.rowCount === 0) {
-        await pg.query('ROLLBACK');
-        return res.status(410).json({ error: 'Reservation has expired or was already consumed', code: 'RESERVATION_EXPIRED' });
-      }
-
-      const qty = resUpdate.rows[0].quantity;
-      const itemId = resUpdate.rows[0].registry_item_id;
-
-      await pg.query(`
-        UPDATE gift_registry_items
-           SET filled_quantity = filled_quantity + $1,
-               reserved_quantity = GREATEST(0, reserved_quantity - $1),
-               status = CASE WHEN filled_quantity + $1 >= target_quantity THEN 'FILLED'
-                             WHEN filled_quantity + $1 > 0 THEN 'PARTIALLY_FILLED'
-                             ELSE status END,
-               updated_at = now()
-         WHERE id = $2
-      `, [qty, itemId]);
-
-      const contribResult = await pg.query(`
-        INSERT INTO gift_contributions
-          (registry_item_id, gifter_user_id, gifter_email, quantity,
-           quoted_amount_cents, fee_cents, status, reservation_id, idempotency_key)
-        VALUES ($1, $2, $3, $4, $5, $6, 'PAID', $7, $8) RETURNING *
-      `, [itemId, user.id, gifterEmail, qty, quotedAmountCents, feeCents, reservationId, idempotencyKey]);
-
-      await pg.query('COMMIT');
-      contribution = contribResult.rows[0];
-    } catch (e) { await pg.query('ROLLBACK'); throw e; } finally { pg.release(); }
-
-    // Check full completion
-    const { data: allItems } = await supabaseAdmin.from('gift_registry_items').select('status').eq('gift_event_id', registryId).neq('status', 'REMOVED');
-    if (allItems?.every(i => i.status === 'FILLED')) {
-      await supabaseAdmin.from('gift_events').update({ status: 'COMPLETED', updated_at: new Date().toISOString() }).eq('id', registryId);
+    if (consumeErr || !consumed?.length) {
+      return res.status(410).json({ error: 'Reservation has expired or was already consumed', code: 'RESERVATION_EXPIRED' });
     }
 
-    // ── CREATE PENDING HOLDINGS FOR THE WISHLIST OWNER ──────────────────────
-    // Fetch the registry item details and the owner's user ID so we can
-    // create stock_holdings_c rows immediately — the same way a normal
-    // strategy purchase does — so the pending purple card appears on their
-    // home dashboard right away without requiring a separate "claim" step.
+    const qty = consumed[0].quantity;
+    const itemId = consumed[0].registry_item_id;
+
+    // Step 2: Update item filled/reserved quantities
+    // Read current state first so we can compute new absolute values
+    const { data: currentItem } = await supabaseAdmin
+      .from('gift_registry_items')
+      .select('filled_quantity, reserved_quantity, target_quantity, status')
+      .eq('id', itemId)
+      .single();
+
+    if (currentItem) {
+      const newFilled = (currentItem.filled_quantity || 0) + qty;
+      const newReserved = Math.max(0, (currentItem.reserved_quantity || 0) - qty);
+      const newStatus = newFilled >= currentItem.target_quantity ? 'FILLED'
+        : newFilled > 0 ? 'PARTIALLY_FILLED'
+        : currentItem.status;
+
+      await supabaseAdmin
+        .from('gift_registry_items')
+        .update({
+          filled_quantity: newFilled,
+          reserved_quantity: newReserved,
+          status: newStatus,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', itemId);
+    }
+
+    // Step 3: Insert contribution
+    const { data: contribution, error: contribErr } = await supabaseAdmin
+      .from('gift_contributions')
+      .insert({
+        registry_item_id: itemId,
+        gifter_user_id: user.id,
+        gifter_email: gifterEmail,
+        quantity: qty,
+        quoted_amount_cents: quotedAmountCents,
+        fee_cents: feeCents,
+        status: 'PAID',
+        reservation_id: reservationId,
+        idempotency_key: idempotencyKey,
+      })
+      .select('*')
+      .single();
+
+    if (contribErr || !contribution) {
+      // Best-effort: un-consume the reservation so the user can retry
+      await supabaseAdmin
+        .from('gift_reservations')
+        .update({ status: 'HELD' })
+        .eq('id', reservationId);
+      throw new Error('Failed to record contribution: ' + (contribErr?.message || 'unknown'));
+    }
+
+    // Mark registry COMPLETED if all items are filled
+    const { data: allItems } = await supabaseAdmin
+      .from('gift_registry_items')
+      .select('status')
+      .eq('gift_event_id', registryId)
+      .neq('status', 'REMOVED');
+    if (allItems?.every(i => i.status === 'FILLED')) {
+      await supabaseAdmin
+        .from('gift_events')
+        .update({ status: 'COMPLETED', updated_at: new Date().toISOString() })
+        .eq('id', registryId);
+    }
+
+    // Create pending holdings for the actual recipient + send notifications (best-effort)
     try {
-      const [itemResult, registryResult] = await Promise.all([
+      const [itemResult, registryResult, gifterResult] = await Promise.all([
         supabaseAdmin.from('gift_registry_items')
           .select('isin, instrument_type')
           .eq('id', contribution.registry_item_id)
           .maybeSingle(),
         supabaseAdmin.from('gift_events')
-          .select('creator_user_id')
+          .select('creator_user_id, title, beneficiary_type, beneficiary_ref, beneficiary_display_name, share_token')
           .eq('id', registryId)
+          .maybeSingle(),
+        supabaseAdmin.from('profiles')
+          .select('first_name, last_name, mint_number')
+          .eq('id', user.id)
           .maybeSingle(),
       ]);
 
       const item = itemResult.data;
-      const ownerUserId = registryResult.data?.creator_user_id;
+      const reg = registryResult.data;
+      const ownerUserId = reg?.creator_user_id;
+      const registryTitle = reg?.title || 'your wishlist';
+      const shareToken = reg?.share_token || '';
 
-      if (item && ownerUserId) {
-        // Investment amount = price paid for this contribution (excluding fee)
+      // Resolve actual investment recipient: child account if CHILD registry
+      let recipientUserId = ownerUserId;
+      if (reg?.beneficiary_type === 'CHILD' && reg?.beneficiary_ref) {
+        const { data: famMember } = await supabaseAdmin
+          .from('family_members')
+          .select('linked_user_id')
+          .eq('id', reg.beneficiary_ref)
+          .maybeSingle();
+        if (famMember?.linked_user_id) {
+          recipientUserId = famMember.linked_user_id;
+          console.log(`[gift-registry/contribute] CHILD registry — routing holdings to child user ${recipientUserId}`);
+        }
+      }
+
+      const gifterProfile = gifterResult.data;
+      const gifterName = [gifterProfile?.first_name, gifterProfile?.last_name].filter(Boolean).join(' ') || gifterEmail.split('@')[0] || 'Someone';
+      const mintPart = gifterProfile?.mint_number ? ` (${gifterProfile.mint_number})` : '';
+
+      if (item && recipientUserId) {
         const investAmountCents = livePriceCents * contribution.quantity;
 
-        // Resolve display name for the transaction — must match /api/user/strategies
-        // which filters by "Strategy Investment: <exact strategy name>".
         let resolvedName = item.isin;
         if (item.instrument_type === 'BASKET') {
           const { data: stratRow } = await supabaseAdmin.from('strategies_c').select('name').eq('id', item.isin).maybeSingle();
@@ -278,16 +325,15 @@ export default async function handler(req, res) {
           resolvedName = secRow?.name || secRow?.symbol || item.isin;
         }
 
-        // Insert a transaction for the owner so holdings have a transaction_id
         const now = new Date().toISOString();
         const txName = item.instrument_type === 'BASKET'
           ? `Strategy Investment: ${resolvedName}`
           : `Purchased ${resolvedName}`;
 
-        let ownerTxId = null;
+        let recipientTxId = null;
         try {
           const txInsert = await supabaseAdmin.from('transactions').insert({
-            user_id: ownerUserId,
+            user_id: recipientUserId,
             direction: 'debit',
             name: txName,
             description: 'Investment received as wishlist gift',
@@ -298,26 +344,68 @@ export default async function handler(req, res) {
             transaction_date: now,
             created_at: now,
           }).select('id').single();
-          ownerTxId = txInsert.data?.id || null;
+          recipientTxId = txInsert.data?.id || null;
         } catch (e) {
-          console.warn('[gift-registry/contribute] owner tx insert:', e.message);
+          console.warn('[gift-registry/contribute] recipient tx insert:', e.message);
         }
 
         const created = await createOwnerHoldings(supabaseAdmin, {
-          ownerUserId,
-          item,
-          amountCents: investAmountCents,
-          txId: ownerTxId,
+          ownerUserId: recipientUserId, item, amountCents: investAmountCents, txId: recipientTxId,
+        });
+        console.log(`[gift-registry/contribute] created ${created} pending holding(s) for recipient ${recipientUserId}`);
+
+        // ── Notifications ──
+        const notifPayload = {
+          action: 'OPEN_GIFT_REGISTRY',
+          registry_id: registryId,
+          share_token: shareToken,
+          deep_link: shareToken ? `/gift/${shareToken}` : null,
+          gifter_user_id: user.id,
+          gifter_name: gifterName,
+          gifter_mint_number: gifterProfile?.mint_number || null,
+        };
+
+        const notifRows = [];
+
+        // Notify the actual recipient (child or self-registry owner)
+        if (recipientUserId && recipientUserId !== user.id) {
+          notifRows.push({
+            user_id: recipientUserId,
+            title: `${gifterName} gifted you 🎁`,
+            body: `${gifterName}${mintPart} gifted you ${resolvedName} from your "${registryTitle}" wishlist!`,
+            type: 'system',
+            payload: notifPayload,
+          });
+        }
+
+        // Also notify the parent/creator if the registry was for a child
+        if (ownerUserId && ownerUserId !== recipientUserId && ownerUserId !== user.id) {
+          notifRows.push({
+            user_id: ownerUserId,
+            title: `${gifterName} gifted your child 🎁`,
+            body: `${gifterName}${mintPart} gifted ${resolvedName} to ${reg?.beneficiary_display_name || 'your child'} from the "${registryTitle}" wishlist!`,
+            type: 'system',
+            payload: notifPayload,
+          });
+        }
+
+        // Confirm to the gifter
+        notifRows.push({
+          user_id: user.id,
+          title: 'Gift sent! 🎉',
+          body: `You gifted ${resolvedName} from "${registryTitle}". They'll love it!`,
+          type: 'system',
+          payload: notifPayload,
         });
 
-        console.log(`[gift-registry/contribute] created ${created} pending holding(s) for owner ${ownerUserId}`);
-      } else {
-        console.warn('[gift-registry/contribute] could not resolve item or owner for holdings creation', { item, ownerUserId });
+        if (notifRows.length > 0) {
+          const { error: notifErr } = await supabaseAdmin.from('notifications').insert(notifRows);
+          if (notifErr) console.error('[gift-registry/contribute] notification insert error:', notifErr.message);
+          else console.log(`[gift-registry/contribute] sent ${notifRows.length} notification(s)`);
+        }
       }
     } catch (e) {
-      // Holdings creation is best-effort — the contribution is already paid,
-      // so we log but do not fail the response.
-      console.error('[gift-registry/contribute] post-payment holdings creation error:', e.message);
+      console.error('[gift-registry/contribute] post-payment error:', e.message);
     }
 
     return res.status(200).json({ success: true, contribution });

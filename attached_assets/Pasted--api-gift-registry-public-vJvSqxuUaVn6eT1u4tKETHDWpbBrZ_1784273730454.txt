@@ -1,0 +1,51 @@
+/api/gift-registry/public/vJvSqxuUaVn6eT1u4tKETHDWpbBrZ9F2/my-contributions:1  Failed to load resource: the server responded with a status of 404 ()
+GiftRegistryPublicPage-DHaur3uC.js:1  GET https://mint-development.vercel.app/api/gift-registry/public/vJvSqxuUaVn6eT1u4tKETHDWpbBrZ9F2/my-contributions 404 (Not Found)
+(anonymous) @ GiftRegistryPublicPage-DHaur3uC.js:1
+await in (anonymous)
+(anonymous) @ GiftRegistryPublicPage-DHaur3uC.js:1
+ju @ vendor-recharts-BfjPiJtV.js:8
+ha @ vendor-recharts-BfjPiJtV.js:8
+(anonymous) @ vendor-recharts-BfjPiJtV.js:8
+I @ vendor-recharts-BfjPiJtV.js:1
+F @ vendor-recharts-BfjPiJtV.js:1
+postMessage
+re @ vendor-recharts-BfjPiJtV.js:1
+he @ vendor-recharts-BfjPiJtV.js:1
+e.unstable_scheduleCallback @ vendor-recharts-BfjPiJtV.js:1
+J0 @ vendor-recharts-BfjPiJtV.js:8
+Vt @ vendor-recharts-BfjPiJtV.js:8
+jr @ vendor-recharts-BfjPiJtV.js:8
+WC @ vendor-recharts-BfjPiJtV.js:6
+(anonymous) @ index--PIkRVkv.js:7
+await in (anonymous)
+(anonymous) @ index--PIkRVkv.js:7
+(anonymous) @ vendor-supabase-D45aZRic.js:44
+_notifyAllSubscribers @ vendor-supabase-D45aZRic.js:44
+_recoverAndRefresh @ vendor-supabase-D45aZRic.js:44
+await in _recoverAndRefresh
+_onVisibilityChanged @ vendor-supabase-D45aZRic.js:44
+await in _onVisibilityChanged
+visibilityChangedCallback @ vendor-supabase-D45aZRic.js:44
+GiftRegistryPublicPage-DHaur3uC.js:1  POST https://mint-development.vercel.app/api/gift-registry/reserve 403 (Forbidden)
+B @ GiftRegistryPublicPage-DHaur3uC.js:1
+await in B
+(anonymous) @ GiftRegistryPublicPage-DHaur3uC.js:1
+ju @ vendor-recharts-BfjPiJtV.js:8
+ha @ vendor-recharts-BfjPiJtV.js:8
+aj @ vendor-recharts-BfjPiJtV.js:8
+vi @ vendor-recharts-BfjPiJtV.js:8
+q0 @ vendor-recharts-BfjPiJtV.js:8
+Dn @ vendor-recharts-BfjPiJtV.js:6
+(anonymous) @ vendor-recharts-BfjPiJtV.js:8
+index--PIkRVkv.js:2 [GiftRegistry][KYC_DEBUG] reserve blocked — onboarding status: {is_fully_onboarded: true, kyc_status: 'onboarding_complete', sumsub_raw_keys: null}
+console.warn @ index--PIkRVkv.js:2
+B @ GiftRegistryPublicPage-DHaur3uC.js:1
+await in B
+(anonymous) @ GiftRegistryPublicPage-DHaur3uC.js:1
+ju @ vendor-recharts-BfjPiJtV.js:8
+ha @ vendor-recharts-BfjPiJtV.js:8
+aj @ vendor-recharts-BfjPiJtV.js:8
+vi @ vendor-recharts-BfjPiJtV.js:8
+q0 @ vendor-recharts-BfjPiJtV.js:8
+Dn @ vendor-recharts-BfjPiJtV.js:6
+(anonymous) @ vendor-recharts-BfjPiJtV.js:8
