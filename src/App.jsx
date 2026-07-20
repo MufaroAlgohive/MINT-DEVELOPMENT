@@ -762,12 +762,12 @@ const App = () => {
               // (giftRegistryNavState is already seeded with the token)
               setCurrentPage("giftRegistryPublic");
             } else {
-              // Check for a pending registry token stored by the og-preview fallback
-              // (fires when dist/index.html wasn't available and we redirected to / with localStorage)
-              const pendingRegistryToken = localStorage.getItem('mint_pending_registry_token');
-              if (pendingRegistryToken) {
-                localStorage.removeItem('mint_pending_registry_token');
-                setGiftRegistryNavState({ token: pendingRegistryToken, context: "shared_wishlist" });
+              // Check for a token stored by the og-preview fallback only
+              // (uses a distinct key so it never collides with the normal deep-link flow)
+              const fallbackToken = localStorage.getItem('mint_ogfallback_registry_token');
+              if (fallbackToken) {
+                localStorage.removeItem('mint_ogfallback_registry_token');
+                setGiftRegistryNavState({ token: fallbackToken, context: "shared_wishlist" });
                 setCurrentPage("giftRegistryPublic");
               } else {
                 setCurrentPage("home");

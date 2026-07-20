@@ -170,7 +170,7 @@ export default async function handler(req, res) {
   <title>${esc(title)}</title>
   ${ogTags}
   <script>
-    try { localStorage.setItem('mint_pending_registry_token', ${JSON.stringify(token)}); } catch(e) {}
+    try { localStorage.setItem('mint_ogfallback_registry_token', ${JSON.stringify(token)}); } catch(e) {}
     window.location.replace('/');
   </script>
 </head>
