@@ -122,8 +122,13 @@ export default function GiftRegistryItemCheckoutSheet({ item, registryId, onSucc
     const ozowTxFee = bufferedBase * OZOW_TRANSACTION_FEE_RATE;
     const walletTotal = bufferedBase + brokerAmount + isinTotal + walletTxFee;
     const ozowTotal = bufferedBase + brokerAmount + isinTotal + ozowTxFee;
+    console.log('[PRICE-DEBUG GiftCheckout] item:', JSON.stringify({ id: item?.id, isin: item?.isin, name: item?.name, instrument_type: item?.instrument_type, price_snapshot_cents: item?.price_snapshot_cents }));
+    console.log('[PRICE-DEBUG GiftCheckout] priceCents:', priceCents, '| quantity:', quantity, '| numAssets:', numAssets, '| baseAmount (Rand):', baseAmount.toFixed(2));
+    console.log('[PRICE-DEBUG GiftCheckout] rates — CASH_BUFFER:', CASH_BUFFER_RATE, 'BROKER:', BROKER_FEE_RATE, 'WALLET_TX:', WALLET_TRANSACTION_FEE_RATE, 'OZOW_TX:', OZOW_TRANSACTION_FEE_RATE, 'ISIN_FEE_PER_ASSET:', ISIN_FEE_PER_ASSET);
+    console.log('[PRICE-DEBUG GiftCheckout] breakdown — bufferedBase:', bufferedBase.toFixed(2), 'brokerAmount:', brokerAmount.toFixed(2), 'isinTotal:', isinTotal.toFixed(2), 'walletTxFee:', walletTxFee.toFixed(2));
+    console.log('[PRICE-DEBUG GiftCheckout] WALLET TOTAL (R):', walletTotal.toFixed(2), '| OZOW TOTAL (R):', ozowTotal.toFixed(2));
     return { baseAmount, bufferedBase, brokerAmount, isinTotal, walletTxFee, ozowTxFee, walletTotal, ozowTotal };
-  }, [quantity, priceCents, numAssets, CASH_BUFFER_RATE, BROKER_FEE_RATE, ISIN_FEE_PER_ASSET, WALLET_TRANSACTION_FEE_RATE, OZOW_TRANSACTION_FEE_RATE]);
+  }, [quantity, priceCents, numAssets, CASH_BUFFER_RATE, BROKER_FEE_RATE, ISIN_FEE_PER_ASSET, WALLET_TRANSACTION_FEE_RATE, OZOW_TRANSACTION_FEE_RATE, item]);
 
   async function handleReserve() {
     setLoading(true);
