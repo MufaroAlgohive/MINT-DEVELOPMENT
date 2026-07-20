@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import { ArrowLeft, Info, Plus, Minus, ChevronDown, ChevronUp, X, Download } from "lucide-react";
 import { formatCurrency } from "../lib/formatCurrency";
 import PdfViewer from "../components/PdfViewer";
@@ -29,6 +29,7 @@ const InvestAmountPage = ({ onBack, strategy, onContinue, paymentMethod, startWi
   const [feeExpanded, setFeeExpanded] = useState(false);
   const [giftEnabled, setGiftEnabled] = useState(startWithGiftOpen);
   const [giftSheetOpen, setGiftSheetOpen] = useState(startWithGiftOpen);
+  const giftSheetRef = useRef(null);
 
   useEffect(() => {
     if (minimumInvestment && minimumInvestment > 0) {
@@ -301,6 +302,7 @@ const InvestAmountPage = ({ onBack, strategy, onContinue, paymentMethod, startWi
           enabled={giftEnabled}
           onToggle={(val) => { setGiftEnabled(val); if (!val) setGiftSheetOpen(false); }}
           onSheetOpenChange={setGiftSheetOpen}
+          giftSheetRef={giftSheetRef}
           onDone={onGiftDone}
           security={{ id: currentStrategy.id, symbol: currentStrategy.name, name: currentStrategy.name }}
           assetType="strategy"
@@ -337,11 +339,18 @@ const InvestAmountPage = ({ onBack, strategy, onContinue, paymentMethod, startWi
         ) : (!giftEnabled || !giftSheetOpen) && (
           <button
             type="button"
-            onClick={handleContinue}
+            onClick={() => {
+              if (giftEnabled && !giftSheetOpen) {
+                // Gift mode is on but sheet was closed — re-open it so user can pick a recipient
+                giftSheetRef.current?.open();
+              } else {
+                handleContinue();
+              }
+            }}
             disabled={!agreementChecked || isLoadingStatus}
             className="w-full rounded-2xl bg-gradient-to-r from-[#5b21b6] to-[#7c3aed] py-3 text-sm font-semibold text-white shadow-lg shadow-violet-200/60 disabled:opacity-50 disabled:cursor-not-allowed hover:enabled:-translate-y-0.5 transition"
           >
-            {isLoadingStatus ? "Checking status..." : "Continue"}
+            {isLoadingStatus ? "Checking status..." : giftEnabled && !giftSheetOpen ? "Select Recipient" : "Continue"}
           </button>
         )}
       </div>

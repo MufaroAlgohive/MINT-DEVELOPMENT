@@ -254,6 +254,7 @@ export default function GiftToggleV2({
   onToggle,
   onDone,
   onSheetOpenChange, // (isOpen: bool) => void — called when sheet opens or closes
+  giftSheetRef,      // optional ref — caller can call giftSheetRef.current.open() to re-open sheet
   security,
   totalCostCents,
   amountDisplay,
@@ -272,6 +273,11 @@ export default function GiftToggleV2({
   const openSheet  = () => { setSheetOpen(true);  onSheetOpenChange?.(true);  };
   const closeSheet = () => { setSheetOpen(false); onSheetOpenChange?.(false); };
   useEffect(() => { if (enabled) openSheet(); }, [enabled]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Expose openSheet to parent via ref so parent can re-open the sheet imperatively
+  useEffect(() => {
+    if (giftSheetRef) giftSheetRef.current = { open: openSheet };
+  }); // no deps — always keep the ref current
 
   const [step, setStep] = useState("picker");
   const [inputMode, setInputMode] = useState("mint");
