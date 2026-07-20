@@ -269,40 +269,6 @@ const PaymentMethodModal = ({
                     <p className="text-[11px] text-violet-600 font-medium">Pay via Wallet</p>
                   </div>
 
-                  {/* ── Quantity picker — shown for gift registry checkout ── */}
-                  {pricePerUnitCents > 0 && (
-                    <div className="rounded-2xl border border-slate-100 bg-white shadow-sm px-5 py-4 flex items-center justify-between">
-                      <button
-                        onClick={() => handleQtyChange(localQty - 1)}
-                        disabled={localQty <= minQty || rereserving}
-                        className="w-12 h-12 rounded-2xl border border-slate-200 bg-white flex items-center justify-center text-slate-600 text-xl font-medium active:scale-95 transition disabled:opacity-30 disabled:cursor-not-allowed"
-                      >
-                        −
-                      </button>
-                      <div className="flex-1 text-center px-3">
-                        <p className="text-xs font-semibold text-slate-500 mb-1">Investment Amount</p>
-                        {rereserving ? (
-                          <div className="flex items-center justify-center gap-2 py-1">
-                            <div className="w-4 h-4 border-2 border-violet-400 border-t-transparent rounded-full animate-spin" />
-                            <span className="text-sm text-slate-400">Updating…</span>
-                          </div>
-                        ) : (
-                          <p className="text-2xl font-bold text-slate-900 tracking-tight">
-                            {formatAmount(bufferedBase)}
-                          </p>
-                        )}
-                        <p className="text-xs text-slate-400 mt-0.5">{localQty} share{localQty !== 1 ? "s" : ""}</p>
-                      </div>
-                      <button
-                        onClick={() => handleQtyChange(localQty + 1)}
-                        disabled={localQty >= maxQty || rereserving}
-                        className="w-12 h-12 rounded-2xl bg-[#6B21A8] flex items-center justify-center text-white text-xl font-medium active:scale-95 transition disabled:opacity-30 disabled:cursor-not-allowed"
-                      >
-                        +
-                      </button>
-                    </div>
-                  )}
-
                   <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4 space-y-2">
                     <div className="flex justify-between text-xs">
                       <span className="text-slate-500">Investment (incl. 8% reserve)</span>
@@ -385,40 +351,6 @@ const PaymentMethodModal = ({
                     <p className="text-[11px] text-violet-600 font-medium">Pay via Ozow instant bank transfer</p>
                   </div>
 
-                  {/* ── Quantity picker — shown for gift registry checkout ── */}
-                  {pricePerUnitCents > 0 && (
-                    <div className="rounded-2xl border border-slate-100 bg-white shadow-sm px-5 py-4 flex items-center justify-between">
-                      <button
-                        onClick={() => handleQtyChange(localQty - 1)}
-                        disabled={localQty <= minQty || rereserving}
-                        className="w-12 h-12 rounded-2xl border border-slate-200 bg-white flex items-center justify-center text-slate-600 text-xl font-medium active:scale-95 transition disabled:opacity-30 disabled:cursor-not-allowed"
-                      >
-                        −
-                      </button>
-                      <div className="flex-1 text-center px-3">
-                        <p className="text-xs font-semibold text-slate-500 mb-1">Investment Amount</p>
-                        {rereserving ? (
-                          <div className="flex items-center justify-center gap-2 py-1">
-                            <div className="w-4 h-4 border-2 border-violet-400 border-t-transparent rounded-full animate-spin" />
-                            <span className="text-sm text-slate-400">Updating…</span>
-                          </div>
-                        ) : (
-                          <p className="text-2xl font-bold text-slate-900 tracking-tight">
-                            {formatAmount(bufferedBase)}
-                          </p>
-                        )}
-                        <p className="text-xs text-slate-400 mt-0.5">{localQty} share{localQty !== 1 ? "s" : ""}</p>
-                      </div>
-                      <button
-                        onClick={() => handleQtyChange(localQty + 1)}
-                        disabled={localQty >= maxQty || rereserving}
-                        className="w-12 h-12 rounded-2xl bg-[#6B21A8] flex items-center justify-center text-white text-xl font-medium active:scale-95 transition disabled:opacity-30 disabled:cursor-not-allowed"
-                      >
-                        +
-                      </button>
-                    </div>
-                  )}
-
                   <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4 space-y-2">
                     <div className="flex justify-between text-xs">
                       <span className="text-slate-500">Investment (incl. 8% reserve)</span>
@@ -493,6 +425,40 @@ const PaymentMethodModal = ({
                   </span>
                 </p>
               </div>
+
+              {/* ── Quantity picker — shown whenever opened from gift registry ── */}
+              {initialQuantity != null && (
+                <div className="mx-5 mb-3 rounded-2xl border border-slate-100 bg-white shadow-sm px-5 py-4 flex items-center justify-between">
+                  <button
+                    onClick={() => handleQtyChange(localQty - 1)}
+                    disabled={localQty <= minQty || rereserving}
+                    className="w-12 h-12 rounded-2xl border border-slate-200 bg-white flex items-center justify-center text-slate-600 text-xl font-medium active:scale-95 transition disabled:opacity-30 disabled:cursor-not-allowed"
+                  >
+                    −
+                  </button>
+                  <div className="flex-1 text-center px-3">
+                    <p className="text-xs font-semibold text-slate-500 mb-1">Investment Amount</p>
+                    {rereserving ? (
+                      <div className="flex items-center justify-center gap-2 py-1">
+                        <div className="w-4 h-4 border-2 border-violet-400 border-t-transparent rounded-full animate-spin" />
+                        <span className="text-sm text-slate-400">Updating…</span>
+                      </div>
+                    ) : (
+                      <p className="text-2xl font-bold text-slate-900 tracking-tight">
+                        {formatAmount(bufferedBase)}
+                      </p>
+                    )}
+                    <p className="text-xs text-slate-400 mt-0.5">{localQty} share{localQty !== 1 ? "s" : ""}</p>
+                  </div>
+                  <button
+                    onClick={() => handleQtyChange(localQty + 1)}
+                    disabled={localQty >= maxQty || rereserving}
+                    className="w-12 h-12 rounded-2xl bg-[#6B21A8] flex items-center justify-center text-white text-xl font-medium active:scale-95 transition disabled:opacity-30 disabled:cursor-not-allowed"
+                  >
+                    +
+                  </button>
+                </div>
+              )}
 
               <div className={`px-5 pb-5 space-y-2.5 pt-3${isAdminPreview() ? " opacity-40 pointer-events-none select-none" : ""}`}>
 
