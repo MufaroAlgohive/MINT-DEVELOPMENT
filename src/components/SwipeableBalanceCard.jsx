@@ -185,9 +185,12 @@ const SwipeableBalanceCard = ({
   const [parentDayLastBasketCents, setParentDayLastBasketCents] = useState(null);
   const [parentDayPrevBasketCents, setParentDayPrevBasketCents] = useState(null);
   const [parentDayLastSnapshotDate, setParentDayLastSnapshotDate] = useState(null);
-  // D-tab: individual stock holdings fetched directly from stock_holdings_c for strategy users
-  // (dbData.holdings only has isStrategy=true aggregates for parent users, so holdingsForD is empty)
+  // D-tab: individual stock holdings fetched directly from stock_holdings_c for strategy users.
+  // Cached here so the intraday chart re-runs on intradayTick without re-fetching holdings.
   const [homeDirectStratHoldings, setHomeDirectStratHoldings] = useState([]);
+  // Set to true the instant the D tab is activated so the skeleton shows immediately,
+  // before any async work begins.
+  const [intradayEagerLoading, setIntradayEagerLoading] = useState(false);
   const [childSnapshotCount, setChildSnapshotCount] = useState(null);
   const [childLivePriceMap, setChildLivePriceMap] = useState({});
   const [yearStartBasketCents, setYearStartBasketCents] = useState(null);
@@ -1087,38 +1090,14 @@ const SwipeableBalanceCard = ({
     return () => { clearInterval(id); };
   }, [activeTab, childMode, holdingsForD]);
 
-  // ── D tab: fetch individual stock holdings from stock_holdings_c for strategy users ──
-  // Mirrors NewPortfolioPage's directStratHoldings fetch. dbData.holdings only has
-  // isStrategy=true aggregate rows for parent users, so holdingsForD is empty; we
-  // need the actual per-security rows to build the intraday chart.
+  // ── D tab: show skeleton the instant the tab is activated (before any async work) ──
   useEffect(() => {
-    if (activeTab !== "d" || childMode || !userId) {
-      setHomeDirectStratHoldings([]);
-      return;
+    if (activeTab === "d" && !childMode) {
+      setIntradayEagerLoading(true);
+    } else {
+      setIntradayEagerLoading(false);
     }
-    const strategyIds = parentStrategyKey ? parentStrategyKey.split(",").filter(Boolean) : [];
-    if (!strategyIds.length) { setHomeDirectStratHoldings([]); return; }
-    let cancelled = false;
-    (async () => {
-      try {
-        const results = await Promise.all(strategyIds.map(sid =>
-          supabase
-            .from("stock_holdings_c")
-            .select("security_id, quantity, avg_fill, Expected_fill, strategy_id, last_price")
-            .eq("user_id", userId)
-            .is("family_member_id", null)
-            .eq("strategy_id", sid)
-            .gt("avg_fill", 0)
-            .eq("Status", "active")
-            .then(({ data }) => data || [])
-        ));
-        if (!cancelled) setHomeDirectStratHoldings(results.flat());
-      } catch (e) {
-        console.warn("[SwipeableBalanceCard] D-tab holdings fetch error:", e.message);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [activeTab, childMode, userId, parentStrategyKey]);
+  }, [activeTab, childMode]);
 
   // ── D tab: fetch 1d_pnl + last-2 basket_values from client_strategy_returns_c ──
   // Mirrors exactly how NewPortfolioPage.jsx reads snapshotRows["1d_pnl"] for the D badge.
@@ -1181,60 +1160,67 @@ const SwipeableBalanceCard = ({
   // server-persisted parent return snapshots are wanted later, build the endpoint
   // and reinstate a trigger here.
 
-  // ── D tab: intraday chart — fetches 5-min bucketed prices from stock_intraday_c ──
-  // Same logic as ChildPortfolioTab.jsx; chart data is formatted as { v, d } to
-  // match the home card's existing recharts schema (dataKey="v", tooltip key "d").
+  // ── D tab: intraday chart ────────────────────────────────────────────────────
+  // Optimised for speed: holdings are fetched inline (no state-update round-trip),
+  // and we query today's date directly (no timestamp-probe round-trip).
+  // Chart data is formatted as { v, d } to match the card's Recharts schema.
   useEffect(() => {
-    if (activeTab !== "d") { setIntradayChartData(null); return; }
-    if (childMode) { setIntradayChartData([]); setIntradayLoading(false); return; }
+    if (activeTab !== "d") { setIntradayChartData(null); setIntradayEagerLoading(false); return; }
+    if (childMode) { setIntradayChartData([]); setIntradayLoading(false); setIntradayEagerLoading(false); return; }
 
-    // For strategy/parent users dbData.holdings only has isStrategy=true rows so holdingsForD
-    // is empty. Fall back to homeDirectStratHoldings (fetched directly from stock_holdings_c).
-    const sourceHoldings = holdingsForD.length > 0 ? holdingsForD : homeDirectStratHoldings;
-    if (sourceHoldings.length === 0) {
-      // Still loading homeDirectStratHoldings — show skeleton, don't blank the chart yet
-      setIntradayLoading(true);
-      return;
-    }
-
-    const securityIds = [...new Set(sourceHoldings.map(h => h.security_id).filter(Boolean))];
-    const qtyMap = {};
-    sourceHoldings.forEach(h => { qtyMap[h.security_id] = Math.abs(Number(h.quantity || 0)); });
-
-    let cancelled = false;
+    // intradayEagerLoading is already true (set synchronously in the activeTab effect above),
+    // so the skeleton renders before this async block even starts.
     setIntradayLoading(true);
+
+    const strategyIds = parentStrategyKey ? parentStrategyKey.split(",").filter(Boolean) : [];
+    const todayUTC = new Date().toISOString().slice(0, 10);
+    let cancelled = false;
 
     (async () => {
       try {
-        // Find the most recent trading day that has intraday data (handles weekends/holidays)
-        const { data: latestRow } = await supabase
-          .from("stock_intraday_c")
-          .select("timestamp")
-          .in("security_id", securityIds)
-          .order("timestamp", { ascending: false })
-          .limit(1)
-          .maybeSingle();
+        // ── Step 1: get individual security holdings ──────────────────────────
+        // Use already-cached data when available (avoids re-fetch on intradayTick).
+        // Falls back to an inline fetch so we don't wait for a separate effect→state cycle.
+        let sourceHoldings = holdingsForD.length > 0 ? holdingsForD : homeDirectStratHoldings;
+        if (!sourceHoldings.length && strategyIds.length && userId) {
+          const results = await Promise.all(strategyIds.map(sid =>
+            supabase
+              .from("stock_holdings_c")
+              .select("security_id, quantity, avg_fill, Expected_fill, strategy_id, last_price")
+              .eq("user_id", userId)
+              .is("family_member_id", null)
+              .eq("strategy_id", sid)
+              .gt("avg_fill", 0)
+              .eq("Status", "active")
+              .then(({ data }) => data || [])
+          ));
+          if (!cancelled) {
+            sourceHoldings = results.flat();
+            // Cache so the next intradayTick re-run doesn't need to re-fetch
+            setHomeDirectStratHoldings(sourceHoldings);
+          }
+        }
         if (cancelled) return;
-        if (!latestRow) { setIntradayChartData([]); setIntradayLoading(false); return; }
-        const tradingDay = latestRow.timestamp.slice(0, 10);
+        if (!sourceHoldings.length) { setIntradayChartData([]); setIntradayLoading(false); setIntradayEagerLoading(false); return; }
 
-        // Don't show a previous day's intraday session labelled as "Today" — if
-        // the most recent data is from a prior calendar day (market not yet open)
-        // return nothing so the D tab shows no chart instead of stale data.
-        const _todayUTC = new Date().toISOString().slice(0, 10);
-        if (tradingDay !== _todayUTC) { setIntradayChartData([]); setIntradayLoading(false); return; }
+        const securityIds = [...new Set(sourceHoldings.map(h => h.security_id).filter(Boolean))];
+        const qtyMap = {};
+        sourceHoldings.forEach(h => { qtyMap[h.security_id] = Math.abs(Number(h.quantity || 0)); });
 
-        // Paginate in batches of 1000 to bypass Supabase server-side row cap
+        // ── Step 2: fetch today's intraday rows directly ──────────────────────
+        // No timestamp-probe round-trip — we query today's UTC date directly.
+        // If there's no data for today (market not yet open / holiday) we get
+        // an empty array and show nothing, matching the portfolio tab's behaviour.
         const PAGE = 1000;
         let intradayRows = [];
         let page = 0;
         while (true) {
           const { data: batch } = await supabase
             .from("stock_intraday_c")
-            .select("security_id, current_price, 1d_abs, timestamp")
+            .select("security_id, current_price, 1d_abs, 1d_pct, timestamp")
             .in("security_id", securityIds)
-            .gte("timestamp", `${tradingDay}T00:00:00Z`)
-            .lt("timestamp", `${tradingDay}T23:59:59Z`)
+            .gte("timestamp", `${todayUTC}T00:00:00Z`)
+            .lt("timestamp", `${todayUTC}T23:59:59Z`)
             .order("timestamp", { ascending: true })
             .range(page * PAGE, (page + 1) * PAGE - 1);
           if (!batch?.length) break;
@@ -1245,36 +1231,38 @@ const SwipeableBalanceCard = ({
         }
 
         if (cancelled) return;
-        if (!intradayRows.length) { setIntradayChartData([]); setIntradayLoading(false); return; }
+        if (!intradayRows.length) { setIntradayChartData([]); setIntradayLoading(false); setIntradayEagerLoading(false); return; }
 
-        const latestBySecId = {};
-        for (const row of intradayRows) {
-          latestBySecId[row.security_id] = row;
-        }
-
-        // Use snapshot basket_value as baseline — same logic as NewPortfolioPage's intraday chart.
-        // This avoids Yahoo Finance's unreliable 1d_abs sign for JSE stocks.
-        // snapshotHasToday → EOD already ran today, yesterday's close is prevBasket.
-        // Otherwise → lastBasket IS yesterday's close (EOD hasn't run yet for today).
-        const snapshotHasToday = parentDayLastSnapshotDate === _todayUTC;
+        // ── Step 3: baseline (yesterday's close) ─────────────────────────────
+        // Prefer snapshot basket_value (same as portfolio tab, avoids Yahoo 1d_abs sign issues).
+        const snapshotHasToday = parentDayLastSnapshotDate === todayUTC;
         const snapshotBaseline = parentDayLastBasketCents != null
           ? ((snapshotHasToday && parentDayPrevBasketCents)
               ? parentDayPrevBasketCents / 100
               : parentDayLastBasketCents / 100)
           : null;
 
-        // Fallback: cost basis from holdings (last resort)
-        const totalCostBasis = sourceHoldings.reduce((sum, h) => {
+        // Fallback: signed 1d_abs × qty (uses 1d_pct for correct sign, matches portfolio tab fallback)
+        const latestBySecId = {};
+        for (const row of intradayRows) latestBySecId[row.security_id] = row;
+        const signedFallbackBaseline = securityIds.reduce((sum, sid) => {
+          const row = latestBySecId[sid];
+          if (!row) return sum;
+          const abs1d = Number(row["1d_abs"] || 0);
+          const pct1d = Number(row["1d_pct"] || 0);
+          const signed1d = Math.abs(abs1d) * (pct1d < 0 ? -1 : 1);
+          return sum + ((Number(row.current_price) - signed1d) / 100) * (qtyMap[sid] || 0);
+        }, 0);
+        const costBasisFallback = sourceHoldings.reduce((sum, h) => {
           const avgFillCents = Number(h.avg_fill || 0);
           const avgFillRands = avgFillCents / 100;
           const expectedRaw = Number(h.Expected_fill || 0);
           const expectedRands = expectedRaw > 0 ? (expectedRaw > avgFillRands * 5 ? expectedRaw / 100 : expectedRaw) : 0;
           return sum + (expectedRands > 0 ? expectedRands : avgFillRands) * Math.abs(Number(h.quantity || 0));
         }, 0);
+        const baselineRands = snapshotBaseline ?? (signedFallbackBaseline || costBasisFallback);
 
-        const baselineRands = snapshotBaseline ?? totalCostBasis;
-
-        // Group into 5-minute buckets
+        // ── Step 4: aggregate into 5-minute buckets ───────────────────────────
         const bucketMap = new Map();
         for (const row of intradayRows) {
           const dt = new Date(row.timestamp);
@@ -1286,7 +1274,7 @@ const SwipeableBalanceCard = ({
         }
 
         const sorted = [...bucketMap.entries()].sort((a, b) => a[0] < b[0] ? -1 : 1);
-        const MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+        const MN = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
         const lastKnown = {};
         const points = [{ d: null, v: 0 }];
 
@@ -1294,22 +1282,17 @@ const SwipeableBalanceCard = ({
           for (const sid of securityIds) {
             if (prices[sid] != null) lastKnown[sid] = prices[sid];
           }
-          if (Object.keys(lastKnown).length === 0) continue;
+          if (!Object.keys(lastKnown).length) continue;
           const portfolioRands = securityIds.reduce((sum, sid) => {
             const price = lastKnown[sid];
             return price != null ? sum + (price / 100) * (qtyMap[sid] || 0) : sum;
           }, 0);
           const pnl = Number((portfolioRands - baselineRands).toFixed(2));
-
-          // Convert UTC → SAST (+2h) for labels
           const dt = new Date(isoKey);
           const sast = new Date(dt.getTime() + 2 * 60 * 60 * 1000);
           const hh = String(sast.getUTCHours()).padStart(2, "0");
           const mm = String(sast.getUTCMinutes()).padStart(2, "0");
-          const dd = sast.getUTCDate();
-          const mo = MONTH_NAMES[sast.getUTCMonth()];
-          const yr = sast.getUTCFullYear();
-          points.push({ d: `${hh}:${mm}`, v: pnl, fullDate: `${dd} ${mo} ${yr} ${hh}:${mm}` });
+          points.push({ d: `${hh}:${mm}`, v: pnl, fullDate: `${sast.getUTCDate()} ${MN[sast.getUTCMonth()]} ${sast.getUTCFullYear()} ${hh}:${mm}` });
         }
 
         if (!cancelled) setIntradayChartData(points.length > 1 ? points : []);
@@ -1317,12 +1300,12 @@ const SwipeableBalanceCard = ({
         console.error("[home-intraday-chart]", e);
         if (!cancelled) setIntradayChartData([]);
       } finally {
-        if (!cancelled) setIntradayLoading(false);
+        if (!cancelled) { setIntradayLoading(false); setIntradayEagerLoading(false); }
       }
     })();
 
     return () => { cancelled = true; };
-  }, [activeTab, childMode, holdingsForD, homeDirectStratHoldings, intradayTick, parentDayLastBasketCents, parentDayPrevBasketCents, parentDayLastSnapshotDate]);
+  }, [activeTab, childMode, holdingsForD, homeDirectStratHoldings, userId, parentStrategyKey, intradayTick, parentDayLastBasketCents, parentDayPrevBasketCents, parentDayLastSnapshotDate]);
 
   useEffect(() => {
     let chartCancelled = false;
@@ -2009,7 +1992,7 @@ const SwipeableBalanceCard = ({
           const effectiveChartData = activeTab === "d"
             ? (intradayChartData && intradayChartData.length > 1 ? intradayChartData : [])
             : chartData;
-          const effectiveLoading = activeTab === "d" ? intradayLoading : (!dataSettled || chartLoading);
+          const effectiveLoading = activeTab === "d" ? (intradayEagerLoading || intradayLoading) : (!dataSettled || chartLoading);
           return (
             <div className="opacity-90 shrink-0 self-end pointer-events-none w-[44%] translate-y-4" style={{ height: 90 }}>
               {effectiveChartData.length > 1 ? (
