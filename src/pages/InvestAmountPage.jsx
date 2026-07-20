@@ -30,6 +30,7 @@ const InvestAmountPage = ({ onBack, strategy, onContinue, paymentMethod, startWi
   const [giftEnabled, setGiftEnabled] = useState(startWithGiftOpen);
   const [giftSheetOpen, setGiftSheetOpen] = useState(startWithGiftOpen);
   const giftSheetRef = useRef(null);
+  const [shakeAgreement, setShakeAgreement] = useState(false);
 
   useEffect(() => {
     if (minimumInvestment && minimumInvestment > 0) {
@@ -225,7 +226,15 @@ const InvestAmountPage = ({ onBack, strategy, onContinue, paymentMethod, startWi
 
 
         {/* Agreement Checkbox */}
-        <section className="mb-6 rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+        <section
+          className={`mb-6 rounded-2xl border p-4 shadow-sm transition-colors duration-300 ${
+            shakeAgreement
+              ? "border-rose-400 bg-rose-50"
+              : "border-slate-100 bg-white"
+          }`}
+          style={shakeAgreement ? { animation: "shake 0.4s ease" } : {}}
+          onAnimationEnd={() => setShakeAgreement(false)}
+        >
           <label className="flex items-start gap-3 cursor-pointer">
             <input
               type="checkbox"
@@ -300,7 +309,15 @@ const InvestAmountPage = ({ onBack, strategy, onContinue, paymentMethod, startWi
 
         <GiftToggleV2
           enabled={giftEnabled}
-          onToggle={(val) => { setGiftEnabled(val); if (!val) setGiftSheetOpen(false); }}
+          onToggle={(val) => {
+            // Turning gift ON requires agreement first
+            if (val && !agreementChecked) {
+              setShakeAgreement(true);
+              return;
+            }
+            setGiftEnabled(val);
+            if (!val) setGiftSheetOpen(false);
+          }}
           onSheetOpenChange={setGiftSheetOpen}
           giftSheetRef={giftSheetRef}
           onDone={onGiftDone}

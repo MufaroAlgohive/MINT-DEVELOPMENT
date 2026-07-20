@@ -177,6 +177,14 @@
 .loading-dot-2 { animation: bounce-dot 1.2s ease-in-out 0.2s infinite; }
 .loading-dot-3 { animation: bounce-dot 1.2s ease-in-out 0.4s infinite; }
 
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20%       { transform: translateX(-6px); }
+  40%       { transform: translateX(6px); }
+  60%       { transform: translateX(-4px); }
+  80%       { transform: translateX(4px); }
+}
+
 @keyframes slideUp {
   from {
     transform: translateY(100%);
