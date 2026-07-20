@@ -1339,7 +1339,9 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
           const { data: strat } = await supabaseAdmin.from('strategies_c').select('name').eq('id', itemIsin).maybeSingle();
           if (strat?.name) itemName = strat.name;
         } else if (itemIsin) {
-          const { data: sec } = await supabaseAdmin.from('securities_c').select('name, symbol').eq('isin', itemIsin).maybeSingle();
+          // Try by ISIN first; fall back to symbol (many JSE securities have isin=null and use ticker as isin field)
+          let { data: sec } = await supabaseAdmin.from('securities_c').select('name, symbol').eq('isin', itemIsin).maybeSingle();
+          if (!sec) ({ data: sec } = await supabaseAdmin.from('securities_c').select('name, symbol').eq('symbol', itemIsin).maybeSingle());
           itemName = sec?.name || sec?.symbol || itemIsin;
         }
 
@@ -1444,11 +1446,20 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
         } else if (recipientUserId && !isBasket && itemIsin) {
           // ── Single security gift — create one pending holding row ──
           try {
-            const { data: sec } = await supabaseAdmin
+            // Try by ISIN first; fall back to symbol (many JSE securities have isin=null and use ticker as isin field)
+            let { data: sec } = await supabaseAdmin
               .from('securities_c')
               .select('id, symbol, last_price')
               .eq('isin', itemIsin)
               .maybeSingle();
+            if (!sec) {
+              ({ data: sec } = await supabaseAdmin
+                .from('securities_c')
+                .select('id, symbol, last_price')
+                .eq('symbol', itemIsin)
+                .maybeSingle());
+              if (sec) console.log(`[gift-registry] contribute: single-security — resolved ${itemIsin} via symbol fallback (isin was null)`);
+            }
 
             if (sec?.id) {
               const now = new Date().toISOString();

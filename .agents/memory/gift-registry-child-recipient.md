@@ -14,10 +14,17 @@ When a gift is purchased through a CHILD registry (wishlist created for a child)
 
 **How to apply:** Check `server/giftRegistryRoutes.cjs` `contribute` endpoint — `recipientFamilyMemberId` variable controls this. Both `transactions` and `stock_holdings_c` inserts must include `family_member_id` when set.
 
-## The bug that was fixed (2026-07-20)
-The contribute endpoint fell through silently when `linked_user_id` was null — it fell back to parent's `user_id` but set NO `family_member_id`. Result: the gift appeared as the parent's own personal investment (with a pending purple card on the parent's home dashboard).
+## Bug 1 fixed (2026-07-20)
+The contribute endpoint fell through silently when `linked_user_id` was null — it fell back to parent's `user_id` but set NO `family_member_id`. Result: the gift appeared as the parent's own personal investment.
 
-**Data repaired:** 5 transactions + 22 holdings for tsiemasilo (parent) were updated to `family_member_id = Amara Smith's family_member id`. All future contributions now use the correct path.
+**Data repaired:** 5 transactions + 22 holdings for tsiemasilo (parent) were updated to `family_member_id = Amara Smith's family_member id`.
+
+## Bug 2 fixed (2026-07-20) — single-security isin=null lookup
+`gift_registry_items.isin` stores the JSE ticker (e.g. `BHG.JO`), but many JSE securities in `securities_c` have `isin = null` with only a `symbol` set. The contribute endpoint's single-security path did `.eq('isin', itemIsin)` which returned nothing → holding silently skipped.
+
+**Fix:** Both the `itemName` resolution (line ~1342) and the holding-creation lookup (line ~1450) in `giftRegistryRoutes.cjs` now fall back to `.eq('symbol', itemIsin)` when the isin lookup returns null.
+
+**Data repaired:** 1 BHG.JO holding manually inserted for Amara Smith (family_member_id `27e0588e`), linked to the existing REGISTRY-CONTRIB transaction `a0756120`. The held-refresh cron confirmed it by updating 34 (up from 33) held securities.
 
 ## Key query patterns
 - Parent personal dashboard: `.eq('user_id', uid).is('family_member_id', null)`
