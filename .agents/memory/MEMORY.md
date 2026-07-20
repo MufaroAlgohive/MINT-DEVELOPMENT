@@ -11,6 +11,7 @@
 - [Yahoo bad-data incident Jun-2026](yahoo-bad-data-recovery.md) — EOD snapshot corruption playbook: identify, fix stock_returns_c, clean intraday, retrigger strategy returns; anomaly guard threshold is 20%.
 - [pgPool optional-connection-string danger](pgpool-fallback-danger.md) — an unreachable SUPABASE_DB_URL is worse than none: null pgPool degrades gracefully, a broken one times out and breaks unrelated features.
 - [Gift registry DRAFT status removed](gift-registry-no-draft.md) — registries are now created directly ACTIVE with a share_token; no more publish step or "Draft" badge/button.
+- [Gift registry child recipient routing](gift-registry-child-recipient.md) — CHILD wishlist gifts must use user_id=parent + family_member_id=child when linked_user_id is null; missing this caused pending card to land on parent's dashboard.
 - [Gift wishlist heart state must be DB-derived](gift-wishlist-heart-state.md) — compute wishlistedKeys solely from live registry-item status, don't just intersect the stored prefs cache.
 - [Strategy returns 1d_pct architecture](strategy-returns-1d-pct.md) — basket_value chain is source of truth; calendar chain-multiplies 1d_pct; ytd_pct column is wrong for rebalanced strategies; Jun 3 2026 rows nulled (template/bad-data corruption).
 - [Strategy calendar monthly fix](strategy-calendar-monthly-fix.md) — inception month uses basket_value; all later months chain 1d_pct (basket_value drops on rebalance days, 1d_pct does not).

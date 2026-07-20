@@ -1263,25 +1263,51 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
         const ownerUserId = registryRow?.creator_user_id; // parent / creator
         const registryTitle = registryRow?.title || 'your wishlist';
 
+        // ── DEBUG: log everything we know about the registry and recipient resolution ──
+        console.log(`[gift-registry] contribute DEBUG: registryId=${registryId}`);
+        console.log(`[gift-registry] contribute DEBUG: beneficiary_type=${registryRow?.beneficiary_type} beneficiary_ref=${registryRow?.beneficiary_ref} creator_user_id=${ownerUserId}`);
+
         // Resolve actual investment recipient: for CHILD registries the holdings
         // and transaction must go to the child's own Supabase account (linked_user_id),
         // not the parent who created the registry.
+        // For CHILD registries: holdings + transaction go to the child.
+        // If the child has their own Supabase account (linked_user_id set), use that user_id.
+        // If not (linked_user_id is null), use the parent's user_id but set family_member_id
+        // to the child's family_members row — this is the established pattern that ChildDashboardPage
+        // and FamilyDashboardPage use to separate child investments from parent investments.
         let recipientUserId = ownerUserId;
+        let recipientFamilyMemberId = null; // set when child has no linked_user_id
+        let recipientSource = 'creator_fallback';
         if (registryRow?.beneficiary_type === 'CHILD' && registryRow?.beneficiary_ref) {
           try {
-            const { data: famMember } = await supabaseAdmin
+            const { data: famMember, error: famErr2 } = await supabaseAdmin
               .from('family_members')
-              .select('linked_user_id')
+              .select('id, linked_user_id, first_name, primary_user_id')
               .eq('id', registryRow.beneficiary_ref)
               .maybeSingle();
+            console.log(`[gift-registry] contribute DEBUG: family_members row=`, JSON.stringify(famMember), 'err=', famErr2?.message || null);
             if (famMember?.linked_user_id) {
+              // Child has their own account — route directly to their user_id
               recipientUserId = famMember.linked_user_id;
+              recipientSource = 'child_linked_user_id';
               console.log(`[gift-registry] contribute: CHILD registry — routing holdings to child user ${recipientUserId} (not parent ${ownerUserId})`);
+            } else if (famMember?.id) {
+              // Child has no linked account — use parent user_id + family_member_id
+              // so the holding appears on ChildDashboardPage (which filters by family_member_id)
+              // but NOT on the parent's personal dashboard (which filters family_member_id IS NULL).
+              recipientFamilyMemberId = famMember.id;
+              recipientSource = 'child_family_member_id';
+              console.log(`[gift-registry] contribute: CHILD registry — child has no linked account, routing holdings to parent ${ownerUserId} with family_member_id=${famMember.id} (child: ${famMember.first_name})`);
+            } else {
+              console.warn(`[gift-registry] contribute: CHILD registry — could not find family_member row for beneficiary_ref=${registryRow.beneficiary_ref}, falling back to parent`);
             }
           } catch (famErr) {
             console.warn('[gift-registry] contribute: could not resolve child linked_user_id, falling back to creator:', famErr.message);
           }
+        } else {
+          console.log(`[gift-registry] contribute DEBUG: not a CHILD registry or no beneficiary_ref — using creator as recipient`);
         }
+        console.log(`[gift-registry] contribute DEBUG: final recipientUserId=${recipientUserId} recipientFamilyMemberId=${recipientFamilyMemberId} source=${recipientSource}`);
         const itemIsin = filledItemRow?.isin || '';
         const isBasket = filledItemRow?.instrument_type === 'BASKET';
 
@@ -1322,7 +1348,7 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
               const investAmountCents = reservation.price_lock_cents * qty;
               let recipientTxId = null;
               try {
-                const { data: txRow } = await supabaseAdmin.from('transactions').insert({
+                const txPayload = {
                   user_id: recipientUserId,
                   direction: 'debit',
                   name: `Strategy Investment: ${strategyName}`,
@@ -1333,7 +1359,11 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
                   status: 'posted',
                   transaction_date: now,
                   created_at: now,
-                }).select('id').single();
+                };
+                // When child has no linked account, tag the transaction with family_member_id
+                // so it appears on ChildDashboardPage (not on parent's personal dashboard).
+                if (recipientFamilyMemberId) txPayload.family_member_id = recipientFamilyMemberId;
+                const { data: txRow } = await supabaseAdmin.from('transactions').insert(txPayload).select('id').single();
                 recipientTxId = txRow?.id || null;
               } catch (txErr) {
                 console.warn('[gift-registry] contribute: recipient transaction insert:', txErr.message);
@@ -1354,7 +1384,7 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
                 if (!sec?.last_price || !sec?.id) continue;
                 const holdingQty = Math.max(1, Math.round((h.weight || 1) * scale));
                 try {
-                  await supabaseAdmin.from('stock_holdings_c').insert({
+                  const holdingPayload = {
                     user_id: recipientUserId,
                     security_id: sec.id,
                     strategy_id: itemIsin,
@@ -1365,11 +1395,14 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
                     as_of_date: null,
                     Status: 'active',
                     transaction_id: recipientTxId || null,
-                  });
+                  };
+                  // Tag with family_member_id when child has no linked account
+                  if (recipientFamilyMemberId) holdingPayload.family_member_id = recipientFamilyMemberId;
+                  await supabaseAdmin.from('stock_holdings_c').insert(holdingPayload);
                   holdingsInserted++;
                 } catch (he) { console.warn('[gift-registry] contribute: pending holding insert:', he.message); }
               }
-              console.log(`[gift-registry] contribute: ${holdingsInserted} holding(s) + tx ${recipientTxId} created for recipient ${recipientUserId} (strategy: ${strategyName})`);
+              console.log(`[gift-registry] contribute: ${holdingsInserted} holding(s) + tx ${recipientTxId} created for recipient ${recipientUserId} family_member=${recipientFamilyMemberId || 'none'} (strategy: ${strategyName})`);
 
               // Upsert user_strategies so the strategy is discoverable
               if (holdingsInserted > 0) {
@@ -1419,7 +1452,7 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
               // Create a transaction so it appears in the child's activity feed
               let recipientTxId = null;
               try {
-                const { data: txRow } = await supabaseAdmin.from('transactions').insert({
+                const singleTxPayload = {
                   user_id: recipientUserId,
                   direction: 'debit',
                   name: `Purchased ${itemName}`,
@@ -1430,7 +1463,9 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
                   status: 'posted',
                   transaction_date: now,
                   created_at: now,
-                }).select('id').single();
+                };
+                if (recipientFamilyMemberId) singleTxPayload.family_member_id = recipientFamilyMemberId;
+                const { data: txRow } = await supabaseAdmin.from('transactions').insert(singleTxPayload).select('id').single();
                 recipientTxId = txRow?.id || null;
               } catch (txErr) {
                 console.warn('[gift-registry] contribute: single-security tx insert:', txErr.message);
@@ -1438,7 +1473,7 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
 
               // Create pending holding — avg_fill=null signals "pending" to the dashboard
               try {
-                await supabaseAdmin.from('stock_holdings_c').insert({
+                const singleHoldingPayload = {
                   user_id: recipientUserId,
                   security_id: sec.id,
                   quantity: sharesQty,
@@ -1449,8 +1484,10 @@ function registerGiftRegistryRoutes(app, supabaseAdmin) {
                   Status: 'active',
                   transaction_id: recipientTxId || null,
                   Expected_fill: expectedFillRands,
-                });
-                console.log(`[gift-registry] contribute: single-security pending holding created for recipient ${recipientUserId} (${sec.symbol} × ${sharesQty})`);
+                };
+                if (recipientFamilyMemberId) singleHoldingPayload.family_member_id = recipientFamilyMemberId;
+                await supabaseAdmin.from('stock_holdings_c').insert(singleHoldingPayload);
+                console.log(`[gift-registry] contribute: single-security pending holding created for recipient ${recipientUserId} family_member=${recipientFamilyMemberId || 'none'} (${sec.symbol} × ${sharesQty})`);
               } catch (holdErr) {
                 console.warn('[gift-registry] contribute: single-security holding insert:', holdErr.message);
               }
