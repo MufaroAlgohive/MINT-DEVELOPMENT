@@ -31,38 +31,28 @@ export default async function handler(req, res) {
         let intradayBySecId = {};
         if (shareItems.length) {
           const isins = shareItems.map(i => i.isin);
-          console.log('[PRICE-DEBUG registry/id] shareItem ISINs:', isins);
 
-          const [{ data: byIsin, error: byIsinErr }, { data: bySymbol, error: bySymbolErr }] = await Promise.all([
+          const [{ data: byIsin }, { data: bySymbol }] = await Promise.all([
             supabaseAdmin.from('securities_c').select('id, isin, symbol, name, logo_url, last_price').in('isin', isins),
             supabaseAdmin.from('securities_c').select('id, isin, symbol, name, logo_url, last_price').in('symbol', isins),
           ]);
-          console.log('[PRICE-DEBUG registry/id] securities_c byIsin rows:', JSON.stringify(byIsin), 'err:', byIsinErr?.message);
-          console.log('[PRICE-DEBUG registry/id] securities_c bySymbol rows:', JSON.stringify(bySymbol), 'err:', bySymbolErr?.message);
 
           for (const s of (bySymbol || [])) if (s.symbol) secMap[s.symbol] = s;
           for (const s of (byIsin   || [])) if (s.isin)   secMap[s.isin]   = s;
-          console.log('[PRICE-DEBUG registry/id] merged secMap keys:', Object.keys(secMap));
 
           // Batch-fetch live intraday prices — same source the single-security buy screen uses
           const secIds = [...new Set(Object.values(secMap).map(s => s.id).filter(Boolean))];
-          console.log('[PRICE-DEBUG registry/id] secIds for intraday query:', secIds);
 
           if (secIds.length) {
-            const { data: intradayRows, error: intradayErr } = await supabaseAdmin
+            const { data: intradayRows } = await supabaseAdmin
               .from('stock_intraday_c')
               .select('security_id, current_price, timestamp')
               .in('security_id', secIds)
               .order('timestamp', { ascending: false });
-            console.log('[PRICE-DEBUG registry/id] intradayRows count:', intradayRows?.length, 'err:', intradayErr?.message);
-            console.log('[PRICE-DEBUG registry/id] intradayRows sample (first 5):', JSON.stringify((intradayRows || []).slice(0, 5)));
 
             for (const row of (intradayRows || [])) {
               if (!intradayBySecId[row.security_id]) intradayBySecId[row.security_id] = row;
             }
-            console.log('[PRICE-DEBUG registry/id] intradayBySecId (deduped):', JSON.stringify(intradayBySecId));
-          } else {
-            console.log('[PRICE-DEBUG registry/id] WARNING: no secIds — skipping intraday query');
           }
         }
 
@@ -91,7 +81,6 @@ export default async function handler(req, res) {
           // Prefer live intraday price (cents); fall back to EOD last_price; then stored snapshot
           const livePrice = sec?.id ? intradayBySecId[sec.id]?.current_price : null;
           const livePriceCents = livePrice ? Number(livePrice) : (sec?.last_price || item.price_snapshot_cents || 0);
-          console.log(`[PRICE-DEBUG registry/id] item isin=${item.isin} | sec.id=${sec?.id} | sec.last_price=${sec?.last_price} | intradayRow=${JSON.stringify(intradayBySecId[sec?.id])} | livePrice=${livePrice} | FINAL cents=${livePriceCents} | FINAL rands=${(livePriceCents/100).toFixed(2)}`);
           return {
             ...item,
             name: sec?.name || item.isin,

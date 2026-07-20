@@ -1885,6 +1885,7 @@ const App = () => {
           isOpen={showPaymentMethodModal}
           onClose={() => setShowPaymentMethodModal(false)}
           amount={stockCheckout.amount}
+          baseAmount={stockCheckout.baseAmount}
           strategyName={stockCheckout.security?.name || stockCheckout.security?.symbol || "Stock"}
           fees={stockCheckout.fees}
           onSelectWallet={() => { setShowPaymentMethodModal(false); setPendingPaymentMethod("wallet"); navigateTo("stockPayment"); }}
@@ -1999,6 +2000,7 @@ const App = () => {
           isOpen={showPaymentMethodModal}
           onClose={() => setShowPaymentMethodModal(false)}
           amount={stockCheckout.amount}
+          baseAmount={stockCheckout.baseAmount}
           strategyName={stockCheckout.security?.name || stockCheckout.security?.symbol || "Stock"}
           onSelectWallet={() => { setShowPaymentMethodModal(false); setPendingPaymentMethod("wallet"); navigateTo("stockPayment"); }}
           onSelectOzow={async () => {

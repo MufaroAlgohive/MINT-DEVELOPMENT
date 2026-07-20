@@ -10,11 +10,11 @@ import { useSyncExternalStore } from "react";
 //   3. FEE_DEFAULTS          — hardcoded last resort
 
 export const FEE_DEFAULTS = {
-  ISIN_FEE_PER_ASSET:          69,
+  ISIN_FEE_PER_ASSET:          25,     // R0.25 per ISIN — matches api/_lib/fees.js
   BROKER_FEE_RATE:             0.0025,
-  TRANSACTION_FEE_RATE:        0.038,
-  WALLET_TRANSACTION_FEE_RATE: 0.01,
-  OZOW_TRANSACTION_FEE_RATE:   0.038,
+  TRANSACTION_FEE_RATE:        0.008,  // 0.8% — was incorrectly 0.038 (3.8%)
+  WALLET_TRANSACTION_FEE_RATE: 0.008,  // 0.8% — was incorrectly 0.01 (1%)
+  OZOW_TRANSACTION_FEE_RATE:   0.025,  // 2.5% — matches api/_lib/fees.js
   CASH_BUFFER_RATE:            0.08,
   AUM_FEE_RATE:                0.0099, // Annual management fee — display only (0.99% p.a.)
 };

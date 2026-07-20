@@ -47,13 +47,8 @@ const StockBuyPage = ({ security, onBack, onContinue, paymentMethod, onGiftDone 
     const isinTotal = ISIN_FEE_PER_ASSET * numAssets;
     const transactionAmount = bufferedBase * TRANSACTION_FEE_RATE;
     const totalCost = bufferedBase + brokerAmount + isinTotal + transactionAmount;
-    console.log('[PRICE-DEBUG StockBuyPage] security:', JSON.stringify({ symbol: security?.symbol, currency: security?.currency, currentPrice: security?.currentPrice }));
-    console.log('[PRICE-DEBUG StockBuyPage] priceValue:', priceValue, '| shares:', shares, '| totalAmount (Rand):', totalAmount);
-    console.log('[PRICE-DEBUG StockBuyPage] rates — CASH_BUFFER:', CASH_BUFFER_RATE, 'BROKER:', BROKER_FEE_RATE, 'TRANSACTION:', TRANSACTION_FEE_RATE, 'ISIN_FEE_PER_ASSET:', ISIN_FEE_PER_ASSET, 'numAssets:', numAssets);
-    console.log('[PRICE-DEBUG StockBuyPage] breakdown — bufferedBase:', bufferedBase.toFixed(2), 'brokerAmount:', brokerAmount.toFixed(2), 'isinTotal:', isinTotal.toFixed(2), 'transactionAmount:', transactionAmount.toFixed(2));
-    console.log('[PRICE-DEBUG StockBuyPage] TOTAL COST (R):', totalCost.toFixed(2));
     return { brokerAmount, isinTotal, transactionAmount, totalCost };
-  }, [totalAmount, numAssets, CASH_BUFFER_RATE, BROKER_FEE_RATE, ISIN_FEE_PER_ASSET, TRANSACTION_FEE_RATE, security, priceValue, shares]);
+  }, [totalAmount, numAssets, CASH_BUFFER_RATE, BROKER_FEE_RATE, ISIN_FEE_PER_ASSET, TRANSACTION_FEE_RATE]);
 
   const isInvalid = !Number.isFinite(shares) || shares <= 0 || shares < minShares;
 

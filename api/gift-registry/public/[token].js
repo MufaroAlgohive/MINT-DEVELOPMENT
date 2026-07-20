@@ -50,40 +50,30 @@ export default async function handler(req, res) {
       let intradayBySecId = {};
       if (shareItems.length) {
         const isins = shareItems.map(i => i.isin);
-        console.log('[PRICE-DEBUG public/token] shareItem ISINs:', isins);
 
         // Include `id` so we can batch-fetch live intraday prices by security_id
-        const [{ data: byIsin, error: byIsinErr }, { data: bySymbol, error: bySymbolErr }] = await Promise.all([
+        const [{ data: byIsin }, { data: bySymbol }] = await Promise.all([
           supabaseAdmin.from('securities_c').select('id, isin, symbol, name, logo_url, last_price').in('isin', isins),
           supabaseAdmin.from('securities_c').select('id, isin, symbol, name, logo_url, last_price').in('symbol', isins),
         ]);
-        console.log('[PRICE-DEBUG public/token] securities_c byIsin rows:', JSON.stringify(byIsin), 'err:', byIsinErr?.message);
-        console.log('[PRICE-DEBUG public/token] securities_c bySymbol rows:', JSON.stringify(bySymbol), 'err:', bySymbolErr?.message);
 
         for (const s of (bySymbol || [])) if (s.symbol) secMap[s.symbol] = s;
         for (const s of (byIsin   || [])) if (s.isin)   secMap[s.isin]   = s;
-        console.log('[PRICE-DEBUG public/token] merged secMap keys:', Object.keys(secMap));
 
         // Batch-fetch live intraday prices — same source the single-security buy screen uses
         const secIds = [...new Set(Object.values(secMap).map(s => s.id).filter(Boolean))];
-        console.log('[PRICE-DEBUG public/token] secIds for intraday query:', secIds);
 
         if (secIds.length) {
-          const { data: intradayRows, error: intradayErr } = await supabaseAdmin
+          const { data: intradayRows } = await supabaseAdmin
             .from('stock_intraday_c')
             .select('security_id, current_price, timestamp')
             .in('security_id', secIds)
             .order('timestamp', { ascending: false });
-          console.log('[PRICE-DEBUG public/token] intradayRows count:', intradayRows?.length, 'err:', intradayErr?.message);
-          console.log('[PRICE-DEBUG public/token] intradayRows sample (first 5):', JSON.stringify((intradayRows || []).slice(0, 5)));
 
           // Keep only the most-recent row per security_id
           for (const row of (intradayRows || [])) {
             if (!intradayBySecId[row.security_id]) intradayBySecId[row.security_id] = row;
           }
-          console.log('[PRICE-DEBUG public/token] intradayBySecId (deduped):', JSON.stringify(intradayBySecId));
-        } else {
-          console.log('[PRICE-DEBUG public/token] WARNING: no secIds — skipping intraday query');
         }
       }
 
