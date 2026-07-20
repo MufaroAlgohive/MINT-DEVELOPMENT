@@ -25,13 +25,31 @@ export default async function handler(req, res) {
         const basketItems = registry.items.filter(i => i.instrument_type === 'BASKET');
 
         // Look up SHARE items in securities_c
+        // Include `id` so we can batch-fetch live intraday prices by security_id.
+        // Also query by symbol in parallel — many JSE stocks have isin=null in securities_c.
         let secMap = {};
+        let intradayBySecId = {};
         if (shareItems.length) {
-          const { data: securities } = await supabaseAdmin
-            .from('securities_c')
-            .select('isin, name, logo_url, last_price')
-            .in('isin', shareItems.map(i => i.isin));
-          secMap = Object.fromEntries((securities || []).map(s => [s.isin, s]));
+          const isins = shareItems.map(i => i.isin);
+          const [{ data: byIsin }, { data: bySymbol }] = await Promise.all([
+            supabaseAdmin.from('securities_c').select('id, isin, symbol, name, logo_url, last_price').in('isin', isins),
+            supabaseAdmin.from('securities_c').select('id, isin, symbol, name, logo_url, last_price').in('symbol', isins),
+          ]);
+          for (const s of (bySymbol || [])) if (s.symbol) secMap[s.symbol] = s;
+          for (const s of (byIsin   || [])) if (s.isin)   secMap[s.isin]   = s;
+
+          // Batch-fetch live intraday prices — same source the single-security buy screen uses
+          const secIds = [...new Set(Object.values(secMap).map(s => s.id).filter(Boolean))];
+          if (secIds.length) {
+            const { data: intradayRows } = await supabaseAdmin
+              .from('stock_intraday_c')
+              .select('security_id, current_price, timestamp')
+              .in('security_id', secIds)
+              .order('timestamp', { ascending: false });
+            for (const row of (intradayRows || [])) {
+              if (!intradayBySecId[row.security_id]) intradayBySecId[row.security_id] = row;
+            }
+          }
         }
 
         // Look up BASKET items in strategies_c (isin stores the strategy UUID)
@@ -55,11 +73,15 @@ export default async function handler(req, res) {
               price_snapshot_cents: item.price_snapshot_cents || 0,
             };
           }
+          const sec = secMap[item.isin];
+          // Prefer live intraday price (cents); fall back to EOD last_price; then stored snapshot
+          const livePrice = sec?.id ? intradayBySecId[sec.id]?.current_price : null;
+          const livePriceCents = livePrice ? Number(livePrice) : (sec?.last_price || item.price_snapshot_cents || 0);
           return {
             ...item,
-            name: secMap[item.isin]?.name || item.isin,
-            logo_url: secMap[item.isin]?.logo_url || null,
-            price_snapshot_cents: item.price_snapshot_cents || secMap[item.isin]?.last_price || 0,
+            name: sec?.name || item.isin,
+            logo_url: sec?.logo_url || null,
+            price_snapshot_cents: livePriceCents,
           };
         });
       }

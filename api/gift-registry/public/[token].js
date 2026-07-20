@@ -47,14 +47,30 @@ export default async function handler(req, res) {
       // Query by both isin AND symbol in parallel — many JSE stocks have isin=null and
       // are only indexed by symbol (e.g. "BHG.JO"). Symbol match is overridden by isin match.
       let secMap = {};
+      let intradayBySecId = {};
       if (shareItems.length) {
         const isins = shareItems.map(i => i.isin);
+        // Include `id` so we can batch-fetch live intraday prices by security_id
         const [{ data: byIsin }, { data: bySymbol }] = await Promise.all([
-          supabaseAdmin.from('securities_c').select('isin, symbol, name, logo_url, last_price').in('isin', isins),
-          supabaseAdmin.from('securities_c').select('isin, symbol, name, logo_url, last_price').in('symbol', isins),
+          supabaseAdmin.from('securities_c').select('id, isin, symbol, name, logo_url, last_price').in('isin', isins),
+          supabaseAdmin.from('securities_c').select('id, isin, symbol, name, logo_url, last_price').in('symbol', isins),
         ]);
         for (const s of (bySymbol || [])) if (s.symbol) secMap[s.symbol] = s;
         for (const s of (byIsin   || [])) if (s.isin)   secMap[s.isin]   = s;
+
+        // Batch-fetch live intraday prices — same source the single-security buy screen uses
+        const secIds = [...new Set(Object.values(secMap).map(s => s.id).filter(Boolean))];
+        if (secIds.length) {
+          const { data: intradayRows } = await supabaseAdmin
+            .from('stock_intraday_c')
+            .select('security_id, current_price, timestamp')
+            .in('security_id', secIds)
+            .order('timestamp', { ascending: false });
+          // Keep only the most-recent row per security_id
+          for (const row of (intradayRows || [])) {
+            if (!intradayBySecId[row.security_id]) intradayBySecId[row.security_id] = row;
+          }
+        }
       }
 
       // Look up BASKET items in strategies_c (isin stores the strategy UUID)
@@ -163,11 +179,14 @@ export default async function handler(req, res) {
             };
           }
           const sec = secMap[item.isin];
+          // Prefer live intraday price (cents); fall back to EOD last_price; then stored snapshot
+          const livePrice = sec?.id ? intradayBySecId[sec.id]?.current_price : null;
+          const livePriceCents = livePrice ? Number(livePrice) : (sec?.last_price || item.price_snapshot_cents || 0);
           return {
             ...item,
             name: sec?.name || item.isin,
             logo_url: sec?.logo_url || null,
-            price_snapshot_cents: item.price_snapshot_cents || sec?.last_price || 0,
+            price_snapshot_cents: livePriceCents,
           };
         });
 
