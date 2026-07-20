@@ -60,7 +60,11 @@ export default async function handler(req, res) {
         .eq('id', itemId);
     }
 
-    const available = item.target_quantity - item.filled_quantity - item.reserved_quantity;
+    // When target_quantity is null the item has no cap — any quantity is valid.
+    const hasTarget = item.target_quantity != null;
+    const available = hasTarget
+      ? item.target_quantity - item.filled_quantity - item.reserved_quantity
+      : Infinity;
     if (quantity > available) {
       return res.status(409).json({ error: 'Not enough shares available', code: 'SOLD_OUT', remaining: available });
     }
@@ -83,8 +87,12 @@ export default async function handler(req, res) {
     // We set the absolute new value and condition the update on the value we
     // just read — if any concurrent request changed it first, this affects 0
     // rows and we return SOLD_OUT.  No pgPool / direct-postgres needed.
-    const maxReservedAllowed = item.target_quantity - item.filled_quantity - quantity;
-    const { data: updated, error: updateErr } = await supabaseAdmin
+    // When target_quantity is null there is no capacity ceiling — skip the
+    // lte guard so uncapped items don't fail the optimistic lock.
+    const maxReservedAllowed = hasTarget
+      ? item.target_quantity - item.filled_quantity - quantity
+      : null;
+    let updateQuery = supabaseAdmin
       .from('gift_registry_items')
       .update({
         reserved_quantity: item.reserved_quantity + quantity,
@@ -92,9 +100,11 @@ export default async function handler(req, res) {
       })
       .eq('id', itemId)
       .eq('reserved_quantity', item.reserved_quantity) // optimistic lock
-      .lte('reserved_quantity', maxReservedAllowed)    // capacity guard
-      .in('status', ['OPEN', 'PARTIALLY_FILLED'])
-      .select('id');
+      .in('status', ['OPEN', 'PARTIALLY_FILLED']);
+    if (maxReservedAllowed !== null) {
+      updateQuery = updateQuery.lte('reserved_quantity', maxReservedAllowed); // capacity guard
+    }
+    const { data: updated, error: updateErr } = await updateQuery.select('id');
 
     if (updateErr || !updated?.length) {
       return res.status(409).json({ error: 'No longer available', code: 'SOLD_OUT', remaining: 0 });
