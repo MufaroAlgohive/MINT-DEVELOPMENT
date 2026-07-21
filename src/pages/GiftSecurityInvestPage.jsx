@@ -1,9 +1,11 @@
-import React, { useState, useMemo, useRef } from "react";
+import React, { useState, useMemo, useRef, useEffect } from "react";
 import { ArrowLeft, Minus, Plus, X, Download } from "lucide-react";
 import { formatCurrency } from "../lib/formatCurrency";
 import PdfViewer from "../components/PdfViewer";
 import GiftToggleV2 from "../components/GiftToggleV2";
 import { useOnboardingStatus } from "../lib/useOnboardingStatus";
+import { useFees } from "../lib/useFees";
+import { motion, AnimatePresence } from "framer-motion";
 
 const GiftSecurityInvestPage = ({ onBack, security, onGiftDone }) => {
   const [quantity, setQuantity] = useState(1);
@@ -11,14 +13,28 @@ const GiftSecurityInvestPage = ({ onBack, security, onGiftDone }) => {
   const [shakeAgreement, setShakeAgreement] = useState(false);
   const [showMandateModal, setShowMandateModal] = useState(false);
   const [giftSheetOpen, setGiftSheetOpen] = useState(true); // starts open
+  const [showGiftLockedToast, setShowGiftLockedToast] = useState(false);
+  const toastTimerRef = useRef(null);
   const giftSheetRef = useRef(null);
 
   const { onboardingComplete: isFullyOnboarded, loading: isLoadingStatus } =
     useOnboardingStatus();
 
+  const { ISIN_FEE_PER_ASSET, BROKER_FEE_RATE, TRANSACTION_FEE_RATE, CASH_BUFFER_RATE } = useFees();
+
   const pricePerShare = security?.currentPrice ?? security?.last_price ?? 0;
-  const totalValue = quantity * pricePerShare;
-  const totalCostCents = Math.round(totalValue * 100);
+  const baseAmount = quantity * pricePerShare;
+
+  const fees = useMemo(() => {
+    const bufferedBase = baseAmount * (1 + CASH_BUFFER_RATE);
+    const brokerAmount = bufferedBase * BROKER_FEE_RATE;
+    const isinTotal = ISIN_FEE_PER_ASSET * 1; // single security
+    const transactionAmount = bufferedBase * TRANSACTION_FEE_RATE;
+    const totalCost = bufferedBase + brokerAmount + isinTotal + transactionAmount;
+    return { bufferedBase, brokerAmount, isinTotal, transactionAmount, totalCost };
+  }, [baseAmount, CASH_BUFFER_RATE, BROKER_FEE_RATE, ISIN_FEE_PER_ASSET, TRANSACTION_FEE_RATE]);
+
+  const totalCostCents = Math.round(fees.totalCost * 100);
 
   const handleIncrement = () => setQuantity((q) => q + 1);
   const handleDecrement = () => setQuantity((q) => Math.max(1, q - 1));
@@ -26,6 +42,14 @@ const GiftSecurityInvestPage = ({ onBack, security, onGiftDone }) => {
   const symbol = security?.symbol || "";
   const name = security?.short_name || security?.name || symbol;
   const logoUrl = security?.logo_url || null;
+
+  function showLockedToast() {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    setShowGiftLockedToast(true);
+    toastTimerRef.current = setTimeout(() => setShowGiftLockedToast(false), 2500);
+  }
+
+  useEffect(() => () => { if (toastTimerRef.current) clearTimeout(toastTimerRef.current); }, []);
 
   return (
     <div className="min-h-screen bg-slate-50 pb-8 text-slate-900">
@@ -74,7 +98,7 @@ const GiftSecurityInvestPage = ({ onBack, security, onGiftDone }) => {
             </div>
             {security?.changePct != null && (
               <span
-                className={`text-xs font-bold px-2 py-1 rounded-full ${
+                className={`flex-shrink-0 text-xs font-bold px-2 py-1 rounded-full ${
                   security.changePct >= 0
                     ? "bg-emerald-50 text-emerald-600"
                     : "bg-red-50 text-red-500"
@@ -86,7 +110,6 @@ const GiftSecurityInvestPage = ({ onBack, security, onGiftDone }) => {
             )}
           </div>
 
-          {/* Sector badge */}
           {security?.sector && (
             <div className="pt-3 border-t border-slate-100">
               <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-medium text-slate-600">
@@ -100,7 +123,6 @@ const GiftSecurityInvestPage = ({ onBack, security, onGiftDone }) => {
         <section className="mb-6">
           <div className="rounded-2xl border border-slate-200 bg-white p-4">
             <div className="flex items-center justify-between gap-3">
-              {/* Decrement */}
               <button
                 type="button"
                 onClick={handleDecrement}
@@ -110,7 +132,6 @@ const GiftSecurityInvestPage = ({ onBack, security, onGiftDone }) => {
                 <Minus className="h-5 w-5" />
               </button>
 
-              {/* Center display */}
               <div className="text-center flex-1">
                 <p className="text-xs font-semibold text-slate-500 mb-1">
                   Number of Shares
@@ -122,13 +143,12 @@ const GiftSecurityInvestPage = ({ onBack, security, onGiftDone }) => {
                   <p className="text-xs text-slate-400 mt-1">
                     Total:{" "}
                     <span className="font-semibold text-slate-700">
-                      {formatCurrency(totalValue, "R")}
+                      {formatCurrency(fees.totalCost, "R")}
                     </span>
                   </p>
                 )}
               </div>
 
-              {/* Increment */}
               <button
                 type="button"
                 onClick={handleIncrement}
@@ -143,9 +163,7 @@ const GiftSecurityInvestPage = ({ onBack, security, onGiftDone }) => {
         {/* Agreement Checkbox */}
         <section
           className={`mb-6 rounded-2xl border p-4 shadow-sm transition-colors duration-300 ${
-            shakeAgreement
-              ? "border-rose-400 bg-rose-50"
-              : "border-slate-100 bg-white"
+            shakeAgreement ? "border-rose-400 bg-rose-50" : "border-slate-100 bg-white"
           }`}
           style={shakeAgreement ? { animation: "shake 0.4s ease" } : {}}
           onAnimationEnd={() => setShakeAgreement(false)}
@@ -162,10 +180,7 @@ const GiftSecurityInvestPage = ({ onBack, security, onGiftDone }) => {
                 I agree to Risk Disclosure, Fee Schedule &{" "}
                 <button
                   type="button"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    setShowMandateModal(true);
-                  }}
+                  onClick={(e) => { e.preventDefault(); setShowMandateModal(true); }}
                   className="underline text-violet-700 hover:text-violet-900"
                 >
                   Strategy Mandate
@@ -179,15 +194,13 @@ const GiftSecurityInvestPage = ({ onBack, security, onGiftDone }) => {
           </label>
         </section>
 
-        {/* Strategy Mandate PDF Modal */}
+        {/* PDF Modal */}
         <div
           className="fixed inset-0 flex flex-col bg-white"
           style={{ zIndex: 100, display: showMandateModal ? "flex" : "none" }}
         >
           <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
-            <h2 className="text-sm font-semibold text-slate-900">
-              Risk Disclosure
-            </h2>
+            <h2 className="text-sm font-semibold text-slate-900">Risk Disclosure</h2>
             <div className="flex items-center gap-1">
               <a
                 href="/strategy-disclosures.pdf"
@@ -207,60 +220,43 @@ const GiftSecurityInvestPage = ({ onBack, security, onGiftDone }) => {
             </div>
           </div>
           <div className="flex-1 overflow-hidden">
-            <PdfViewer
-              file="/strategy-disclosures.pdf"
-              style={{ height: "100%" }}
-            />
+            <PdfViewer file="/strategy-disclosures.pdf" style={{ height: "100%" }} />
           </div>
         </div>
 
-        {/* Gift Toggle — always ON, locked */}
-        <div className="relative">
-          {/* Locked-ON overlay hint */}
-          <div className="mb-1 flex items-center gap-1.5 px-1">
-            <span className="text-[10px] font-semibold text-violet-600 uppercase tracking-wide">
-              🎁 Send as Gift — always on
-            </span>
-          </div>
-          <GiftToggleV2
-            enabled={true}
-            onToggle={() => {
-              /* locked ON — gift mode cannot be disabled in gifting flow */
-            }}
-            onSheetOpenChange={setGiftSheetOpen}
-            giftSheetRef={giftSheetRef}
-            onDone={onGiftDone}
-            security={{
-              id: security?.id,
-              symbol,
-              name,
-            }}
-            assetType="stock"
-            totalCostCents={totalCostCents}
-            amountDisplay={formatCurrency(totalValue, "R")}
-          />
-        </div>
+        {/* Gift Toggle — always ON, locked. Toast shown on toggle-off attempt. */}
+        <GiftToggleV2
+          enabled={true}
+          onToggle={(val) => {
+            if (!val) showLockedToast();
+            // always stays enabled — no-op on toggle off
+          }}
+          onSheetOpenChange={setGiftSheetOpen}
+          giftSheetRef={giftSheetRef}
+          onDone={onGiftDone}
+          security={{ id: security?.id, symbol, name }}
+          assetType="stock"
+          totalCostCents={totalCostCents}
+          amountDisplay={formatCurrency(fees.totalCost, "R")}
+          fees={fees}
+        />
 
         <div className="mt-4" />
 
-        {/* CTA button — only shown when gift sheet is closed */}
+        {/* CTA — only when gift sheet is closed */}
         {!giftSheetOpen && !isLoadingStatus && !isFullyOnboarded ? (
           <div className="w-full rounded-2xl border border-rose-200 bg-rose-50 p-4 text-center">
-            <h3 className="text-sm font-semibold text-rose-800 mb-2">
-              Onboarding Required
-            </h3>
+            <h3 className="text-sm font-semibold text-rose-800 mb-2">Onboarding Required</h3>
             <p className="text-xs text-rose-700 mb-4">
               Complete your profile and verify your identity before gifting.
             </p>
             <button
               type="button"
-              onClick={() => {
+              onClick={() =>
                 window.dispatchEvent(
-                  new CustomEvent("navigate-within-app", {
-                    detail: { page: "userOnboarding" },
-                  })
-                );
-              }}
+                  new CustomEvent("navigate-within-app", { detail: { page: "userOnboarding" } })
+                )
+              }
               className="w-full rounded-xl bg-rose-600 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-rose-700 transition"
             >
               Complete Onboarding
@@ -270,19 +266,35 @@ const GiftSecurityInvestPage = ({ onBack, security, onGiftDone }) => {
           <button
             type="button"
             onClick={() => {
-              if (!agreementChecked) {
-                setShakeAgreement(true);
-                return;
-              }
+              if (!agreementChecked) { setShakeAgreement(true); return; }
               giftSheetRef.current?.open();
             }}
             disabled={isLoadingStatus}
             className="w-full rounded-2xl bg-gradient-to-r from-[#5b21b6] to-[#7c3aed] py-3 text-sm font-semibold text-white shadow-lg shadow-violet-200/60 disabled:opacity-50 disabled:cursor-not-allowed hover:enabled:-translate-y-0.5 transition"
           >
-            {isLoadingStatus ? "Checking status..." : "Select Recipient"}
+            {isLoadingStatus ? "Checking status…" : "Select Recipient"}
           </button>
         ) : null}
       </div>
+
+      {/* Toast — gift mode locked */}
+      <AnimatePresence>
+        {showGiftLockedToast && (
+          <motion.div
+            key="gift-locked-toast"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 20 }}
+            transition={{ duration: 0.2 }}
+            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[20000] flex items-center gap-2 rounded-2xl bg-slate-900 px-4 py-3 shadow-xl"
+          >
+            <span className="text-base">🎁</span>
+            <p className="text-sm font-semibold text-white whitespace-nowrap">
+              Gift mode is always on for this flow
+            </p>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
