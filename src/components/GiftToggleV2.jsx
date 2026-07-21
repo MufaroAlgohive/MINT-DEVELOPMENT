@@ -881,12 +881,9 @@ export default function GiftToggleV2({
                 {/* ── GIFT FOR (who is this gift for?) ── */}
                 {step === "giftFor" && (
                   <div className="flex flex-col" style={{ maxHeight: "calc(92vh - 20px)" }}>
-                    {/* Purple accent bar */}
-                    <div className="h-1 w-full flex-shrink-0" style={{ background: "linear-gradient(90deg,#7c3aed,#6366f1,#8b5cf6)" }} />
-
                     {/* Drag handle */}
-                    <div className="flex justify-center pt-2.5 pb-1 flex-shrink-0">
-                      <div className="h-[3px] w-9 rounded-full bg-slate-200" />
+                    <div className="flex justify-center pt-3 pb-1 flex-shrink-0">
+                      <div className="h-1 w-10 rounded-full bg-slate-200" />
                     </div>
 
                     {/* Header row */}
@@ -1062,13 +1059,6 @@ export default function GiftToggleV2({
                         {childLookupLoading
                           ? <div className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />
                           : "Continue"}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={handleClose}
-                        className="text-[12px] text-slate-400 hover:text-slate-600 transition mt-3 block"
-                      >
-                        ← Cancel
                       </button>
                     </div>
                   </div>
