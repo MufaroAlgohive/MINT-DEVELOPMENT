@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from "react";
 import OriginButton from "../components/OriginButton";
 import { supabase } from "../lib/supabase.js";
+import AuthMethodModal from "../components/AuthMethodModal.jsx";
 
 const OnboardingPage = ({ onCreateAccount, onLogin }) => {
+  const [authModal, setAuthModal] = useState(null); // 'login' | 'signup' | null
   const [imageUrl, setImageUrl] = useState(null);
   const [imageLoading, setImageLoading] = useState(true);
   const [giftId, setGiftId] = useState(() => {
@@ -113,6 +115,7 @@ const OnboardingPage = ({ onCreateAccount, onLogin }) => {
   };
 
   return (
+    <>
     <div className="h-screen overflow-hidden bg-white">
       <div className="grid h-full grid-rows-2 lg:grid-cols-[1.05fr_1fr] lg:grid-rows-none">
         <div className="order-2 flex h-full flex-col overflow-y-auto px-6 py-8 lg:order-1 lg:px-16 lg:py-12">
@@ -224,7 +227,7 @@ const OnboardingPage = ({ onCreateAccount, onLogin }) => {
 
             <div className="flex flex-col gap-4 animate-on-load delay-3 sm:items-start">
               <OriginButton
-                onClick={onLogin}
+                onClick={() => setAuthModal('login')}
                 circleColor="rgba(148,163,184,0.18)"
                 className="inline-flex w-full items-center justify-center rounded-full border border-slate-200 bg-white px-6 py-3 text-sm font-semibold uppercase tracking-[0.2em] text-slate-900 shadow-sm sm:w-auto"
               >
@@ -232,7 +235,7 @@ const OnboardingPage = ({ onCreateAccount, onLogin }) => {
               </OriginButton>
 
               <OriginButton
-                onClick={onCreateAccount}
+                onClick={() => setAuthModal('signup')}
                 circleColor="rgba(255,255,255,0.12)"
                 className="inline-flex w-full items-center justify-center rounded-full bg-slate-900 px-6 py-3 text-sm font-semibold uppercase tracking-[0.2em] text-white shadow-lg shadow-slate-900/20 sm:w-auto"
               >
@@ -262,6 +265,22 @@ const OnboardingPage = ({ onCreateAccount, onLogin }) => {
         </div>
       </div>
     </div>
+
+    {authModal && (
+      <AuthMethodModal
+        mode={authModal}
+        onClose={() => setAuthModal(null)}
+        onContinueWithEmail={() => {
+          setAuthModal(null);
+          if (authModal === 'login') {
+            onLogin();
+          } else {
+            onCreateAccount();
+          }
+        }}
+      />
+    )}
+    </>
   );
 };
 
