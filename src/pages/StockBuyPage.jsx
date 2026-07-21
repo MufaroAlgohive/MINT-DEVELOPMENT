@@ -42,13 +42,14 @@ const StockBuyPage = ({ security, onBack, onContinue, paymentMethod, onGiftDone 
   const numAssets = validShares > 0 ? 1 : 0;
 
   const fees = useMemo(() => {
-    const bufferedBase = totalAmount * (1 + CASH_BUFFER_RATE);
+    // Single securities: no cash buffer reserve — invest the exact stated amount
+    const bufferedBase = totalAmount;
     const brokerAmount = bufferedBase * BROKER_FEE_RATE;
     const isinTotal = ISIN_FEE_PER_ASSET * numAssets;
     const transactionAmount = bufferedBase * TRANSACTION_FEE_RATE;
     const totalCost = bufferedBase + brokerAmount + isinTotal + transactionAmount;
-    return { brokerAmount, isinTotal, transactionAmount, totalCost };
-  }, [totalAmount, numAssets, CASH_BUFFER_RATE, BROKER_FEE_RATE, ISIN_FEE_PER_ASSET, TRANSACTION_FEE_RATE]);
+    return { bufferedBase, brokerAmount, isinTotal, transactionAmount, totalCost };
+  }, [totalAmount, numAssets, BROKER_FEE_RATE, ISIN_FEE_PER_ASSET, TRANSACTION_FEE_RATE]);
 
   const isInvalid = !Number.isFinite(shares) || shares <= 0 || shares < minShares;
 
@@ -134,6 +135,8 @@ const StockBuyPage = ({ security, onBack, onContinue, paymentMethod, onGiftDone 
             security={security}
             totalCostCents={Math.round(fees.totalCost * 100)}
             amountDisplay={formatCurrency(fees.totalCost, displayCurrency)}
+            fees={fees}
+            singleSecurity={true}
           />
         </form>
       </div>

@@ -26,13 +26,14 @@ const GiftSecurityInvestPage = ({ onBack, security, onGiftDone }) => {
   const baseAmount = quantity * pricePerShare;
 
   const fees = useMemo(() => {
-    const bufferedBase = baseAmount * (1 + CASH_BUFFER_RATE);
+    // Single securities: no cash buffer reserve — invest the exact stated amount
+    const bufferedBase = baseAmount;
     const brokerAmount = bufferedBase * BROKER_FEE_RATE;
     const isinTotal = ISIN_FEE_PER_ASSET * 1; // single security
     const transactionAmount = bufferedBase * TRANSACTION_FEE_RATE;
     const totalCost = bufferedBase + brokerAmount + isinTotal + transactionAmount;
     return { bufferedBase, brokerAmount, isinTotal, transactionAmount, totalCost };
-  }, [baseAmount, CASH_BUFFER_RATE, BROKER_FEE_RATE, ISIN_FEE_PER_ASSET, TRANSACTION_FEE_RATE]);
+  }, [baseAmount, BROKER_FEE_RATE, ISIN_FEE_PER_ASSET, TRANSACTION_FEE_RATE]);
 
   const totalCostCents = Math.round(fees.totalCost * 100);
 
@@ -239,6 +240,7 @@ const GiftSecurityInvestPage = ({ onBack, security, onGiftDone }) => {
           totalCostCents={totalCostCents}
           amountDisplay={formatCurrency(fees.totalCost, "R")}
           fees={fees}
+          singleSecurity={true}
         />
 
         <div className="mt-4" />

@@ -260,6 +260,7 @@ export default function GiftToggleV2({
   amountDisplay,
   assetType = "stock",
   fees, // optional: { bufferedBase, brokerAmount, isinTotal, transactionAmount, totalCost }
+  singleSecurity = false, // when true: hide AUM fee and the "incl. X% reserve" buffer label
 }) {
   const { BROKER_FEE_RATE, TRANSACTION_FEE_RATE, AUM_FEE_RATE, CASH_BUFFER_RATE } = useFees();
   const pct = (r) => `${(r * 100).toFixed(2).replace(/\.?0+$/, "")}%`;
@@ -1528,7 +1529,9 @@ export default function GiftToggleV2({
                       {fees ? (
                         <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 space-y-2">
                           <div className="flex justify-between items-center">
-                            <span className="text-[11px] text-slate-500">Investment (incl. {Math.round(CASH_BUFFER_RATE * 100)}% reserve)</span>
+                            <span className="text-[11px] text-slate-500">
+                              {singleSecurity ? "Investment" : `Investment (incl. ${Math.round(CASH_BUFFER_RATE * 100)}% reserve)`}
+                            </span>
                             <span className="text-[12px] font-semibold text-slate-800">{formatZAR(fees.bufferedBase)}</span>
                           </div>
                           <div className="flex justify-between items-center">
@@ -1545,10 +1548,12 @@ export default function GiftToggleV2({
                             <span className="text-[11px] text-slate-500">Transaction fee ({pct(TRANSACTION_FEE_RATE)}) — Wallet</span>
                             <span className="text-[12px] font-semibold text-slate-800">{formatZAR(fees.transactionAmount)}</span>
                           </div>
-                          <div className="flex justify-between items-center">
-                            <span className="text-[11px] text-slate-400">AUM fee ({pct(AUM_FEE_RATE)} p.a.)</span>
-                            <span className="text-[11px] text-slate-400 italic">monthly from cash</span>
-                          </div>
+                          {!singleSecurity && (
+                            <div className="flex justify-between items-center">
+                              <span className="text-[11px] text-slate-400">AUM fee ({pct(AUM_FEE_RATE)} p.a.)</span>
+                              <span className="text-[11px] text-slate-400 italic">monthly from cash</span>
+                            </div>
+                          )}
                           <div className="border-t border-slate-200 mt-1 pt-2 flex justify-between items-center">
                             <span className="text-[13px] font-bold text-slate-700">Total to Deduct</span>
                             <span className="text-[14px] font-bold text-violet-700">{amountDisplay}</span>
