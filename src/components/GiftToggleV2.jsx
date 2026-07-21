@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
-import { Gift, Copy, Check, AlertCircle, X, Search, Hash, User, ChevronLeft, ChevronRight, Plus, Trash2, CreditCard, Mail, Send, UserPlus } from "lucide-react";
+import { Gift, Copy, Check, AlertCircle, X, Search, Hash, User, ChevronLeft, ChevronRight, Plus, Trash2, CreditCard, Mail, Send, UserPlus, Baby, Users } from "lucide-react";
 import { motion, AnimatePresence, useMotionValue, animate } from "framer-motion";
 import { supabase } from "../lib/supabase";
 import { isAdminPreview } from "../lib/adminPreview";
@@ -280,8 +280,17 @@ export default function GiftToggleV2({
     if (giftSheetRef) giftSheetRef.current = { open: openSheet };
   }); // no deps — always keep the ref current
 
-  const [step, setStep] = useState("picker");
+  const [step, setStep] = useState("giftFor");
   const [inputMode, setInputMode] = useState("mint");
+
+  // "Gift for child or someone else" state
+  const [giftForType, setGiftForType] = useState(null); // "child" | "other"
+  const [children, setChildren] = useState([]);
+  const [childrenLoading, setChildrenLoading] = useState(false);
+  const [selectedChild, setSelectedChild] = useState(null);
+  const [childPickerBackStep, setChildPickerBackStep] = useState("giftFor");
+  const [childLookupLoading, setChildLookupLoading] = useState(false);
+  const [childLookupError, setChildLookupError] = useState(null);
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [recipientEmail, setRecipientEmail] = useState("");
@@ -339,7 +348,14 @@ export default function GiftToggleV2({
   const canProceed = firstName.trim() && lastName.trim() && emailValid;
 
   function resetForm() {
-    setStep("picker");
+    setStep("giftFor");
+    setGiftForType(null);
+    setChildren([]);
+    setChildrenLoading(false);
+    setSelectedChild(null);
+    setChildPickerBackStep("giftFor");
+    setChildLookupLoading(false);
+    setChildLookupError(null);
     setInputMode("mint");
     setFirstName("");
     setLastName("");
@@ -481,6 +497,65 @@ export default function GiftToggleV2({
       setInviteError("Something went wrong. Please try again.");
     } finally {
       setInviteSending(false);
+    }
+  }
+
+  // Fetch the user's children from the family-members API
+  async function fetchChildren() {
+    if (children.length > 0) return; // already loaded
+    setChildrenLoading(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user?.id) return;
+      const res = await fetch(`/api/family-members?user_id=${session.user.id}`, {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      const json = await res.json();
+      const kids = (json.members || []).filter(m => m.relationship === "child");
+      setChildren(kids);
+    } catch {}
+    finally { setChildrenLoading(false); }
+  }
+
+  // When a child is selected from the picker, look up their Mint profile and pre-fill the gift form
+  async function handleSelectChild(child) {
+    setSelectedChild(child);
+    setChildLookupError(null);
+    setChildLookupLoading(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      let profile = null;
+
+      if (child.mint_number) {
+        const res = await fetch(`/api/user/lookup-by-mint?mint_number=${encodeURIComponent(child.mint_number)}`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        const data = await res.json();
+        if (res.ok && data.user) profile = data.user;
+      }
+
+      if (!profile && child.id_number) {
+        const res = await fetch(`/api/user/lookup-by-id?id_number=${encodeURIComponent(child.id_number)}`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        const data = await res.json();
+        if (res.ok && data.user) profile = data.user;
+      }
+
+      if (profile) {
+        setFirstName(profile.first_name || child.first_name || "");
+        setLastName(profile.last_name || child.last_name || "");
+        setRecipientEmail(profile.email || "");
+        setConfirmBackStep("childPicker");
+        setStep("confirming");
+      } else {
+        setChildLookupError("This child doesn't have a Mint account yet. Use \"Invite by Email\" to invite them to join.");
+      }
+    } catch {
+      setChildLookupError("Couldn't look up this child's account. Please try again.");
+    } finally {
+      setChildLookupLoading(false);
     }
   }
 
@@ -803,13 +878,173 @@ export default function GiftToggleV2({
                   <div className="w-10 h-1 rounded-full bg-slate-200" />
                 </div>
 
+                {/* ── GIFT FOR (who is this gift for?) ── */}
+                {step === "giftFor" && (
+                  <div className="flex flex-col" style={{ maxHeight: "calc(92vh - 20px)" }}>
+                    <div className="px-5 pt-2 pb-3 flex items-center">
+                      <div className="w-8" />
+                      <h2 className="flex-1 text-center text-[17px] font-bold text-slate-900">Who is this gift for?</h2>
+                      <button type="button" onClick={handleClose} className="w-8 h-8 rounded-full flex items-center justify-center text-slate-400 hover:bg-slate-100 transition-colors">
+                        <X size={16} />
+                      </button>
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto px-5 pb-10 space-y-3 pt-2">
+                      <p className="text-[13px] text-slate-400 text-center mb-4">Select who you'd like to send this gift to</p>
+
+                      {/* My Child */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setGiftForType("child");
+                          setChildPickerBackStep("giftFor");
+                          fetchChildren();
+                          setStep("childPicker");
+                        }}
+                        className="w-full flex items-center gap-4 p-4 rounded-2xl bg-white border border-slate-200 shadow-sm active:scale-[0.98] transition-all text-left"
+                      >
+                        <div className="w-12 h-12 rounded-2xl bg-violet-100 flex items-center justify-center shrink-0">
+                          <Baby size={22} className="text-violet-600" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[15px] font-bold text-slate-800">My Child</p>
+                          <p className="text-[12px] text-slate-400 mt-0.5">Gift to one of your children's accounts</p>
+                        </div>
+                        <ChevronRight size={16} className="text-slate-300 shrink-0" />
+                      </button>
+
+                      {/* Someone Else */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setGiftForType("other");
+                          setStep("picker");
+                        }}
+                        className="w-full flex items-center gap-4 p-4 rounded-2xl bg-white border border-slate-200 shadow-sm active:scale-[0.98] transition-all text-left"
+                      >
+                        <div className="w-12 h-12 rounded-2xl bg-emerald-100 flex items-center justify-center shrink-0">
+                          <Users size={22} className="text-emerald-600" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[15px] font-bold text-slate-800">Someone Else</p>
+                          <p className="text-[12px] text-slate-400 mt-0.5">Gift to a friend, family member or beneficiary</p>
+                        </div>
+                        <ChevronRight size={16} className="text-slate-300 shrink-0" />
+                      </button>
+                    </div>
+
+                    <div className="px-5 pb-8 pt-3 border-t border-slate-100">
+                      <button type="button" onClick={handleClose} className="w-full rounded-2xl border border-[#e63946] py-3.5 text-sm font-bold text-[#e63946] active:scale-[0.98] transition-all">
+                        CANCEL
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* ── CHILD PICKER ── */}
+                {step === "childPicker" && (
+                  <div className="flex flex-col" style={{ maxHeight: "calc(92vh - 20px)" }}>
+                    <div className="flex items-center px-4 pt-2 pb-3">
+                      <button type="button" onClick={() => { setChildLookupError(null); setSelectedChild(null); setStep(childPickerBackStep); }} className="w-8 h-8 rounded-full flex items-center justify-center text-slate-400 hover:bg-slate-100 transition-colors">
+                        <ChevronLeft size={20} />
+                      </button>
+                      <h2 className="flex-1 text-center text-[17px] font-bold text-slate-900">Select a child</h2>
+                      <div className="w-8" />
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto px-5 pb-10 space-y-3">
+                      {/* Lookup error */}
+                      <AnimatePresence>
+                        {childLookupError && (
+                          <motion.div
+                            initial={{ opacity: 0, y: -6 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -6 }}
+                            className="rounded-2xl bg-amber-50 border border-amber-200 p-4"
+                          >
+                            <div className="flex items-start gap-2.5">
+                              <AlertCircle size={15} className="text-amber-600 mt-0.5 shrink-0" />
+                              <div className="flex-1">
+                                <p className="text-[13px] font-semibold text-amber-900">No Mint account found</p>
+                                <p className="text-[11px] text-amber-700 mt-0.5 leading-relaxed">{childLookupError}</p>
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => { setChildLookupError(null); setSelectedChild(null); setInputMode("email"); setEmailSearch(""); setEmailSearchResult(null); setEmailSearchError(null); setInviteFirstName(selectedChild?.first_name || ""); setInviteLastName(selectedChild?.last_name || ""); setInviteSent(false); setInviteError(null); setStep("form"); }}
+                              className="mt-3 w-full py-2.5 rounded-xl bg-[#6B21A8] text-white text-xs font-bold transition active:scale-[0.97]"
+                            >
+                              Invite by Email →
+                            </button>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+
+                      {childrenLoading ? (
+                        <div className="space-y-3 pt-2">
+                          {[0, 1, 2].map(i => (
+                            <div key={i} className="h-[72px] rounded-2xl bg-slate-100 animate-pulse" />
+                          ))}
+                        </div>
+                      ) : children.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center py-14 px-6 text-center">
+                          <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center mb-4">
+                            <Baby size={28} className="text-slate-300" />
+                          </div>
+                          <p className="text-sm font-semibold text-slate-500">No children found</p>
+                          <p className="text-[12px] text-slate-400 mt-1.5 leading-relaxed">
+                            Add a child account from the Family section in your profile.
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="space-y-2 pt-1">
+                          {children.map(child => {
+                            const isSelected = selectedChild?.id === child.id;
+                            const initials = [child.first_name?.[0], child.last_name?.[0]].filter(Boolean).join("").toUpperCase() || "?";
+                            const age = child.date_of_birth
+                              ? new Date().getFullYear() - new Date(child.date_of_birth).getFullYear()
+                              : null;
+                            return (
+                              <button
+                                key={child.id}
+                                type="button"
+                                onClick={() => !childLookupLoading && handleSelectChild(child)}
+                                disabled={childLookupLoading}
+                                className={`w-full flex items-center gap-3 p-3.5 rounded-2xl border-2 transition-all text-left ${isSelected ? "border-[#6B21A8] bg-violet-50" : "border-slate-200 bg-white hover:border-violet-200"}`}
+                              >
+                                <div className={`flex h-11 w-11 items-center justify-center rounded-full font-bold text-sm flex-shrink-0 ${isSelected ? "bg-[#6B21A8] text-white" : "bg-violet-100 text-violet-700"}`}>
+                                  {isSelected && childLookupLoading
+                                    ? <div className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />
+                                    : initials}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className={`text-sm font-semibold ${isSelected ? "text-[#6B21A8]" : "text-slate-800"}`}>
+                                    {[child.first_name, child.last_name].filter(Boolean).join(" ")}
+                                  </p>
+                                  <p className="text-[11px] text-slate-400 mt-0.5">
+                                    {age !== null ? `${age} years old` : "Child account"}
+                                    {child.mint_number ? ` · ${child.mint_number}` : ""}
+                                  </p>
+                                </div>
+                                {isSelected && !childLookupLoading && <Check size={16} className="text-[#6B21A8] shrink-0" />}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 {/* ── PICKER ── */}
                 {step === "picker" && (
                   <div className="flex flex-col" style={{ minHeight: "72vh", maxHeight: "calc(92vh - 20px)" }}>
                     {/* Header */}
                     <div className="px-5 pt-2 pb-4">
                       <div className="flex items-center mb-4">
-                        <div className="w-8" />
+                        <button type="button" onClick={() => setStep("giftFor")} className="w-8 h-8 rounded-full flex items-center justify-center text-slate-400 hover:bg-slate-100 transition-colors">
+                          <ChevronLeft size={20} />
+                        </button>
                         <h2 className="flex-1 text-center text-[17px] font-bold text-slate-900">Beneficiary</h2>
                         <button type="button" onClick={handleClose} className="w-8 h-8 rounded-full flex items-center justify-center text-slate-400 hover:bg-slate-100 transition-colors">
                           <X size={16} />
@@ -940,6 +1175,22 @@ export default function GiftToggleV2({
                     <div className="flex-1 overflow-y-auto px-5 pb-10">
                       <p className="text-[13px] font-semibold text-slate-500 mb-4">Please select an option</p>
                       <div className="space-y-3">
+                        {/* My Child */}
+                        <button
+                          type="button"
+                          onClick={() => { setChildPickerBackStep("selectMethod"); fetchChildren(); setStep("childPicker"); }}
+                          className="w-full flex items-center gap-4 p-4 rounded-2xl bg-white border border-slate-200 shadow-sm active:scale-[0.98] transition-all text-left"
+                        >
+                          <div className="w-11 h-11 rounded-xl bg-violet-100 flex items-center justify-center shrink-0">
+                            <Baby size={20} className="text-violet-600" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[14px] font-bold text-slate-800">My Child</p>
+                            <p className="text-[12px] text-slate-400 mt-0.5">Gift to a child on your family account</p>
+                          </div>
+                          <ChevronRight size={16} className="text-slate-300 shrink-0" />
+                        </button>
+
                         {/* MINT Number */}
                         <button
                           type="button"
