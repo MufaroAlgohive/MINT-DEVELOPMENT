@@ -3915,34 +3915,46 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
           />
         )}
       </AnimatePresence>
+      <AnimatePresence>
       {showGoalsModal && (
-        <div className="fixed inset-0 z-[950] flex items-end justify-center bg-slate-900/60 px-4 pb-20 sm:items-center sm:pb-0">
-          <button
-            type="button"
-            className="absolute inset-0 h-full w-full cursor-default backdrop-blur-sm"
-            aria-label="Close modal"
+        <>
+          <motion.div
+            key="goals-backdrop"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[940] bg-black/50 backdrop-blur-sm"
             onClick={closeGoalsModal}
           />
-          <div className="relative z-10 w-full max-w-sm overflow-hidden rounded-[32px] bg-white shadow-2xl animate-in slide-in-from-bottom duration-300">
-            <div className="flex items-center justify-center pt-3">
-              <div className="h-1.5 w-12 rounded-full bg-slate-200" />
+          <motion.div
+            key="goals-sheet"
+            initial={{ y: "100%" }}
+            animate={{ y: 0 }}
+            exit={{ y: "100%" }}
+            transition={{ type: "spring", damping: 28, stiffness: 300 }}
+            className="fixed inset-x-0 bottom-0 z-[950] flex flex-col rounded-t-3xl bg-white shadow-2xl"
+            style={{ maxHeight: "85vh" }}
+          >
+            {/* Handle */}
+            <div className="flex flex-shrink-0 items-center justify-center pt-3 pb-1">
+              <div className="h-1 w-10 rounded-full bg-slate-200" />
             </div>
-            <div className="p-6">
-              <header className="mb-6 flex items-center justify-between">
-                <h2 className="text-xl font-bold text-slate-900">
-                  {editingGoalId ? "Edit Goal" : (isCreatingGoal || goals.length === 0) ? "New Goal" : "Your Goals"}
-                </h2>
-                <button
-                  type="button"
-                  onClick={closeGoalsModal}
-                  className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-50 text-slate-400"
-                  aria-label="Close"
-                >
-                  <X size={20} />
-                </button>
-              </header>
+            {/* Header */}
+            <div className="flex flex-shrink-0 items-center justify-between px-5 pt-2 pb-4">
+              <h2 className="text-[17px] font-bold text-slate-900">
+                {editingGoalId ? "Edit Goal" : (isCreatingGoal || goals.length === 0) ? "New Goal" : "Your Goals"}
+              </h2>
+              <button
+                type="button"
+                onClick={closeGoalsModal}
+                className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-400 active:bg-slate-200"
+                aria-label="Close"
+              >
+                <X size={18} />
+              </button>
+            </div>
 
-              <div className="max-h-[60vh] overflow-y-auto pr-1">
+            <div className="flex-1 overflow-y-auto px-5 pb-[calc(1.5rem+env(safe-area-inset-bottom))]">
                 {loadingGoals ? (
                   <div className="space-y-4">
                     {[0, 1].map((i) => (
@@ -4077,11 +4089,11 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
                     </button>
                   </div>
                 )}
-              </div>
             </div>
-          </div>
-        </div>
+          </motion.div>
+        </>
       )}
+      </AnimatePresence>
     </div>
   );
 }
