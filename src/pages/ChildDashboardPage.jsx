@@ -3680,7 +3680,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
               animate={{ y: 0 }}
               exit={{ y: "100%" }}
               transition={{ type: "spring", damping: 28, stiffness: 300 }}
-              className="fixed inset-x-0 bottom-0 z-50 rounded-t-3xl bg-white px-5 pt-5 pb-[calc(1.5rem+env(safe-area-inset-bottom))] shadow-2xl"
+              className="fixed inset-x-0 bottom-0 z-50 rounded-t-3xl bg-white px-5 pt-5 pb-[calc(6rem+env(safe-area-inset-bottom))] shadow-2xl"
             >
               {/* Handle */}
               <div className="mx-auto mb-5 h-1 w-10 rounded-full bg-slate-200" />
