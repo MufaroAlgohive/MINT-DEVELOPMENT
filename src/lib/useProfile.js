@@ -20,12 +20,25 @@ const emptyProfile = {
 
 const buildProfile = ({ user, row }) => {
   const metadata = user?.user_metadata || {};
+
+  // Google OAuth puts names in full_name/name/given_name/family_name.
+  // Email/password signup uses first_name/last_name. Handle both.
+  const googleFullName = metadata.full_name || metadata.name || "";
+  const googleParts = googleFullName.trim().split(/\s+/);
+  const googleFirst = googleParts[0] || "";
+  const googleLast = googleParts.slice(1).join(" ");
+
+  // Treat a DB value of "Unknown" (set by a legacy trigger fallback) as empty
+  // so that the real name from OAuth metadata takes precedence.
+  const dbFirst = row?.first_name && row.first_name.toLowerCase() !== "unknown" ? row.first_name : "";
+  const dbLast  = row?.last_name  && row.last_name.toLowerCase()  !== "unknown" ? row.last_name  : "";
+
   return {
     id: row?.id || user?.id || "",
     email: row?.email || user?.email || "",
-    firstName: row?.first_name || metadata.first_name || "",
-    lastName: row?.last_name || metadata.last_name || "",
-    avatarUrl: row?.avatar_url || metadata.avatar_url || "",
+    firstName: dbFirst || metadata.first_name || metadata.given_name || googleFirst || "",
+    lastName:  dbLast  || metadata.last_name  || metadata.family_name || googleLast  || "",
+    avatarUrl: row?.avatar_url || metadata.avatar_url || metadata.picture || "",
     phoneNumber: row?.phone_number || metadata.phone_number || "",
     dateOfBirth: row?.date_of_birth || metadata.date_of_birth || "",
     gender: row?.gender || metadata.gender || "",
@@ -107,6 +120,27 @@ export const useProfile = ({ enabled = true } = {}) => {
       globalProfileCache = built;
       setProfile(built);
       setLoading(false);
+
+      // If the DB row has a stale "Unknown" / empty name but we now have the
+      // real name from OAuth metadata, write it back so the DB stays in sync.
+      const rawFirst = rowData?.first_name || "";
+      const rawLast  = rowData?.last_name  || "";
+      const needsNameSync =
+        built.firstName &&
+        (!rawFirst || rawFirst.toLowerCase() === "unknown") &&
+        (!rawLast  || rawLast.toLowerCase()  === "unknown");
+      if (needsNameSync) {
+        try {
+          await supabase.from("profiles").upsert({
+            id:         user.id,
+            first_name: built.firstName,
+            last_name:  built.lastName,
+            email:      built.email,
+          }, { onConflict: "id" });
+        } catch (_syncErr) {
+          // Non-fatal — display is already correct from metadata
+        }
+      }
 
       if (!built.mintNumber && user.id) {
         try {
