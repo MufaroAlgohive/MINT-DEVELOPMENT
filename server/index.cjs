@@ -3098,8 +3098,15 @@ app.post("/api/banking/initiate", async (req, res) => {
     }
 
     // Resilience: Fallback to metadata if profile record is missing or incomplete
-    let firstName = profile?.first_name || user.user_metadata?.first_name || "";
-    let lastName = profile?.last_name || user.user_metadata?.last_name || "";
+    // Google OAuth stores names in full_name/given_name/family_name; email signup uses first_name/last_name
+    const _oauthFull  = user.user_metadata?.full_name || user.user_metadata?.name || "";
+    const _oauthParts = _oauthFull.trim().split(/\s+/);
+    const _oauthFirst = _oauthParts[0] || "";
+    const _oauthLast  = _oauthParts.slice(1).join(" ");
+    const _dbFirst = profile?.first_name && profile.first_name.toLowerCase() !== "unknown" ? profile.first_name : "";
+    const _dbLast  = profile?.last_name  && profile.last_name.toLowerCase()  !== "unknown" ? profile.last_name  : "";
+    let firstName = _dbFirst || user.user_metadata?.first_name || user.user_metadata?.given_name  || _oauthFirst || "";
+    let lastName  = _dbLast  || user.user_metadata?.last_name  || user.user_metadata?.family_name || _oauthLast  || "";
     let idNumber = profile?.id_number || "";
 
     if (!idNumber) {
@@ -3217,7 +3224,8 @@ app.post("/api/loan/email-agreement", async (req, res) => {
 
     const formattedAmount = "R " + (amount || 0).toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     const assetList = (assets || []).join(", ");
-    const firstName = user.user_metadata?.first_name || 'Client';
+    const _oauthFullN = user.user_metadata?.full_name || user.user_metadata?.name || "";
+    const firstName = user.user_metadata?.first_name || user.user_metadata?.given_name || _oauthFullN.split(/\s+/)[0] || 'Client';
 
     const { data, error } = await resend.emails.send({
       from: 'Mint Platforms <alerts@thealgohive.com>',

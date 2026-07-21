@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef, useCallback, useMemo, lazy, Suspense, startTransition } from "react";
-import { supabase } from "./lib/supabase.js";
+import { supabase, supabaseReady } from "./lib/supabase.js";
 import { initAdminPreview, listenForAdminPreviewMessage, clearAdminPreview } from "./lib/adminPreview.js";
 import { getMarketsSecuritiesWithMetrics } from "./lib/marketData.js";
 import { setCachedSession, clearSessionCache } from "./lib/sessionCache.js";
@@ -752,9 +752,10 @@ const App = () => {
       // unblocks; the session check still completes in the background.
       const safetyTimer = setTimeout(() => setIsCheckingAuth(false), window.location.hash.includes('access_token') ? 5000 : 300);
 
-      if (supabase && !isRecoveryMode && !hasError) {
+      const activeClient = supabase || (await supabaseReady);
+      if (activeClient && !isRecoveryMode && !hasError) {
         try {
-          const { data: { session } } = await supabase.auth.getSession();
+          const { data: { session } } = await activeClient.auth.getSession();
           clearTimeout(safetyTimer);
           if (session) {
             if (ozowReturnParam.current === "success") {
@@ -800,9 +801,10 @@ const App = () => {
   }, []);
 
   useEffect(() => {
-    if (!supabase || isRecoveryMode) {
-      return;
-    }
+    let sub;
+    const setup = async () => {
+      const client = supabase || (await supabaseReady);
+      if (!client || isRecoveryMode) return;
 
     const handleRecoveryFlow = () => {
       if (recoveryHandled.current) return;
@@ -812,7 +814,7 @@ const App = () => {
       window.history.replaceState({}, document.title, window.location.pathname);
     };
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    const { data: { subscription } } = client.auth.onAuthStateChange((event, session) => {
       if (event === 'PASSWORD_RECOVERY') {
         handleRecoveryFlow();
       }
@@ -878,9 +880,10 @@ const App = () => {
       }
     });
 
-    return () => {
-      subscription?.unsubscribe();
-    };
+    sub = subscription;
+    }; // end setup()
+    setup();
+    return () => { sub?.unsubscribe(); };
   }, []);
 
   const [showSessionExpired, setShowSessionExpired] = useState(false);
