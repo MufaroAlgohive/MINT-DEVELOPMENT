@@ -120,6 +120,24 @@ const clearUserStorage = () => {
 const initialHash = window.location.hash;
 const isRecoveryMode = initialHash.includes('type=recovery');
 
+// Detect OAuth errors returned as query params (e.g. bad_oauth_state from Supabase PKCE).
+// Clean the URL immediately and wipe stale PKCE verifiers so the next sign-in attempt
+// starts from a completely fresh state.
+const _oauthSearchParams = new URLSearchParams(window.location.search);
+const initialOAuthErrorCode = _oauthSearchParams.get('error_code') || '';
+const initialOAuthErrorDesc = _oauthSearchParams.get('error_description') || '';
+const initialOAuthError = !!_oauthSearchParams.get('error') && !_oauthSearchParams.get('ozow');
+if (initialOAuthError) {
+  // Strip the error params from the URL so the page looks clean
+  window.history.replaceState({}, document.title, window.location.pathname);
+  // Clear any stale PKCE verifiers / OAuth state cookies Supabase left behind
+  try {
+    Object.keys(localStorage)
+      .filter(k => k.includes('code-verifier') || k.includes('oauth-state') || k.includes('-auth-code'))
+      .forEach(k => localStorage.removeItem(k));
+  } catch (_) {}
+}
+
 // Detect /gift/claim/:token deep link
 const initialGiftToken = (() => {
   const match = window.location.pathname.match(/^\/gift\/claim\/([a-f0-9]+)$/i);
@@ -3154,6 +3172,11 @@ const App = () => {
       <OnboardingPage
         onCreateAccount={() => openAuthFlow("email")}
         onLogin={() => openAuthFlow("loginEmail")}
+        oauthError={initialOAuthError ? (
+          initialOAuthErrorCode === 'bad_oauth_state'
+            ? 'Sign-in session expired — please try again.'
+            : (initialOAuthErrorDesc.replace(/\+/g, ' ') || 'Sign-in failed — please try again.')
+        ) : null}
       />
     );
   }

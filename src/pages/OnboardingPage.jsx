@@ -3,7 +3,7 @@ import OriginButton from "../components/OriginButton";
 import { supabase } from "../lib/supabase.js";
 import AuthMethodModal from "../components/AuthMethodModal.jsx";
 
-const OnboardingPage = ({ onCreateAccount, onLogin }) => {
+const OnboardingPage = ({ onCreateAccount, onLogin, oauthError }) => {
   const [authModal, setAuthModal] = useState(null); // 'login' | 'signup' | null
   const [imageUrl, setImageUrl] = useState(null);
   const [imageLoading, setImageLoading] = useState(true);
@@ -224,6 +224,15 @@ const OnboardingPage = ({ onCreateAccount, onLogin }) => {
                 Your money tools are ready when you are.
               </p>
             </div>
+
+            {oauthError && (
+              <div className="flex items-center gap-2.5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 animate-on-load delay-2">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="shrink-0" aria-hidden="true">
+                  <path d="M8 1.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13ZM0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8Zm8-3a.75.75 0 0 1 .75.75v3.5a.75.75 0 0 1-1.5 0v-3.5A.75.75 0 0 1 8 5Zm0 7a1 1 0 1 1 0-2 1 1 0 0 1 0 2Z" fill="currentColor"/>
+                </svg>
+                {oauthError}
+              </div>
+            )}
 
             <div className="flex flex-col gap-4 animate-on-load delay-3 sm:items-start">
               <OriginButton
