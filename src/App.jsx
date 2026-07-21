@@ -3175,7 +3175,9 @@ const App = () => {
         oauthError={initialOAuthError ? (
           initialOAuthErrorCode === 'bad_oauth_state'
             ? 'Sign-in session expired — please try again.'
-            : (initialOAuthErrorDesc.replace(/\+/g, ' ') || 'Sign-in failed — please try again.')
+            : initialOAuthErrorDesc.toLowerCase().includes('database')
+              ? 'Sign-in failed — please try again.'
+              : (initialOAuthErrorDesc.replace(/\+/g, ' ') || 'Sign-in failed — please try again.')
         ) : null}
       />
     );

@@ -833,6 +833,64 @@ async function cleanupInvalidHoldings() {
 
 cleanupInvalidHoldings();
 
+// ── Fix/ensure handle_new_user trigger (Google OAuth profile creation) ─────────
+// Requires a direct Supabase Postgres connection (SUPABASE_DB_URL secret).
+// If not set, the fix is skipped and a reminder is logged.
+async function ensureHandleNewUserTrigger() {
+  const supabaseDbUrl = process.env.SUPABASE_DB_URL;
+  if (!supabaseDbUrl) {
+    console.warn('[auth-trigger] SUPABASE_DB_URL not set — skipping trigger fix. Google OAuth may fail for new users.');
+    return;
+  }
+  const { Pool: PgPool } = require('pg');
+  const directPool = new PgPool({
+    connectionString: supabaseDbUrl,
+    ssl: { rejectUnauthorized: false },
+    max: 1,
+    connectionTimeoutMillis: 8000,
+  });
+  const client = await directPool.connect();
+  try {
+    const dq = String.fromCharCode(36, 36);
+    const fnSql = [
+      'CREATE OR REPLACE FUNCTION public.handle_new_user()',
+      ' RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS ',
+      dq,
+      '\nDECLARE\n  _email TEXT; _fname TEXT; _lname TEXT; _fullname TEXT;\n' +
+      'BEGIN\n' +
+      "  _email    := NEW.email;\n" +
+      "  _fullname := COALESCE(NEW.raw_user_meta_data->>'full_name', NEW.raw_user_meta_data->>'name', '');\n" +
+      "  _fname    := COALESCE(NEW.raw_user_meta_data->>'given_name', NEW.raw_user_meta_data->>'first_name',\n" +
+      "    CASE WHEN _fullname <> '' THEN split_part(_fullname,' ',1) ELSE '' END, '');\n" +
+      "  _lname    := COALESCE(NEW.raw_user_meta_data->>'family_name', NEW.raw_user_meta_data->>'last_name',\n" +
+      "    CASE WHEN _fullname <> '' AND position(' ' IN _fullname) > 0\n" +
+      "         THEN substring(_fullname FROM position(' ' IN _fullname)+1) ELSE '' END, '');\n" +
+      '  INSERT INTO public.profiles (id, email, first_name, last_name, created_at)\n' +
+      '  VALUES (NEW.id, _email, _fname, _lname, NOW())\n' +
+      '  ON CONFLICT (id) DO NOTHING;\n' +
+      '  RETURN NEW;\n' +
+      'EXCEPTION WHEN OTHERS THEN\n' +
+      "  RAISE WARNING '[handle_new_user] non-fatal: %', SQLERRM;\n" +
+      '  RETURN NEW;\n' +
+      'END;\n',
+      dq,
+    ].join('');
+    await client.query(fnSql);
+    await client.query('DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users');
+    await client.query(
+      'CREATE TRIGGER on_auth_user_created AFTER INSERT ON auth.users' +
+      ' FOR EACH ROW EXECUTE FUNCTION public.handle_new_user()'
+    );
+    console.log('[auth-trigger] handle_new_user trigger fixed ✓');
+  } catch (err) {
+    console.warn('[auth-trigger] Could not update trigger (non-fatal):', err.message);
+  } finally {
+    client.release();
+    await directPool.end().catch(() => {});
+  }
+}
+ensureHandleNewUserTrigger();
+
 // ============================================================
 // Settlement Status System
 // Tracks investment lifecycle: pending (awaiting fill) → pending_broker → confirmed
