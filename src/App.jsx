@@ -640,7 +640,7 @@ const App = () => {
 
   useEffect(() => {
     const handleNavigationEvent = (e) => {
-      const { page, member, child, openWishlistCreate, childFamilyMemberId } = e.detail || {};
+      const { page, member, child, openWishlistCreate, childFamilyMemberId, registryId } = e.detail || {};
       // Withdrawals temporarily disabled (CEO) — never route to the withdraw page.
       if (page === 'withdraw') return;
       if (page) {
@@ -650,6 +650,9 @@ const App = () => {
         }
         if (page === 'giftRegistryDashboard') {
           setGiftRegistryChildFilter(childFamilyMemberId || null);
+        }
+        if (page === 'giftRegistryDetail' && registryId) {
+          setGiftRegistryNavState(s => ({ ...s, registryId }));
         }
         const selectedChild = child || member || null;
         if (selectedChild && (page === 'childDashboard' || page === 'memberPortfolio')) {

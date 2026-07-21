@@ -1908,6 +1908,22 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
   const { profile } = useProfile();
   const isMounted = useRef(true);
   const [child, setChild] = useState(initialChild);
+
+  // Sync when the parent switches to a different child (e.g. via FamilyDropdown)
+  useEffect(() => {
+    if (initialChild?.id && initialChild.id !== child?.id) {
+      setChild(initialChild);
+      setHoldings([]);
+      setTransactions([]);
+      setChildWishlists([]);
+      setChildWishlistsLoading(false);
+      setLoading(true);
+      setActiveChildTab("home");
+      setStrategyDetailId(null);
+      setExpandedStrategyStack(null);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialChild?.id]);
   const [holdings, setHoldings] = useState([]);
   const [childLivePriceMap, setChildLivePriceMap] = useState({});
   const [strategyMap, setStrategyMap] = useState({});
@@ -1940,6 +1956,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
 
   // Wishlist state
   const [showChildWishlistCreate, setShowChildWishlistCreate] = useState(false);
+  const [showWishlistOptions, setShowWishlistOptions] = useState(false);
   const [childWishlists, setChildWishlists] = useState([]);
   const [childWishlistsLoading, setChildWishlistsLoading] = useState(false);
 
@@ -3013,7 +3030,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
                 { label: "Invest", icon: LayoutGrid, onClick: openInvestModal, disabled: isAdminPreview() },
                 { label: "Deposit", icon: ArrowDownToLine, onClick: openTransferModal, disabled: openingTransfer || isAdminPreview() },
                 { label: "Goals", icon: Target, onClick: () => setShowGoalsModal(true) },
-                { label: "Wishlist", icon: Heart, onClick: () => setShowChildWishlistCreate(true) },
+                { label: "Wishlist", icon: Heart, onClick: () => setShowWishlistOptions(true) },
               ].map((btn, i) => {
                 const Icon = btn.icon;
                 return (
@@ -3644,6 +3661,92 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
           />
         )}
       </div>
+
+      {/* -- Wishlist options sheet (View or Create) -- */}
+      <AnimatePresence>
+        {showWishlistOptions && (
+          <>
+            <motion.div
+              key="wishlist-options-backdrop"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-40 bg-black/40"
+              onClick={() => setShowWishlistOptions(false)}
+            />
+            <motion.div
+              key="wishlist-options-sheet"
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={{ type: "spring", damping: 28, stiffness: 300 }}
+              className="fixed inset-x-0 bottom-0 z-50 rounded-t-3xl bg-white px-5 pt-5 pb-[calc(1.5rem+env(safe-area-inset-bottom))] shadow-2xl"
+            >
+              {/* Handle */}
+              <div className="mx-auto mb-5 h-1 w-10 rounded-full bg-slate-200" />
+
+              <p className="mb-1 text-[17px] font-bold text-slate-900">
+                {child?.first_name ? `${child.first_name}'s Wishlist` : "Wishlist"}
+              </p>
+              <p className="mb-5 text-sm text-slate-400">What would you like to do?</p>
+
+              <div className="space-y-3">
+                {/* View wishlist */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowWishlistOptions(false);
+                    if (childWishlists.length > 0) {
+                      // Navigate to the first (most recent) wishlist detail
+                      window.dispatchEvent(new CustomEvent("navigate-within-app", {
+                        detail: { page: "giftRegistryDetail", registryId: childWishlists[0].id }
+                      }));
+                    } else {
+                      // No wishlists yet — scroll to the wishlists section on home tab
+                      setActiveChildTab("home");
+                    }
+                  }}
+                  className="flex w-full items-center gap-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-left transition-all active:scale-[0.98]"
+                >
+                  <div className="flex h-11 w-11 items-center justify-center rounded-full bg-violet-100 flex-shrink-0">
+                    <Heart size={20} className="text-violet-600 fill-violet-200" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-slate-800">View Wishlist</p>
+                    <p className="text-xs text-slate-400">
+                      {childWishlistsLoading
+                        ? "Loading…"
+                        : childWishlists.length === 0
+                          ? "No wishlists yet"
+                          : `${childWishlists.length} wishlist${childWishlists.length > 1 ? "s" : ""}`}
+                    </p>
+                  </div>
+                  <span className="text-slate-300 text-base">›</span>
+                </button>
+
+                {/* Create new wishlist */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowWishlistOptions(false);
+                    setShowChildWishlistCreate(true);
+                  }}
+                  className="flex w-full items-center gap-4 rounded-2xl border border-violet-200 bg-violet-50 px-4 py-4 text-left transition-all active:scale-[0.98]"
+                >
+                  <div className="flex h-11 w-11 items-center justify-center rounded-full bg-violet-600 flex-shrink-0">
+                    <Plus size={20} className="text-white" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-violet-700">Create New Wishlist</p>
+                    <p className="text-xs text-violet-400">Add items for friends & family to gift</p>
+                  </div>
+                  <span className="text-violet-300 text-base">›</span>
+                </button>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
 
       {/* -- Create Wishlist for child -- */}
       <GiftRegistryCreateSheet
