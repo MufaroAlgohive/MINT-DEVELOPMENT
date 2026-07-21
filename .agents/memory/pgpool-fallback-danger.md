@@ -25,3 +25,8 @@ existing CHECK constraints on the table (e.g. `no_oversell`) act as a safety net
 Also: `SUPABASE_DB_URL` is stored as a *secret*, not a plain env var — `deleteEnvVars` (env var
 tool) silently no-ops on it. Secrets can only be removed by the user via the Secrets tab in the
 Replit GUI.
+
+**Fixed:** The global `pgPool` now uses `DATABASE_URL` only (Replit's local Postgres). `SUPABASE_DB_URL`
+is reserved exclusively for one-off isolated pools (e.g. trigger fix). The direct Supabase port 5432
+is unreachable from Replit's network so any direct-connection attempt will time out — use the Supabase
+JS admin client or Supabase SQL Editor instead for schema changes.
