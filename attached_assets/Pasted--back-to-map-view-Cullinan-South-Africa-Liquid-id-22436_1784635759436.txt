@@ -1,0 +1,94 @@
+← back to map view
+Cullinan, South Africa
+Liquid
+id 22436
+opcode QUERY
+rcode NOERROR
+flags QR RD RA
+;QUESTION
+_acme-challenge.auth.mymint.co.za. IN TXT
+;ANSWER
+_acme-challenge.auth.mymint.co.za. 32 IN TXT "hhTGSa4wLT1Rhr0b5ysOcnP8RRADhWij77f1tShez8g"
+;AUTHORITY
+;ADDITIONAL
+Global DNS Checker - How to check DNS propagation
+whatsmydns.net is a free online tool that lets you quickly and easily perform a DNS lookup to check DNS propagation and see information of any domain from DNS servers located in many countries all around the world.
+
+You can test changes made to new or existing domains and see if they have been updated correctly without the need to manually query remote servers. This gives you immediate insight into how users globally may be resolving DNS records for your website, email or other online service.
+
+Many operating systems include DNS tools to check DNS records manually for diagnosing problems. However, using these tools can be complicated and difficult to understand for non-technical people which is why the whatsmydns.net DNS checker was created to help with quickly checking DNS propagation.
+
+whatsmydns.net makes the process of performing global DNS checks easy by maintaining a range of DNS servers to perform lookups with. These results are then parsed and displayed on a map so that results are easier to understand at a glance. Individual lookup results can be seen in detail by selecting a server location from the list or clicking on the map markers once a search has been completed.
+
+What is DNS and how does it work?
+The Domain Name System (known as DNS) is a system used to convert a name (like www.google.com) into an IP address (like 192.168.2.1). These addresses are used by computers to communicate with each other on the internet. Most people find remembering names much easier than numbers, so DNS makes this process easy.
+
+When you visit a website, your computer, phone or tablet will first check your local DNS cache for the corresponding IP address. If your device has not recently looked up this website, then it will need to ask your configured DNS server which will forward the request on to the DNS server responsible for managing the records. This process is known as a DNS lookup request.
+
+Once the IP address is known, it is stored locally for a set period of time known as the Time To Live (TTL) and used to speed up future requests. Updated records will not be returned until this time has expired, this can often be the cause of why DNS changes do not appear to be working right away.
+
+What is DNS propagation?
+DNS propagation is the term commonly used to check the current state of DNS results globally and is often asked about when changes made to DNS zones do not appear to be working as expected. This process can take from only a few minutes, but often takes up to 48-72 hours and sometimes longer.
+
+While technically DNS does not propagate, this is the term that people have become familiar with. DNS requests are recursively forwarded and looked up from the locally used resolver to the authoritative name server on demand and then cached to speed up future lookup requests. For this reason, commonly used DNS servers of large network providers located around the world have been selected when performing DNS checks.
+
+For popular websites, DNS results may be cached for people in different parts of the world using many different recursive DNS resolvers. If you have recently made changes to your configuration, and the TTL has not yet expired, then some people may be receiving out of date results which could mean that they see an older version of your website.
+
+How long does DNS propagation take?
+How long DNS propagation takes usually depends on your records TTL setting. This can be anywhere from several minutes up to 48-72 hours or longer. However, there are sometimes other reasons for a long propagation time.
+
+The main issues as to why DNS propagation can take so long are:
+
+DNS Cache - The Time to Live (TTL) is the duration in which DNS data is allowed to 'live' in the cache of a local device or DNS resolver. When this duration expires, the local device or server removes existing DNS information and carries out another DNS lookup to fetch new information. Higher TTL settings can often cause a delay in DNS propagation.
+
+Internet Service Providers - Your ISP also caches DNS results, which allows for many users to access sites faster. For every website requested, they will ask the DNS server responsible only once but return the same result for many users. Some ISPs also overlook TTL rules, keeping a cached DNS record even if the TTL has expired. This can make DNS propagation take longer than it should.
+
+Other DNS Servers - You may not be using your ISPs DNS server, if this is the case then the same issues that may be causing delays can still apply.
+
+Domain Name Registrar - When changing web hosting or DNS providers for your domain, it is often also required to update your authoritative name servers. These changes will need to be reflected in the corresponding TLD nameserver for your domain name. For example, if you were to change the NS records for example.com, then the .com TLD nameserver would also need to update which can cause delays in DNS propagation.
+
+How do you speed up DNS propagation?
+A technique used to speed up DNS propagation and prevent a delay is to lower your DNS records TTL a few days in advance of making any changes so that when the change is made any old records expire more quickly. Unfortunately, most people who are having issues and trying to speed up DNS propagation only find this out after making changes and are wondering why they're not seeing instant results.
+
+If you have checked DNS globally, and are seeing different results locally then you may consider flushing your DNS cache, or using another DNS server. As a last resort, manually overriding your local DNS entries in your systems hosts file can also be done but should be considered a temporary measure and only works for certain record types.
+
+What server types are used in a DNS check?
+There are 4 different types of DNS servers involved when performing a DNS check. Each has a different role and may not be needed at all depending on the situation, having all these different server types is what contributes to DNS propagation issues.
+
+Recursive Resolver - The DNS server your device communicates with is called the recursive resolver and is issued to you automatically by your ISP, but can be also configured on your router or individual devices. These DNS severs are ideally located in close geographical proximity to return results as fast as possible. These servers will cache a copy of the DNS results to speed up future DNS lookup requests.
+
+Root Name Server - This type of DNS server is responsible for returning the IP address of the TLD (Top Level Domain) nameserver. For instance, if it is trying to resolve example.com, the root name server returns the IP of the TLD name server that runs .com domains.
+
+TLD Name Server - This name server returns the authoritative name servers for each domain under the Top Level Domain it's responsible for. The .com TLD name server will return results for example.com but not example.org.
+
+Authoritative Name Server - This stores DNS servers' configuration data for specific domain names.
+
+What happens when a DNS request is made?
+Below demonstrates the flow of events when a user requests to visit www.example.com in their web browser for the first time and does not yet have cached results. As you can see, each step introduces the possibility of a DNS propagation delay.
+
+→ You type www.example.com into your web browser.
+→ Your device sends a request to your configured recursive resolver.
+→ The recursive resolver asks the root nameserver for the IP address of the TLD nameserver responsible for .com domains.
+← The root nameserver returns the IP address of the .com TLD nameserver to the recursive resolver.
+→ The recursive resolver asks the .com TLD nameserver for the address of the authoritative nameserver responsible for example.com.
+← The .com TLD nameserver returns the IP address of the authoritative nameserver to the recursive resolver.
+→ The recursive resolver asks the authoritative nameserver for the IP address of www.example.com.
+← The authoritative nameserver returns the IP address of www.example.com to the recursive resolver.
+← The recursive resolver returns IP address of www.example.com to the browser.
+→ Your browser makes a web request directly to the resolved IP address.
+Which DNS record types can be checked?
+You can check DNS propagation for common record types including:
+
+A - The most common DNS record, used to point a domain to an IP address.
+CNAME - Also known as alias records, they point to other DNS records. Sometimes used for subdomains like www.
+MX - Mail Exchanger records are used set email servers and their priority.
+NS - Name Server records store the authoritative nameserver.
+TXT - Text records are commonly used for configuration settings such as SPF and DKIM records.
+Additional types that can be checked which are usually used in more advanced configurations include: AAAA, CAA, PTR, SOA and SRV.
+
+Make sure to check all your DNS records
+When checking DNS records, there are often multiple record types that you need to verify are correct. For example, websites sometimes include www or other subdomains as either an A or CNAME record, and email servers use the MX record type.
+
+Check Another Record Type ↑
+or
+Check Another Domain ↑
