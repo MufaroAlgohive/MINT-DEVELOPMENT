@@ -56,6 +56,7 @@ const GiftCodeEntryPage = lazy(() => import("./pages/GiftCodeEntryPage.jsx"));
 const GiftPreviewPage = lazy(() => import("./pages/GiftPreviewPage.jsx"));
 const SentGiftsPageV2 = lazy(() => import("./pages/SentGiftsPageV2.jsx"));
 const GiftStrategyPickerPage = lazy(() => import("./pages/GiftStrategyPickerPage.jsx"));
+const GiftSecurityInvestPage = lazy(() => import("./pages/GiftSecurityInvestPage.jsx"));
 const MyWishlistsPage = lazy(() => import("./pages/MyWishlistsPage.jsx"));
 const GiftRegistryCreatePage = lazy(() => import("./pages/GiftRegistryCreatePage.jsx"));
 const GiftRegistryDetailPage = lazy(() => import("./pages/GiftRegistryDetailPage.jsx"));
@@ -2973,6 +2974,7 @@ const App = () => {
               onBack={() => { navigationHistory.current = []; setPreviousPageName(null); startTransition(() => setCurrentPage("home")); }}
               autoOpenWishlist={giftWishlistAutoOpen}
               onOpenStockDetail={(security) => { setSelectedSecurity(security); navigateTo("stockDetail"); }}
+              onGiftSecurity={(security) => { setSelectedSecurity(security); navigateTo("giftSecurityInvest"); }}
               onNavigate={(page, params) => {
                 setGiftWishlistAutoOpen(false);
                 if (page === "giftStrategyInvest") {
@@ -3003,6 +3005,20 @@ const App = () => {
             onContinue={() => navigateTo("home")}
             onGiftDone={() => navigateTo("home")}
             startWithGiftOpen
+          />
+        </Suspense>
+      </SwipeBackWrapper>
+    );
+  }
+
+  if (currentPage === "giftSecurityInvest") {
+    return (
+      <SwipeBackWrapper onBack={goBack} enabled={canSwipeBack} previousPage={previousPageComponent}>
+        <Suspense fallback={<div className="min-h-screen bg-slate-50" />}>
+          <GiftSecurityInvestPage
+            security={selectedSecurity}
+            onBack={goBack}
+            onGiftDone={() => navigateTo("home")}
           />
         </Suspense>
       </SwipeBackWrapper>

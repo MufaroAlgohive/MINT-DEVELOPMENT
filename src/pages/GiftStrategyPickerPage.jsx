@@ -203,7 +203,7 @@ function CategoryPill({ label, active, onClick }) {
   );
 }
 
-export default function GiftStrategyPickerPage({ onBack, onNavigate, autoOpenWishlist, onOpenStockDetail }) {
+export default function GiftStrategyPickerPage({ onBack, onNavigate, autoOpenWishlist, onOpenStockDetail, onGiftSecurity }) {
   const [strategies, setStrategies] = useState([]);
   const [ytdMap, setYtdMap] = useState({});
   const [securitiesMap, setSecuritiesMap] = useState(new Map());
@@ -823,7 +823,7 @@ export default function GiftStrategyPickerPage({ onBack, onNavigate, autoOpenWis
                     <CollapsibleSection
                       title="Largest companies"
                       securities={largestGiftCompanies}
-                      onOpenStockDetail={s => onOpenStockDetail?.(s)}
+                      onOpenStockDetail={s => onGiftSecurity?.(s)}
                       onToggleWatchlist={toggleGiftSecurityWatchlist}
                       onToggleWishlist={toggleWishlistItem}
                       watchlist={giftSecurityWatchlist}
@@ -835,7 +835,7 @@ export default function GiftStrategyPickerPage({ onBack, onNavigate, autoOpenWis
                     <CollapsibleSection
                       title="Highest dividend yield"
                       securities={highestGiftDividendYield}
-                      onOpenStockDetail={s => onOpenStockDetail?.(s)}
+                      onOpenStockDetail={s => onGiftSecurity?.(s)}
                       onToggleWatchlist={toggleGiftSecurityWatchlist}
                       onToggleWishlist={toggleWishlistItem}
                       watchlist={giftSecurityWatchlist}
@@ -847,7 +847,7 @@ export default function GiftStrategyPickerPage({ onBack, onNavigate, autoOpenWis
                     <CollapsibleSection
                       title="Gainers"
                       securities={giftGainers}
-                      onOpenStockDetail={s => onOpenStockDetail?.(s)}
+                      onOpenStockDetail={s => onGiftSecurity?.(s)}
                       onToggleWatchlist={toggleGiftSecurityWatchlist}
                       onToggleWishlist={toggleWishlistItem}
                       watchlist={giftSecurityWatchlist}
@@ -878,7 +878,7 @@ export default function GiftStrategyPickerPage({ onBack, onNavigate, autoOpenWis
                       {filteredGiftSecurities.map((security) => (
                         <button
                           key={security.id}
-                          onClick={() => onOpenStockDetail?.(security)}
+                          onClick={() => onGiftSecurity?.(security)}
                           className="relative w-full rounded-3xl border border-slate-100/80 bg-white/90 backdrop-blur-sm p-4 text-left shadow-[0_2px_16px_-2px_rgba(0,0,0,0.08)] transition-all hover:shadow-[0_4px_24px_-4px_rgba(0,0,0,0.12)] active:scale-[0.97]"
                         >
                           <div className="flex items-start gap-3">
