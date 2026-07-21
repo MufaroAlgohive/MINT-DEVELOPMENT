@@ -881,11 +881,6 @@ export default function GiftToggleV2({
                 {/* ── GIFT FOR (who is this gift for?) ── */}
                 {step === "giftFor" && (
                   <div className="flex flex-col" style={{ maxHeight: "calc(92vh - 20px)" }}>
-                    {/* Drag handle */}
-                    <div className="flex justify-center pt-3 pb-1 flex-shrink-0">
-                      <div className="h-1 w-10 rounded-full bg-slate-200" />
-                    </div>
-
                     {/* Header row */}
                     <div className="flex items-center justify-between px-5 py-3 flex-shrink-0">
                       <div>
