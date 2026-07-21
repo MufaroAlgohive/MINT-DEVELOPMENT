@@ -1881,6 +1881,7 @@ const App = () => {
           onBack={goBack}
           onOpenBuy={() => navigateTo("stockBuy")}
           onNavigateToOnboarding={() => navigateTo("identityCheck")}
+          onGiftDone={() => navigateTo("home")}
           onProceedToPayment={({ security, amount, baseAmount, shareCount, goalId }) => {
             setStockCheckout({ security, amount, baseAmount: baseAmount || amount, shareCount });
             setSelectedGoalId(goalId || null);

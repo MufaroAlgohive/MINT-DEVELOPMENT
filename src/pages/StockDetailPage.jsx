@@ -6,13 +6,14 @@ import { supabase } from "../lib/supabase.js";
 import { useProfile } from "../lib/useProfile";
 import { useOnboardingStatus } from "../lib/useOnboardingStatus";
 import GoalLinkModal from "../components/GoalLinkModal.jsx";
+import GiftToggleV2 from "../components/GiftToggleV2.jsx";
 import { useFees } from "../lib/useFees";
 
 const MIN_INVESTMENT = 200;
 
 const fmt = (val, cur = "R") => `${cur} ${Number(val).toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-const StockDetailPage = ({ security: initialSecurity, onBack, onOpenBuy, onNavigateToOnboarding, onProceedToPayment }) => {
+const StockDetailPage = ({ security: initialSecurity, onBack, onOpenBuy, onNavigateToOnboarding, onProceedToPayment, onGiftDone }) => {
   const { onboardingComplete, loading: onboardingLoading } = useOnboardingStatus();
   const { ISIN_FEE_PER_ASSET, BROKER_FEE_RATE, TRANSACTION_FEE_RATE, CASH_BUFFER_RATE } = useFees();
   const { profile } = useProfile();
@@ -31,6 +32,9 @@ const StockDetailPage = ({ security: initialSecurity, onBack, onOpenBuy, onNavig
   const [buyFeeExpanded, setBuyFeeExpanded] = useState(false);
   const [showGoalModal, setShowGoalModal] = useState(false);
   const [pendingCheckout, setPendingCheckout] = useState(null);
+  const [isGift, setIsGift] = useState(false);
+
+  const handleGiftToggle = (val) => { setIsGift(val); };
   const periods = ["1W", "1M", "3M", "6M", "YTD", "1Y", "ALL"];
 
   useEffect(() => {
@@ -263,6 +267,7 @@ const StockDetailPage = ({ security: initialSecurity, onBack, onOpenBuy, onNavig
     if (!onboardingComplete) { setShowOnboardingModal(true); return; }
     setBuyShares(minShares);
     setBuyFeeExpanded(false);
+    setIsGift(false);
     setShowBuySheet(true);
   };
 
@@ -621,14 +626,15 @@ const StockDetailPage = ({ security: initialSecurity, onBack, onOpenBuy, onNavig
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            onClick={(e) => { if (e.target === e.currentTarget) setShowBuySheet(false); }}
+            onClick={(e) => { if (e.target === e.currentTarget) { setIsGift(false); setShowBuySheet(false); } }}
           >
             <motion.div
               className="w-full max-w-md rounded-t-3xl bg-white pb-[env(safe-area-inset-bottom)] shadow-2xl"
               initial={{ y: "100%" }}
-              animate={{ y: 0 }}
+              animate={{ y: isGift ? "110%" : 0 }}
               exit={{ y: "100%" }}
               transition={{ type: "spring", damping: 25, stiffness: 300 }}
+              style={{ pointerEvents: isGift ? "none" : "auto" }}
             >
               {/* Header */}
               <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
@@ -644,7 +650,7 @@ const StockDetailPage = ({ security: initialSecurity, onBack, onOpenBuy, onNavig
                 </div>
                 <button
                   type="button"
-                  onClick={() => setShowBuySheet(false)}
+                  onClick={() => { setIsGift(false); setShowBuySheet(false); }}
                   className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-500 transition hover:bg-slate-200"
                 >
                   <X className="h-4 w-4" />
@@ -688,19 +694,34 @@ const StockDetailPage = ({ security: initialSecurity, onBack, onOpenBuy, onNavig
                   <p className="text-sm font-bold text-slate-900">{fmt(buyFees.total, displayCurrency)}</p>
                 </div>
 
-                {/* Invest button */}
-                <button
-                  type="button"
-                  disabled={buyIsInvalid}
-                  onClick={handleBuySheetInvest}
-                  className={`w-full rounded-2xl py-4 text-sm font-bold uppercase tracking-[0.18em] text-white shadow-lg transition-all active:scale-95 ${
-                    buyIsInvalid
-                      ? "cursor-not-allowed bg-slate-300"
-                      : "bg-gradient-to-r from-[#0a0a0a] via-[#2d0f6b] to-[#7c3aed] shadow-[0_8px_24px_rgba(109,40,217,0.40)]"
-                  }`}
-                >
-                  Invest
-                </button>
+                {/* Invest button — hidden when gift mode is active */}
+                {!isGift && (
+                  <button
+                    type="button"
+                    disabled={buyIsInvalid}
+                    onClick={handleBuySheetInvest}
+                    className={`w-full rounded-2xl py-4 text-sm font-bold uppercase tracking-[0.18em] text-white shadow-lg transition-all active:scale-95 ${
+                      buyIsInvalid
+                        ? "cursor-not-allowed bg-slate-300"
+                        : "bg-gradient-to-r from-[#0a0a0a] via-[#2d0f6b] to-[#7c3aed] shadow-[0_8px_24px_rgba(109,40,217,0.40)]"
+                    }`}
+                  >
+                    Invest
+                  </button>
+                )}
+
+                {/* Send as a gift */}
+                <div className="mb-1">
+                  <GiftToggleV2
+                    enabled={isGift}
+                    onToggle={handleGiftToggle}
+                    onDone={() => { setIsGift(false); setShowBuySheet(false); onGiftDone?.(); }}
+                    security={{ id: displaySecurity?.id, name: displaySecurity?.name || displaySecurity?.symbol, symbol: displaySecurity?.symbol }}
+                    totalCostCents={Math.round(buyFees.total * 100)}
+                    amountDisplay={`${displayCurrency}${buyFees.total.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                    assetType="stock"
+                  />
+                </div>
               </div>
             </motion.div>
           </motion.div>
