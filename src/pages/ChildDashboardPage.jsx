@@ -3680,7 +3680,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
               animate={{ y: 0 }}
               exit={{ y: "100%" }}
               transition={{ type: "spring", damping: 28, stiffness: 300 }}
-              className="fixed inset-x-0 bottom-0 z-50 rounded-t-3xl bg-white px-5 pt-5 pb-[calc(6rem+env(safe-area-inset-bottom))] shadow-2xl"
+              className="fixed inset-x-0 bottom-0 z-50 mx-auto w-full max-w-md rounded-t-[28px] bg-white px-5 pt-5 pb-[calc(6rem+env(safe-area-inset-bottom))] shadow-2xl"
             >
               {/* Handle */}
               <div className="mx-auto mb-5 h-1 w-10 rounded-full bg-slate-200" />
@@ -3932,7 +3932,7 @@ export default function ChildDashboardPage({ child: initialChild, onBack, onOpen
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
             transition={{ type: "spring", damping: 28, stiffness: 300 }}
-            className="fixed inset-x-0 bottom-0 z-[950] flex flex-col rounded-t-3xl bg-white shadow-2xl"
+            className="fixed inset-x-0 bottom-0 z-[950] mx-auto flex w-full max-w-md flex-col rounded-t-[28px] bg-white shadow-2xl"
             style={{ maxHeight: "85vh" }}
           >
             {/* Handle */}

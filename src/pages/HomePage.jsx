@@ -2792,7 +2792,7 @@ const HomePage = ({
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
             transition={{ type: "spring", damping: 28, stiffness: 300 }}
-            className="fixed inset-x-0 bottom-0 z-[950] flex flex-col rounded-t-3xl bg-white shadow-2xl"
+            className="fixed inset-x-0 bottom-0 z-[950] mx-auto flex w-full max-w-md flex-col rounded-t-[28px] bg-white shadow-2xl"
             style={{ maxHeight: "85vh" }}
           >
             {/* Handle */}
