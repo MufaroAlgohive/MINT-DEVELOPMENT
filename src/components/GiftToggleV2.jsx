@@ -261,6 +261,7 @@ export default function GiftToggleV2({
   assetType = "stock",
   fees, // optional: { bufferedBase, brokerAmount, isinTotal, transactionAmount, totalCost }
   singleSecurity = false, // when true: hide AUM fee and the "incl. X% reserve" buffer label
+  hideToggleRow = false,  // when true: hide the "Send as a gift" toggle row (parent drives it)
 }) {
   const { BROKER_FEE_RATE, TRANSACTION_FEE_RATE, AUM_FEE_RATE, CASH_BUFFER_RATE } = useFees();
   const pct = (r) => `${(r * 100).toFixed(2).replace(/\.?0+$/, "")}%`;
@@ -789,7 +790,8 @@ export default function GiftToggleV2({
 
   return (
     <div className="mt-4">
-      {/* Toggle row */}
+      {/* Toggle row — hidden when parent drives gift mode directly (hideToggleRow=true) */}
+      {!hideToggleRow && (
       <button
         type="button"
         onClick={() => handleToggle(!enabled)}
@@ -826,6 +828,7 @@ export default function GiftToggleV2({
           </motion.div>
         </div>
       </button>
+      )}
 
       {/* ── BOTTOM SHEET ── rendered via portal so CSS transforms on parent containers
            (e.g. AdultInvestModal sliding off-screen) don't clip fixed-positioned overlays */}

@@ -2,6 +2,7 @@ import React, { useEffect, useId, useMemo, useRef, useState } from "react";
 import { ArrowLeft, Baby, BookMarked, Bookmark, Gift, Heart, Search, SlidersHorizontal, Sparkles, TrendingUp, X } from "lucide-react";
 import GiftRegistryCreateSheet from "../components/GiftRegistryCreateSheet.jsx";
 import WishlistPickerSheet from "../components/WishlistPickerSheet.jsx";
+import GiftCompleteSheet from "../components/GiftCompleteSheet.jsx";
 import { AreaChart, Area, LineChart, Line, ResponsiveContainer } from "recharts";
 import { motion, AnimatePresence } from "framer-motion";
 import { SparklesText } from "../components/ui/sparkles-text";
@@ -226,6 +227,11 @@ export default function GiftStrategyPickerPage({ onBack, onNavigate, autoOpenWis
   const [selectedChildForMarket, setSelectedChildForMarket] = useState(null);
   // tracks whether the strategy being wishlisted is a kid strategy (for the picker guard)
   const [wishlistPickerIsKid, setWishlistPickerIsKid] = useState(null);
+
+  // Gift complete sheet — replaces page navigation for both baskets and securities
+  const [showGiftSheet, setShowGiftSheet] = useState(false);
+  const [giftSheetItem, setGiftSheetItem] = useState(null);   // strategy or security object
+  const [giftSheetAssetType, setGiftSheetAssetType] = useState("strategy");
 
   // Markets tab
   const [viewTab, setViewTab] = useState("baskets"); // "baskets" | "markets"
@@ -559,9 +565,15 @@ export default function GiftStrategyPickerPage({ onBack, onNavigate, autoOpenWis
   }
 
   function handleGift(strategy) {
-    onNavigate?.("giftStrategyInvest", {
-      strategy: { ...strategy, calculatedMinInvestment: calculateMinInvestmentSync(strategy, securitiesMap) },
-    });
+    setGiftSheetItem({ ...strategy, calculatedMinInvestment: calculateMinInvestmentSync(strategy, securitiesMap) });
+    setGiftSheetAssetType("strategy");
+    setShowGiftSheet(true);
+  }
+
+  function handleGiftSecurity(security) {
+    setGiftSheetItem(security);
+    setGiftSheetAssetType("stock");
+    setShowGiftSheet(true);
   }
 
   return (
@@ -823,7 +835,7 @@ export default function GiftStrategyPickerPage({ onBack, onNavigate, autoOpenWis
                     <CollapsibleSection
                       title="Largest companies"
                       securities={largestGiftCompanies}
-                      onOpenStockDetail={s => onGiftSecurity?.(s)}
+                      onOpenStockDetail={s => handleGiftSecurity(s)}
                       onToggleWatchlist={toggleGiftSecurityWatchlist}
                       onToggleWishlist={toggleWishlistItem}
                       watchlist={giftSecurityWatchlist}
@@ -835,7 +847,7 @@ export default function GiftStrategyPickerPage({ onBack, onNavigate, autoOpenWis
                     <CollapsibleSection
                       title="Highest dividend yield"
                       securities={highestGiftDividendYield}
-                      onOpenStockDetail={s => onGiftSecurity?.(s)}
+                      onOpenStockDetail={s => handleGiftSecurity(s)}
                       onToggleWatchlist={toggleGiftSecurityWatchlist}
                       onToggleWishlist={toggleWishlistItem}
                       watchlist={giftSecurityWatchlist}
@@ -847,7 +859,7 @@ export default function GiftStrategyPickerPage({ onBack, onNavigate, autoOpenWis
                     <CollapsibleSection
                       title="Gainers"
                       securities={giftGainers}
-                      onOpenStockDetail={s => onGiftSecurity?.(s)}
+                      onOpenStockDetail={s => handleGiftSecurity(s)}
                       onToggleWatchlist={toggleGiftSecurityWatchlist}
                       onToggleWishlist={toggleWishlistItem}
                       watchlist={giftSecurityWatchlist}
@@ -878,7 +890,7 @@ export default function GiftStrategyPickerPage({ onBack, onNavigate, autoOpenWis
                       {filteredGiftSecurities.map((security) => (
                         <button
                           key={security.id}
-                          onClick={() => onGiftSecurity?.(security)}
+                          onClick={() => handleGiftSecurity(security)}
                           className="relative w-full rounded-3xl border border-slate-100/80 bg-white/90 backdrop-blur-sm p-4 text-left shadow-[0_2px_16px_-2px_rgba(0,0,0,0.08)] transition-all hover:shadow-[0_4px_24px_-4px_rgba(0,0,0,0.12)] active:scale-[0.97]"
                         >
                           <div className="flex items-start gap-3">
@@ -1162,6 +1174,19 @@ export default function GiftStrategyPickerPage({ onBack, onNavigate, autoOpenWis
           setSearchQuery("");
           setViewTab("baskets");
           setShowChildMarketPrompt(false);
+        }}
+      />
+
+      {/* Gift complete sheet — slides up instead of navigating to a new page */}
+      <GiftCompleteSheet
+        isOpen={showGiftSheet}
+        onClose={() => setShowGiftSheet(false)}
+        strategy={giftSheetAssetType === "strategy" ? giftSheetItem : undefined}
+        security={giftSheetAssetType === "stock" ? giftSheetItem : undefined}
+        assetType={giftSheetAssetType}
+        onGiftDone={() => {
+          setShowGiftSheet(false);
+          onNavigate?.("home");
         }}
       />
     </div>
