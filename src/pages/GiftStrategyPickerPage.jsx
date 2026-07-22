@@ -607,7 +607,7 @@ export default function GiftStrategyPickerPage({ onBack, onNavigate, autoOpenWis
                   className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 backdrop-blur-sm"
                   title="Wishlist"
                 >
-                  <BookMarked className="h-4 w-4" />
+                  <Bookmark className="h-4 w-4" />
                 </button>
 
                 <AnimatePresence>
