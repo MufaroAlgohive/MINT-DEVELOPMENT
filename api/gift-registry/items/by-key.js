@@ -31,8 +31,9 @@ export default async function handler(req, res) {
     const { user, error: authError } = await authenticateUser(req);
     if (authError || !user) return res.status(401).json({ error: 'Unauthorized' });
 
-    const { registryId, itemKey } = req.body;
+    const { registryId, itemKey, quantity } = req.body;
     if (!registryId || !itemKey) return res.status(400).json({ error: 'Missing registryId or itemKey' });
+    const targetQty = (Number.isInteger(quantity) && quantity >= 1) ? quantity : 1;
 
     // Verify ownership
     const { data: reg } = await supabaseAdmin
@@ -87,7 +88,7 @@ export default async function handler(req, res) {
         const minTranche = priceCents > 0 ? Math.max(1, Math.ceil(1000 / priceCents)) : 1;
         toInsert.push({
           gift_event_id: registryId, isin: sec.isin, instrument_type: 'SHARE',
-          target_quantity: 1, price_snapshot_cents: priceCents, min_tranche_quantity: minTranche,
+          target_quantity: targetQty, price_snapshot_cents: priceCents, min_tranche_quantity: minTranche,
         });
       }
 
@@ -118,7 +119,7 @@ export default async function handler(req, res) {
       const { data: item, error } = await supabaseAdmin
         .from('gift_registry_items')
         .insert({ gift_event_id: registryId, isin: itemKey, instrument_type: 'SHARE',
-          target_quantity: 1, price_snapshot_cents: priceCents, min_tranche_quantity: minTranche })
+          target_quantity: targetQty, price_snapshot_cents: priceCents, min_tranche_quantity: minTranche })
         .select().single();
       if (error) throw error;
       return res.status(200).json({ success: true, item });

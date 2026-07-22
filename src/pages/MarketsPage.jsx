@@ -14,6 +14,7 @@ import { TrendingUp, Search, SlidersHorizontal, X, ChevronRight, Bookmark, HelpC
 import PdfViewer from "../components/PdfViewer";
 import WishlistModal from "../components/WishlistModal.jsx";
 import WishlistPickerSheet from "../components/WishlistPickerSheet.jsx";
+import WishlistQuantitySheet from "../components/WishlistQuantitySheet.jsx";
 import WishlistToast from "../components/WishlistToast.jsx";
 import ChildInvestModal from "../components/ChildInvestModal.jsx";
 import GiftRegistryCreateSheet from "../components/GiftRegistryCreateSheet.jsx";
@@ -362,6 +363,9 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
   const [wishlistedKeys, setWishlistedKeys] = useState(new Set());
   const [strategyWatchlist, setStrategyWatchlist] = useState([]);
   const [wishlistPickerKey, setWishlistPickerKey] = useState(null); // itemKey awaiting picker
+  const [wishlistPendingQuantity, setWishlistPendingQuantity] = useState(1); // quantity chosen in step 1
+  // Step 1 of the heart flow — quantity picker
+  const [wishlistQuantityItem, setWishlistQuantityItem] = useState(null); // { itemKey, pricePerUnit, isStrategy, itemName, isKidStrategy }
   const [wishlistToastMsg, setWishlistToastMsg] = useState("");
   const [wishlistToastVisible, setWishlistToastVisible] = useState(false);
   const [wishlistToastRegistryId, setWishlistToastRegistryId] = useState(null);
@@ -411,22 +415,39 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
   const toggleWishlistItem = (e, itemKey) => {
     e.stopPropagation();
     if (wishlistedKeys.has(itemKey)) {
+      // Un-heart: remove immediately, no quantity step needed
       const next = new Set(wishlistedKeys);
       next.delete(itemKey);
       setWishlistedKeys(next);
       updateWishlistPrefs({ wishlistedKeys: [...next] });
     } else {
-      // Determine if the strategy is a kid strategy (for the wishlist picker guard).
-      // Default to false when not found — safer to block than to allow.
+      // Heart: determine kid-strategy guard flag (same logic as before)
+      let isKidStrategy = null;
+      let isStrategy = false;
+      let pricePerUnit = 0;
+      let itemName = "";
+
       if (itemKey.startsWith("strategy:")) {
+        isStrategy = true;
         const stratId = itemKey.slice(9);
         const strat = publicStrategiesWithMetrics.find(s => s.id === stratId);
-        setWishlistPickerIsKid(strat ? strat.is_kid_strategy === true : false);
+        isKidStrategy = strat ? strat.is_kid_strategy === true : false;
+        pricePerUnit = strat ? (calculateMinInvestmentSync(strat, holdingsBySymbol) ?? 0) : 0;
+        itemName = strat?.name || "";
       } else {
-        setWishlistPickerIsKid(null); // single securities — not a strategy at all, bypass child guard
+        // Single security
+        isKidStrategy = null;
+        const sec = securities.find(s => s.symbol === itemKey);
+        // last_price is in cents; currentPrice is already in Rand
+        pricePerUnit = sec
+          ? (sec.currentPrice != null ? Number(sec.currentPrice) : (sec.last_price ? sec.last_price / 100 : 0))
+          : 0;
+        itemName = sec?.name || sec?.symbol || itemKey;
       }
-      // Show the wishlist picker so the user can choose a category
-      setWishlistPickerKey(itemKey);
+
+      setWishlistPickerIsKid(isKidStrategy);
+      // Show quantity picker first (step 1), then wishlist picker (step 2)
+      setWishlistQuantityItem({ itemKey, pricePerUnit, isStrategy, itemName, isKidStrategy });
     }
   };
 
@@ -3701,22 +3722,41 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
         </div>
       , portalTarget)}
 
-      {/* Wishlist picker — Airbnb-style category selector */}
+      {/* Step 1: Quantity picker — shown before the wishlist selector */}
+      {wishlistQuantityItem && (
+        <WishlistQuantitySheet
+          itemKey={wishlistQuantityItem.itemKey}
+          itemName={wishlistQuantityItem.itemName}
+          pricePerUnit={wishlistQuantityItem.pricePerUnit}
+          isStrategy={wishlistQuantityItem.isStrategy}
+          onClose={() => setWishlistQuantityItem(null)}
+          onConfirm={(qty) => {
+            setWishlistPendingQuantity(qty);
+            setWishlistPickerKey(wishlistQuantityItem.itemKey);
+            setWishlistQuantityItem(null);
+          }}
+        />
+      )}
+
+      {/* Step 2: Wishlist picker — Airbnb-style category selector */}
       {wishlistPickerKey && (
         <WishlistPickerSheet
           itemKey={wishlistPickerKey}
+          quantity={wishlistPendingQuantity}
           isKidStrategy={wishlistPickerIsKid}
           onGoToChildMarket={() => {
             setWishlistPickerKey(null);
+            setWishlistPendingQuantity(1);
             setShowChildMarketPrompt(true);
           }}
           childFamilyMemberId={childData?.id || null}
-          onClose={() => setWishlistPickerKey(null)}
+          onClose={() => { setWishlistPickerKey(null); setWishlistPendingQuantity(1); }}
           onSaved={(savedItemKey, listName, registryId) => {
             const next = new Set([...wishlistedKeys, savedItemKey]);
             setWishlistedKeys(next);
             updateWishlistPrefs({ wishlistedKeys: [...next] });
             setWishlistPickerKey(null);
+            setWishlistPendingQuantity(1);
             setWishlistToastMsg(`Added to "${listName}"`);
             setWishlistToastRegistryId(registryId || null);
             setWishlistToastVisible(true);
@@ -3724,6 +3764,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
           onCreateNew={(name) => {
             const key = wishlistPickerKey;
             setWishlistPickerKey(null);
+            setWishlistPendingQuantity(1);
             onContinueToRegistry?.(key, name || null);
           }}
         />

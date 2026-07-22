@@ -15,7 +15,7 @@ const CARD_GRADIENTS = [
 
 const year = new Date().getFullYear();
 
-export default function WishlistPickerSheet({ itemKey, onClose, onSaved, onCreateNew, childFamilyMemberId, isKidStrategy, onGoToChildMarket }) {
+export default function WishlistPickerSheet({ itemKey, quantity = 1, onClose, onSaved, onCreateNew, childFamilyMemberId, isKidStrategy, onGoToChildMarket }) {
   const [wishlists, setWishlists] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(null);
@@ -131,7 +131,7 @@ export default function WishlistPickerSheet({ itemKey, onClose, onSaved, onCreat
         const res = await fetch("/api/gift-registry/items/by-key", {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ registryId: list.id, itemKey }),
+          body: JSON.stringify({ registryId: list.id, itemKey, quantity }),
         });
         if (!res.ok) {
           const json = await res.json().catch(() => ({}));
