@@ -1,6 +1,9 @@
 import React, { useEffect, useState, useRef, useMemo, useId } from "react";
 import { createPortal } from "react-dom";
 import MaintenanceModal from "../components/MaintenanceModal.jsx";
+import GoalLinkModal from "../components/GoalLinkModal.jsx";
+import { useFees } from "../lib/useFees";
+import { useOnboardingStatus } from "../lib/useOnboardingStatus";
 import { registerCacheResetCallback } from "../lib/userCacheReset.js";
 import { supabase } from "../lib/supabase.js";
 import { getMarketsSecuritiesWithMetrics, getSecurityPrices, clearMarketDataCache } from "../lib/marketData.js";
@@ -156,8 +159,10 @@ registerCacheResetCallback(() => {
   _mkHoldingsSecurities = null;
 });
 
-const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNewsArticle, onOpenFactsheet, onInvestNow, initialViewMode, onViewModeChange, childFilter, onNavigateToHome, onNavigateToInvest, onOpenMyWishlists, onContinueToRegistry }) => {
+const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNewsArticle, onOpenFactsheet, onInvestNow, onProceedToPayment, initialViewMode, onViewModeChange, childFilter, onNavigateToHome, onNavigateToInvest, onOpenMyWishlists, onContinueToRegistry }) => {
   const { profile, loading: profileLoading } = useProfile();
+  const { ISIN_FEE_PER_ASSET, BROKER_FEE_RATE, TRANSACTION_FEE_RATE, CASH_BUFFER_RATE } = useFees();
+  const { onboardingComplete, loading: onboardingLoading } = useOnboardingStatus();
   const [portalTarget, setPortalTarget] = useState(null);
   const { lastUpdated: pricesLastUpdated } = useRealtimePrices();
   const [securities, setSecurities] = useState(() => _mkSecurities || []);
@@ -216,6 +221,15 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
 
   const [selectedStrategy, setSelectedStrategy] = useState(null);
   const [selectedSecurity, setSelectedSecurity] = useState(null);
+
+  // ── Security buy sheet state ─────────────────────────────────────────────
+  const [investingSecurity, setInvestingSecurity] = useState(null);
+  const [showSecurityBuySheet, setShowSecurityBuySheet] = useState(false);
+  const [securityBuyShares, setSecurityBuyShares] = useState(1);
+  const [pendingSecurityCheckout, setPendingSecurityCheckout] = useState(null);
+  const [showSecurityGoalModal, setShowSecurityGoalModal] = useState(false);
+  const [showSecurityOnboardingModal, setShowSecurityOnboardingModal] = useState(false);
+
   const [selectedStrategyTimeframe, setSelectedStrategyTimeframe] = useState("YTD");
   const [selectedStrategyActiveLabel, setSelectedStrategyActiveLabel] = useState(null);
   const [selectedStrategyAnalytics, setSelectedStrategyAnalytics] = useState(null);
@@ -228,7 +242,38 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
   const [sheetOffset, setSheetOffset] = useState(0);
   const dragStartY = useRef(null);
   const isDragging = useRef(false);
-  
+
+  // ── Security buy sheet — computed fee values ─────────────────────────────
+  const securityDisplayCurrency = useMemo(() => {
+    const c = investingSecurity?.currency || "R";
+    return c.toUpperCase() === "ZAC" ? "R" : c;
+  }, [investingSecurity]);
+
+  const securityPriceValue = useMemo(() => {
+    const c = investingSecurity?.currency || "R";
+    const p = Number(investingSecurity?.currentPrice ?? 0);
+    return c.toUpperCase() === "ZAC" ? p / 100 : p;
+  }, [investingSecurity]);
+
+  const securityMinShares = useMemo(() => {
+    if (!securityPriceValue || securityPriceValue <= 0) return 1;
+    return Math.ceil(200 / securityPriceValue);
+  }, [securityPriceValue]);
+
+  const securityValidShares = Number.isFinite(securityBuyShares) && securityBuyShares > 0 ? securityBuyShares : 0;
+  const securityBuyTotal = securityValidShares * securityPriceValue;
+  const securityBuyIsInvalid = !Number.isFinite(securityBuyShares) || securityBuyShares <= 0 || securityBuyShares < securityMinShares;
+
+  const securityBuyFees = useMemo(() => {
+    const buffered = securityBuyTotal * (1 + CASH_BUFFER_RATE);
+    const broker = buffered * BROKER_FEE_RATE;
+    const isin = ISIN_FEE_PER_ASSET * (securityValidShares > 0 ? 1 : 0);
+    const txn = buffered * TRANSACTION_FEE_RATE;
+    return { total: buffered + broker + isin + txn };
+  }, [securityBuyTotal, securityValidShares, CASH_BUFFER_RATE, BROKER_FEE_RATE, ISIN_FEE_PER_ASSET, TRANSACTION_FEE_RATE]);
+
+  const fmtSecAmt = (val) => `${securityDisplayCurrency} ${Number(val).toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
   // Filter states for Invest view (restored from localStorage)
   const _savedInvest = useMemo(() => loadMarketsInvestFilters(), []);
   const [selectedSort, setSelectedSort] = useState(_savedInvest?.sort || "Market Cap");
@@ -2684,8 +2729,21 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                   <div className="mt-6 flex flex-col gap-2">
                     <button
                       onClick={() => {
+                        if (onboardingLoading) return;
+                        const sec = selectedSecurity;
                         setSelectedSecurity(null);
-                        setTimeout(() => onOpenStockDetail(selectedSecurity), 220);
+                        if (!onboardingComplete) {
+                          setInvestingSecurity(sec);
+                          setTimeout(() => setShowSecurityOnboardingModal(true), 220);
+                          return;
+                        }
+                        setInvestingSecurity(sec);
+                        setSecurityBuyShares(Math.max(1, Math.ceil(200 / (() => {
+                          const c = sec?.currency || "R";
+                          const p = Number(sec?.currentPrice ?? 0);
+                          return c.toUpperCase() === "ZAC" ? p / 100 : p;
+                        })())));
+                        setTimeout(() => setShowSecurityBuySheet(true), 220);
                       }}
                       className="w-full rounded-2xl bg-gradient-to-r from-[#5b21b6] to-[#7c3aed] py-4 font-semibold text-white shadow-lg transition-all active:scale-95"
                     >
@@ -2708,6 +2766,181 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
           )}
         </AnimatePresence>
       , portalTarget)}
+
+      {/* ── Security Buy Sheet ────────────────────────────────────────────── */}
+      {portalTarget && createPortal(
+        <AnimatePresence>
+          {showSecurityBuySheet && investingSecurity && (
+            <>
+              {/* Backdrop */}
+              <motion.div
+                key="sec-buy-backdrop"
+                className="fixed inset-0"
+                style={{ zIndex: 9998, background: "rgba(15,10,30,0.65)" }}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                onClick={() => setShowSecurityBuySheet(false)}
+              />
+              {/* Sheet */}
+              <motion.div
+                key="sec-buy-sheet"
+                className="fixed inset-x-0 bottom-0 mx-auto flex w-full max-w-md flex-col overflow-hidden rounded-t-[28px] bg-white shadow-2xl"
+                style={{ zIndex: 9999, maxHeight: "92dvh" }}
+                initial={{ y: "100%" }}
+                animate={{ y: 0 }}
+                exit={{ y: "100%" }}
+                transition={{ type: "spring", damping: 28, stiffness: 320 }}
+              >
+                {/* Gradient accent strip */}
+                <div className="h-1 w-full flex-shrink-0" style={{ background: "linear-gradient(90deg,#7c3aed,#6366f1,#8b5cf6)" }} />
+                {/* Drag handle */}
+                <div className="flex justify-center pt-2.5 pb-1 flex-shrink-0">
+                  <div className="h-[3px] w-9 rounded-full bg-slate-200" />
+                </div>
+                {/* Header */}
+                <div className="flex items-center justify-between px-5 py-3 flex-shrink-0">
+                  <div className="flex items-center gap-3">
+                    {investingSecurity.logo_url ? (
+                      <img src={investingSecurity.logo_url} alt={investingSecurity.symbol} className="h-10 w-10 rounded-full border border-slate-100 object-cover" />
+                    ) : (
+                      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-purple-500 to-purple-600 text-sm font-bold text-white">
+                        {investingSecurity.symbol?.substring(0, 2) || "—"}
+                      </div>
+                    )}
+                    <div>
+                      <h2 className="text-[15px] font-bold text-slate-900">Invest in {investingSecurity.symbol}</h2>
+                      <p className="text-xs text-slate-400 mt-0.5">{investingSecurity.short_name || investingSecurity.name}</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowSecurityBuySheet(false)}
+                    className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200 transition"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+
+                <div
+                  className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-5 pb-6"
+                  style={{ WebkitOverflowScrolling: "touch" }}
+                >
+                  {/* Price per share */}
+                  <div className="rounded-2xl bg-slate-50 p-4 mb-5">
+                    <p className="text-[11px] font-semibold uppercase tracking-widest text-slate-400">Price per share</p>
+                    <p className="mt-2 text-3xl font-bold text-slate-900">
+                      {securityDisplayCurrency}{securityPriceValue > 0 ? securityPriceValue.toFixed(2) : "—"}
+                    </p>
+                  </div>
+
+                  {/* Shares stepper */}
+                  <div className="rounded-2xl border border-slate-200 bg-white p-4 mb-5">
+                    <p className="text-[11px] font-semibold uppercase tracking-widest text-slate-400 mb-3">Number of shares</p>
+                    <div className="flex items-center justify-between">
+                      <button
+                        type="button"
+                        onClick={() => setSecurityBuyShares(s => Math.max(securityMinShares, (s || 1) - 1))}
+                        className="flex h-11 w-11 items-center justify-center rounded-full border border-slate-200 bg-slate-50 text-slate-600 text-xl font-semibold transition active:scale-90"
+                      >
+                        −
+                      </button>
+                      <div className="text-center">
+                        <p className="text-3xl font-bold text-slate-900">{securityBuyShares}</p>
+                        <p className="text-xs text-slate-400 mt-0.5">Total: {fmtSecAmt(securityBuyTotal)}</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setSecurityBuyShares(s => (s || 1) + 1)}
+                        className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-[#5b21b6] to-[#7c3aed] text-white text-xl font-semibold shadow-md transition active:scale-90"
+                      >
+                        +
+                      </button>
+                    </div>
+                    {securityBuyIsInvalid && securityPriceValue > 0 && (
+                      <p className="mt-2 text-center text-xs text-red-500">
+                        Min. {securityMinShares} share{securityMinShares !== 1 ? "s" : ""} required (R200 minimum)
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Investment summary */}
+                  <div className="space-y-2 mb-6">
+                    <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3.5">
+                      <span className="text-sm text-slate-600">Investment Amount</span>
+                      <span className="font-semibold text-slate-900">{fmtSecAmt(securityBuyTotal)}</span>
+                    </div>
+                    <div className="flex items-center justify-between rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3.5">
+                      <span className="text-xs font-semibold text-slate-700">Total Cost (incl. fees)</span>
+                      <span className="text-sm font-bold text-slate-900">{fmtSecAmt(securityBuyFees.total)}</span>
+                    </div>
+                  </div>
+
+                  {/* Invest button */}
+                  <button
+                    type="button"
+                    disabled={securityBuyIsInvalid}
+                    onClick={() => {
+                      if (securityBuyIsInvalid) return;
+                      setPendingSecurityCheckout({
+                        security: investingSecurity,
+                        amount: securityBuyFees.total,
+                        baseAmount: securityBuyTotal,
+                        shareCount: securityValidShares,
+                      });
+                      setShowSecurityBuySheet(false);
+                      setTimeout(() => setShowSecurityGoalModal(true), 320);
+                    }}
+                    className={`w-full rounded-2xl py-4 font-semibold text-white shadow-lg transition-all active:scale-95 ${
+                      securityBuyIsInvalid
+                        ? "cursor-not-allowed bg-slate-300"
+                        : "bg-gradient-to-r from-[#5b21b6] to-[#7c3aed]"
+                    }`}
+                  >
+                    Invest
+                  </button>
+                </div>
+              </motion.div>
+            </>
+          )}
+        </AnimatePresence>
+      , portalTarget)}
+
+      {/* ── Goal Link Modal (for security buy flow) ───────────────────────── */}
+      <GoalLinkModal
+        isOpen={showSecurityGoalModal}
+        onClose={() => setShowSecurityGoalModal(false)}
+        onConfirm={(goalId) => {
+          setShowSecurityGoalModal(false);
+          if (onProceedToPayment && pendingSecurityCheckout) {
+            onProceedToPayment({ ...pendingSecurityCheckout, goalId });
+          }
+        }}
+        investmentAmount={pendingSecurityCheckout?.baseAmount}
+        assetName={pendingSecurityCheckout?.security?.name || pendingSecurityCheckout?.security?.symbol}
+      />
+
+      {/* ── Onboarding guard (for security buy flow) ─────────────────────── */}
+      {showSecurityOnboardingModal && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowSecurityOnboardingModal(false)}>
+          <div className="mx-6 w-full max-w-sm rounded-3xl bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-violet-50 mx-auto mb-4">
+              <TrendingUp className="h-7 w-7 text-violet-600" />
+            </div>
+            <h3 className="text-center text-lg font-semibold text-slate-900 mb-2">Complete Your Onboarding</h3>
+            <p className="text-center text-sm text-slate-500 mb-6">
+              You need to complete your identity verification before you can start investing.
+            </p>
+            <button
+              onClick={() => setShowSecurityOnboardingModal(false)}
+              className="w-full rounded-2xl bg-gradient-to-r from-black to-purple-600 py-3 text-sm font-semibold text-white shadow-lg"
+            >
+              Got it
+            </button>
+          </div>
+        </div>
+      )}
 
       {childFilter && selectedStrategy && showChildInvestModal && (
         <ChildInvestModal

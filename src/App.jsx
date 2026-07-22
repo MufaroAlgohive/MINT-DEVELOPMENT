@@ -1591,6 +1591,7 @@ const App = () => {
           {/* Markets tab – mount on first visit */}
           <div style={{ display: currentPage === 'markets' ? 'block' : 'none' }}>
             {mountedTabs.has('markets') && (
+              <>
               <AppLayout
                 activeTab={currentPage}
                 onTabChange={handleTabChange}
@@ -1608,6 +1609,14 @@ const App = () => {
                   onOpenNewsArticle={(articleId) => { setSelectedArticleId(articleId); navigateTo("newsArticle"); }}
                   onOpenFactsheet={(strategy) => { if (!marketsChildFilter) setSelectedChildForInvest(null); setSelectedStrategy(strategy); navigateTo("factsheet"); }}
                   onInvestNow={(strategy) => { if (!marketsChildFilter) { setSelectedChildForInvest(null); setSelectedStrategy(strategy); setShowAdultInvestModal(true); } }}
+                  onProceedToPayment={({ security, amount, baseAmount, shareCount, goalId }) => {
+                    setStockCheckout({ security, amount, baseAmount: baseAmount || amount, shareCount });
+                    setSelectedGoalId(goalId || null);
+                    selectedGoalIdRef.current = goalId || null;
+                    goalInvestAmountRef.current = baseAmount || amount;
+                    pendingPaymentTypeRef.current = "stock";
+                    setShowPaymentMethodModal(true);
+                  }}
                   childFilter={marketsChildFilter}
                   onNavigateToHome={() => { navigationHistory.current = []; setPreviousPageName(null); setCurrentPage("home"); }}
                   onNavigateToInvest={() => { navigationHistory.current = []; setPreviousPageName(null); setCurrentPage("markets"); }}
@@ -1615,6 +1624,72 @@ const App = () => {
                   onContinueToRegistry={(itemKey, name) => { setGiftRegistryNavState(s => ({ ...s, pendingItemKey: itemKey, pendingTitle: name || null })); setShowRegistryCreateSheet(true); }}
                 />
               </AppLayout>
+              <PaymentMethodModal
+                isOpen={showPaymentMethodModal && currentPage === "markets"}
+                onClose={() => setShowPaymentMethodModal(false)}
+                amount={stockCheckout.amount}
+                baseAmount={stockCheckout.baseAmount}
+                strategyName={stockCheckout.security?.name || stockCheckout.security?.symbol || "Stock"}
+                fees={stockCheckout.fees}
+                onSelectWallet={() => { setShowPaymentMethodModal(false); setPendingPaymentMethod("wallet"); navigateTo("stockPayment"); }}
+                onSelectOzow={async () => {
+                  try {
+                    const { data: { user } } = await supabase.auth.getUser();
+                    const baseUrl = window.location.origin;
+                    const resp = await fetch("/api/ozow/initiate", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        amount: stockCheckout.amount,
+                        strategyName: stockCheckout.security?.name || stockCheckout.security?.symbol || "Stock",
+                        strategyId: stockCheckout.security?.id || null,
+                        userId: user?.id || null,
+                        userEmail: user?.email || null,
+                        successUrl: `${baseUrl}/?ozow=success`,
+                        cancelUrl: `${baseUrl}/?ozow=cancel`,
+                        errorUrl: `${baseUrl}/?ozow=error`,
+                        abandonedUrl: `${baseUrl}/?ozow=abandoned`,
+                      }),
+                    });
+                    const data = await resp.json();
+                    if (data.success && data.action_url) {
+                      const form = document.createElement("form");
+                      form.method = "POST"; form.action = data.action_url;
+                      Object.entries(data).forEach(([key, value]) => {
+                        if (["success", "action_url"].includes(key)) return;
+                        const input = document.createElement("input");
+                        input.type = "hidden"; input.name = key; input.value = value;
+                        form.appendChild(input);
+                      });
+                      document.body.appendChild(form); form.submit(); document.body.removeChild(form);
+                    } else { alert(data.error || "Failed to initiate Ozow payment."); }
+                  } catch { alert("Could not connect to Ozow. Please try another payment method."); }
+                }}
+                onEFTConfirm={async () => {
+                  setShowPaymentMethodModal(false);
+                  try {
+                    const { data: { session } } = await supabase.auth.getSession();
+                    const token = session?.access_token;
+                    const headers = { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) };
+                    await fetch("/api/eft-deposit", {
+                      method: "POST", headers,
+                      body: JSON.stringify({
+                        amount: stockCheckout.amount,
+                        baseAmount: stockCheckout.baseAmount || stockCheckout.amount,
+                        reference: `EFT-${Date.now()}`,
+                        securityId: stockCheckout.security?.id,
+                        symbol: stockCheckout.security?.symbol || "",
+                        name: stockCheckout.security?.name || "",
+                        ...(stockCheckout.shareCount ? { shareCount: Number(stockCheckout.shareCount) } : {}),
+                      }),
+                    });
+                  } catch (e) { console.error("EFT record error:", e); }
+                  navigationHistory.current = [];
+                  setPreviousPageName(null);
+                  setCurrentPage("home");
+                }}
+              />
+              </>
             )}
           </div>
           {/* News tab – mount on first visit */}
