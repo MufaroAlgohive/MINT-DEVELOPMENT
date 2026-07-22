@@ -52,8 +52,16 @@ export default function GiftCompleteSheet({
   const [shakeAgreement, setShakeAgreement] = useState(false);
   const [showMandateModal, setShowMandateModal] = useState(false);
   const [isGift, setIsGift] = useState(false); // slides sheet away, GiftToggleV2 opens
+  const [giftSubSheetOpen, setGiftSubSheetOpen] = useState(false);
 
   const giftSheetRef = useRef(null);
+
+  // When GiftToggleV2 closes its sheet (user dismissed it without completing),
+  // slide the invest sheet back up so the user is not stuck on a dark screen.
+  const handleGiftSheetOpenChange = (open) => {
+    setGiftSubSheetOpen(open);
+    if (!open) setIsGift(false);
+  };
 
   /* ── Reset on open ───────────────────────────────────── */
   useEffect(() => {
@@ -169,7 +177,7 @@ export default function GiftCompleteSheet({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
-            onClick={!isGift ? onClose : undefined}
+            onClick={() => { setIsGift(false); onClose?.(); }}
           />
 
           {/* ── Complete Investment sheet ─────────────────── */}
@@ -498,6 +506,7 @@ export default function GiftCompleteSheet({
                 <GiftToggleV2
                   enabled={isGift}
                   onToggle={() => {}}          // gift mode is locked on in this flow
+                  onSheetOpenChange={handleGiftSheetOpenChange}
                   onDone={() => { setIsGift(false); onClose?.(); onGiftDone?.(); }}
                   giftSheetRef={giftSheetRef}
                   security={giftItem}
