@@ -215,6 +215,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
   }, []);
 
   const [selectedStrategy, setSelectedStrategy] = useState(null);
+  const [selectedSecurity, setSelectedSecurity] = useState(null);
   const [selectedStrategyTimeframe, setSelectedStrategyTimeframe] = useState("YTD");
   const [selectedStrategyActiveLabel, setSelectedStrategyActiveLabel] = useState(null);
   const [selectedStrategyAnalytics, setSelectedStrategyAnalytics] = useState(null);
@@ -1716,7 +1717,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                 <CollapsibleSection
                   title="My Watch List"
                   securities={watchedSecurities}
-                  onOpenStockDetail={onOpenStockDetail}
+                  onOpenStockDetail={setSelectedSecurity}
                   onToggleWatchlist={toggleWatchlist}
                   onToggleWishlist={toggleWishlistItem}
                   watchlist={watchlist}
@@ -1729,7 +1730,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                 <CollapsibleSection
                   title="Largest companies"
                   securities={largestCompanies}
-                  onOpenStockDetail={onOpenStockDetail}
+                  onOpenStockDetail={setSelectedSecurity}
                   onToggleWatchlist={toggleWatchlist}
                   onToggleWishlist={toggleWishlistItem}
                   watchlist={watchlist}
@@ -1742,7 +1743,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                 <CollapsibleSection
                   title="Highest dividend yield"
                   securities={highestDividendYield}
-                  onOpenStockDetail={onOpenStockDetail}
+                  onOpenStockDetail={setSelectedSecurity}
                   onToggleWatchlist={toggleWatchlist}
                   onToggleWishlist={toggleWishlistItem}
                   watchlist={watchlist}
@@ -1755,7 +1756,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                 <CollapsibleSection
                   title="Gainers"
                   securities={gainers}
-                  onOpenStockDetail={onOpenStockDetail}
+                  onOpenStockDetail={setSelectedSecurity}
                   onToggleWatchlist={toggleWatchlist}
                   onToggleWishlist={toggleWishlistItem}
                   watchlist={watchlist}
@@ -1775,7 +1776,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                 {filteredSecurities.map((security) => (
                   <button
                     key={security.id}
-                    onClick={() => onOpenStockDetail(security)}
+                    onClick={() => setSelectedSecurity(security)}
                     className="relative w-full rounded-3xl border border-slate-100/80 bg-white/90 backdrop-blur-sm p-4 text-left shadow-[0_2px_16px_-2px_rgba(0,0,0,0.08)] transition-all hover:shadow-[0_4px_24px_-4px_rgba(0,0,0,0.12)] active:scale-[0.97]"
                   >
                     <div className="flex items-start gap-3">
@@ -1886,7 +1887,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                     {filteredSecurities.map((security) => (
                       <button
                         key={security.id}
-                        onClick={() => onOpenStockDetail(security)}
+                        onClick={() => setSelectedSecurity(security)}
                         className="relative w-full rounded-3xl border border-slate-100/80 bg-white/90 backdrop-blur-sm p-4 text-left shadow-[0_2px_16px_-2px_rgba(0,0,0,0.08)] transition-all hover:shadow-[0_4px_24px_-4px_rgba(0,0,0,0.12)] active:scale-[0.97]"
                       >
                         <div className="flex items-start gap-3">
@@ -2524,6 +2525,183 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                   View Factsheet
                 </button>
               </div>
+                </div>
+              </motion.div>
+            </>
+          )}
+        </AnimatePresence>
+      , portalTarget)}
+
+      {/* Security Preview Sheet — shown when a single security is tapped in Markets/Invest view */}
+      {portalTarget && createPortal(
+        <AnimatePresence>
+          {selectedSecurity && (
+            <>
+              {/* Backdrop */}
+              <motion.div
+                key="sec-preview-backdrop"
+                className="fixed inset-0"
+                style={{ zIndex: 9998, background: "rgba(15,10,30,0.65)" }}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                onClick={() => setSelectedSecurity(null)}
+              />
+              {/* Sheet */}
+              <motion.div
+                key="sec-preview-sheet"
+                className="fixed inset-x-0 bottom-0 mx-auto flex w-full max-w-md flex-col overflow-hidden rounded-t-[28px] bg-white shadow-2xl"
+                style={{ zIndex: 9999, maxHeight: "92dvh" }}
+                initial={{ y: "100%" }}
+                animate={{ y: 0 }}
+                exit={{ y: "100%" }}
+                transition={{ type: "spring", damping: 28, stiffness: 320 }}
+              >
+                {/* Gradient accent strip */}
+                <div className="h-1 w-full flex-shrink-0" style={{ background: "linear-gradient(90deg,#7c3aed,#6366f1,#8b5cf6)" }} />
+                {/* Drag handle */}
+                <div className="flex justify-center pt-2.5 pb-1 flex-shrink-0">
+                  <div className="h-[3px] w-9 rounded-full bg-slate-200" />
+                </div>
+                {/* Header */}
+                <div className="flex items-center justify-between px-5 py-3 flex-shrink-0">
+                  <div className="flex items-center gap-3">
+                    {selectedSecurity.logo_url ? (
+                      <img src={selectedSecurity.logo_url} alt={selectedSecurity.symbol} className="h-10 w-10 rounded-full border border-slate-100 object-cover" />
+                    ) : (
+                      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-purple-500 to-purple-600 text-sm font-bold text-white">
+                        {selectedSecurity.symbol?.substring(0, 2) || "—"}
+                      </div>
+                    )}
+                    <div>
+                      <h2 className="text-[15px] font-bold text-slate-900">{selectedSecurity.short_name || selectedSecurity.name}</h2>
+                      <p className="text-xs text-slate-400 mt-0.5">{selectedSecurity.symbol} · {selectedSecurity.exchange}</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedSecurity(null)}
+                    className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200 transition"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+
+                <div
+                  className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-5 pb-6"
+                  style={{ WebkitOverflowScrolling: "touch" }}
+                >
+                  {/* Price block */}
+                  <div className="flex items-center gap-3 mb-6">
+                    {selectedSecurity.currentPrice != null ? (
+                      <>
+                        <p className="text-2xl font-semibold text-slate-900">
+                          <span className="text-sm font-normal text-slate-400 mr-1">{getDisplayCurrency(selectedSecurity)}</span>
+                          {formatPrice(selectedSecurity)}
+                        </p>
+                        {selectedSecurity.changePct != null && (
+                          <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                            selectedSecurity.changePct >= 0 ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"
+                          }`}>
+                            {selectedSecurity.changePct >= 0 ? "+" : ""}{selectedSecurity.changePct.toFixed(2)}%
+                          </span>
+                        )}
+                      </>
+                    ) : (
+                      <p className="text-2xl font-semibold text-slate-400">—</p>
+                    )}
+                  </div>
+
+                  {/* Sparkline chart */}
+                  {(() => {
+                    const points = sparklineData[selectedSecurity.symbol];
+                    if (!points || points.length < 2) return null;
+                    const chartData = points.map((v, i) => ({ i, v }));
+                    const isPositive = (selectedSecurity.changePct ?? 0) >= 0;
+                    const lineColor = isPositive ? "#10b981" : "#ef4444";
+                    const gradId = `sec-preview-grad-${selectedSecurity.symbol}`;
+                    return (
+                      <div className="mb-5">
+                        <div className="mb-2 flex items-center justify-between text-xs font-semibold text-slate-500">
+                          <span>Price trend</span>
+                          {selectedSecurity.returns?.ytd != null && (
+                            <span className={selectedSecurity.returns.ytd >= 0 ? "text-emerald-600" : "text-rose-600"}>
+                              YTD {selectedSecurity.returns.ytd >= 0 ? "+" : ""}{(selectedSecurity.returns.ytd * 100).toFixed(2)}%
+                            </span>
+                          )}
+                        </div>
+                        <div className="h-44 w-full">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <ComposedChart data={chartData} margin={{ top: 12, right: 16, left: 8, bottom: 8 }}>
+                              <defs>
+                                <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+                                  <stop offset="0%" stopColor={lineColor} stopOpacity={0.25} />
+                                  <stop offset="70%" stopColor={lineColor} stopOpacity={0.1} />
+                                  <stop offset="100%" stopColor="#ffffff" stopOpacity={0} />
+                                </linearGradient>
+                              </defs>
+                              <XAxis dataKey="i" hide />
+                              <YAxis hide domain={["auto", "auto"]} />
+                              <Area type="monotone" dataKey="v" stroke="transparent" fill={`url(#${gradId})`} dot={false} />
+                              <Line type="monotone" dataKey="v" stroke={lineColor} strokeWidth={2} dot={false} activeDot={false} />
+                            </ComposedChart>
+                          </ResponsiveContainer>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Tags */}
+                  <div className="flex flex-wrap gap-2 mb-6">
+                    {selectedSecurity.sector && (
+                      <span className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600">
+                        {selectedSecurity.sector}
+                      </span>
+                    )}
+                    {selectedSecurity.exchange && (
+                      <span className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600">
+                        {selectedSecurity.exchange}
+                      </span>
+                    )}
+                    {selectedSecurity.pe && (
+                      <span className="rounded-full border border-blue-100 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700">
+                        P/E {Number(selectedSecurity.pe).toFixed(2)}
+                      </span>
+                    )}
+                    {selectedSecurity.returns?.ytd != null && (
+                      <span className={`rounded-full border px-3 py-1.5 text-xs font-semibold ${
+                        selectedSecurity.returns.ytd >= 0
+                          ? "border-emerald-100 bg-emerald-50 text-emerald-700"
+                          : "border-red-100 bg-red-50 text-red-700"
+                      }`}>
+                        YTD {formatChangePct(selectedSecurity.returns.ytd)}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Action buttons */}
+                  <div className="mt-6 flex flex-col gap-2">
+                    <button
+                      onClick={() => {
+                        setSelectedSecurity(null);
+                        setTimeout(() => onOpenStockDetail(selectedSecurity), 220);
+                      }}
+                      className="w-full rounded-2xl bg-gradient-to-r from-[#5b21b6] to-[#7c3aed] py-4 font-semibold text-white shadow-lg transition-all active:scale-95"
+                    >
+                      Invest Now
+                    </button>
+                    <button
+                      onClick={() => {
+                        const sec = selectedSecurity;
+                        setSelectedSecurity(null);
+                        onOpenStockDetail(sec);
+                      }}
+                      className="w-full rounded-2xl border border-slate-200 bg-white py-4 font-semibold text-slate-700 transition-all active:scale-95"
+                    >
+                      View Factsheet
+                    </button>
+                  </div>
                 </div>
               </motion.div>
             </>
