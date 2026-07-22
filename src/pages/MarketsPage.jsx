@@ -10,7 +10,8 @@ import { getMarketsSecuritiesWithMetrics, getSecurityPrices, clearMarketDataCach
 import { useRealtimePrices } from "../lib/useRealtimePrices";
 import { getStrategiesWithMetrics, getPublicStrategies, formatChangePct, formatChangeAbs, getChangeColor } from "../lib/strategyData.js";
 import { useProfile } from "../lib/useProfile";
-import { TrendingUp, Search, SlidersHorizontal, X, ChevronRight, Bookmark, HelpCircle, Gift, Heart } from "lucide-react";
+import { TrendingUp, Search, SlidersHorizontal, X, ChevronRight, Bookmark, HelpCircle, Gift, Heart, Wallet, BarChart3, AlertCircle, ArrowLeft, Download } from "lucide-react";
+import PdfViewer from "../components/PdfViewer";
 import WishlistModal from "../components/WishlistModal.jsx";
 import WishlistPickerSheet from "../components/WishlistPickerSheet.jsx";
 import WishlistToast from "../components/WishlistToast.jsx";
@@ -229,6 +230,32 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
   const [pendingSecurityCheckout, setPendingSecurityCheckout] = useState(null);
   const [showSecurityGoalModal, setShowSecurityGoalModal] = useState(false);
   const [showSecurityOnboardingModal, setShowSecurityOnboardingModal] = useState(false);
+  const [securityBuyWalletBalance, setSecurityBuyWalletBalance] = useState(null);
+  const [securityBuyAgreementChecked, setSecurityBuyAgreementChecked] = useState(false);
+  const [securityBuyAgreementError, setSecurityBuyAgreementError] = useState(false);
+  const [securityBuyShakeAgreement, setSecurityBuyShakeAgreement] = useState(false);
+  const [securityBuyShowMandateModal, setSecurityBuyShowMandateModal] = useState(false);
+
+  // Fetch wallet balance when the security buy sheet opens; reset agreement state
+  useEffect(() => {
+    if (!showSecurityBuySheet) return;
+    setSecurityBuyAgreementChecked(false);
+    setSecurityBuyAgreementError(false);
+    setSecurityBuyShakeAgreement(false);
+    setSecurityBuyWalletBalance(null);
+    (async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.user) return;
+        const { data } = await supabase
+          .from("wallets")
+          .select("balance")
+          .eq("user_id", session.user.id)
+          .maybeSingle();
+        if (data) setSecurityBuyWalletBalance(data.balance ?? 0);
+      } catch { /* ignore */ }
+    })();
+  }, [showSecurityBuySheet]);
 
   const [selectedStrategyTimeframe, setSelectedStrategyTimeframe] = useState("YTD");
   const [selectedStrategyActiveLabel, setSelectedStrategyActiveLabel] = useState(null);
@@ -2787,7 +2814,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
               <motion.div
                 key="sec-buy-sheet"
                 className="fixed inset-x-0 bottom-0 mx-auto flex w-full max-w-md flex-col overflow-hidden rounded-t-[28px] bg-white shadow-2xl"
-                style={{ zIndex: 9999, maxHeight: "92dvh" }}
+                style={{ zIndex: 9999, maxHeight: "92dvh", paddingBottom: "env(safe-area-inset-bottom)" }}
                 initial={{ y: "100%" }}
                 animate={{ y: 0 }}
                 exit={{ y: "100%" }}
@@ -2801,18 +2828,9 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                 </div>
                 {/* Header */}
                 <div className="flex items-center justify-between px-5 py-3 flex-shrink-0">
-                  <div className="flex items-center gap-3">
-                    {investingSecurity.logo_url ? (
-                      <img src={investingSecurity.logo_url} alt={investingSecurity.symbol} className="h-10 w-10 rounded-full border border-slate-100 object-cover" />
-                    ) : (
-                      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-purple-500 to-purple-600 text-sm font-bold text-white">
-                        {investingSecurity.symbol?.substring(0, 2) || "—"}
-                      </div>
-                    )}
-                    <div>
-                      <h2 className="text-[15px] font-bold text-slate-900">Invest in {investingSecurity.symbol}</h2>
-                      <p className="text-xs text-slate-400 mt-0.5">{investingSecurity.short_name || investingSecurity.name}</p>
-                    </div>
+                  <div>
+                    <h2 className="text-[15px] font-bold text-slate-900 leading-tight">Complete Investment</h2>
+                    <p className="text-[11px] text-slate-400 mt-0.5">{investingSecurity.short_name || investingSecurity.name}</p>
                   </div>
                   <button
                     type="button"
@@ -2827,61 +2845,142 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                   className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-5 pb-6"
                   style={{ WebkitOverflowScrolling: "touch" }}
                 >
-                  {/* Price per share */}
-                  <div className="rounded-2xl bg-slate-50 p-4 mb-5">
-                    <p className="text-[11px] font-semibold uppercase tracking-widest text-slate-400">Price per share</p>
-                    <p className="mt-2 text-3xl font-bold text-slate-900">
-                      {securityDisplayCurrency}{securityPriceValue > 0 ? securityPriceValue.toFixed(2) : "—"}
-                    </p>
+                  {/* Security card */}
+                  <div className="mb-4 rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+                    <div className="flex items-start gap-3 mb-3">
+                      <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full border border-slate-100 bg-slate-50 overflow-hidden">
+                        {investingSecurity.logo_url ? (
+                          <img src={investingSecurity.logo_url} alt={investingSecurity.symbol} className="h-full w-full object-cover" />
+                        ) : (
+                          <span className="text-sm font-bold text-slate-500 uppercase">{investingSecurity.symbol?.slice(0, 2) || "—"}</span>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-base font-semibold text-slate-900 leading-tight">{investingSecurity.short_name || investingSecurity.name}</p>
+                        <p className="text-xs text-slate-500 mt-0.5">
+                          {investingSecurity.symbol}{investingSecurity.exchange ? ` · ${investingSecurity.exchange}` : ""}
+                        </p>
+                        {securityPriceValue > 0 && (
+                          <p className="text-xs font-semibold text-slate-600 mt-1">
+                            Price per share: <span className="text-slate-900">{fmtSecAmt(securityPriceValue)}</span>
+                          </p>
+                        )}
+                      </div>
+                      {investingSecurity.changePct != null && (
+                        <span className={`flex-shrink-0 text-xs font-bold px-2 py-1 rounded-full ${investingSecurity.changePct >= 0 ? "bg-emerald-50 text-emerald-600" : "bg-red-50 text-red-500"}`}>
+                          {investingSecurity.changePct >= 0 ? "+" : ""}{Number(investingSecurity.changePct).toFixed(2)}%
+                        </span>
+                      )}
+                    </div>
+                    {investingSecurity.sector && (
+                      <div className="pt-3 border-t border-slate-100">
+                        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-medium text-slate-600">
+                          {investingSecurity.sector}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Stat chips */}
+                  <div className="flex gap-3 mb-4">
+                    <div className="flex-1 rounded-2xl p-3.5 border border-slate-100" style={{ background: "linear-gradient(135deg,#f5f3ff,#ede9fe)" }}>
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <Wallet className="h-3 w-3 text-purple-400" />
+                        <p className="text-[10px] font-bold text-purple-400 uppercase tracking-wide">My Balance</p>
+                      </div>
+                      <p className="text-base font-bold text-purple-900 tabular-nums">
+                        {securityBuyWalletBalance === null ? "…" : fmtSecAmt(securityBuyWalletBalance)}
+                      </p>
+                    </div>
+                    <div className="flex-1 rounded-2xl p-3.5 border border-slate-100 bg-white">
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <BarChart3 className="h-3 w-3 text-indigo-400" />
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Price / Share</p>
+                      </div>
+                      <p className="text-base font-bold text-slate-900 tabular-nums">
+                        {securityPriceValue > 0 ? fmtSecAmt(securityPriceValue) : "—"}
+                      </p>
+                    </div>
                   </div>
 
                   {/* Shares stepper */}
-                  <div className="rounded-2xl border border-slate-200 bg-white p-4 mb-5">
-                    <p className="text-[11px] font-semibold uppercase tracking-widest text-slate-400 mb-3">Number of shares</p>
+                  <div className="rounded-2xl border border-slate-100 bg-white shadow-sm p-5 mb-4">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center mb-4">Number of Shares</p>
                     <div className="flex items-center justify-between">
                       <button
                         type="button"
                         onClick={() => setSecurityBuyShares(s => Math.max(securityMinShares, (s || 1) - 1))}
-                        className="flex h-11 w-11 items-center justify-center rounded-full border border-slate-200 bg-slate-50 text-slate-600 text-xl font-semibold transition active:scale-90"
+                        className="flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-700 text-xl font-semibold transition active:scale-90 shadow-sm"
                       >
                         −
                       </button>
-                      <div className="text-center">
-                        <p className="text-3xl font-bold text-slate-900">{securityBuyShares}</p>
-                        <p className="text-xs text-slate-400 mt-0.5">Total: {fmtSecAmt(securityBuyTotal)}</p>
+                      <div className="text-center flex-1">
+                        <p className="text-4xl font-black text-slate-900 tabular-nums tracking-tight">{securityBuyShares}</p>
+                        <p className="text-xs text-slate-400 mt-1">Total: {fmtSecAmt(securityBuyTotal)}</p>
                       </div>
                       <button
                         type="button"
                         onClick={() => setSecurityBuyShares(s => (s || 1) + 1)}
-                        className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-[#5b21b6] to-[#7c3aed] text-white text-xl font-semibold shadow-md transition active:scale-90"
+                        className="flex h-11 w-11 items-center justify-center rounded-2xl text-white text-xl font-semibold shadow-md transition active:scale-90"
+                        style={{ background: "linear-gradient(135deg,#6366f1,#7c3aed)" }}
                       >
                         +
                       </button>
                     </div>
                     {securityBuyIsInvalid && securityPriceValue > 0 && (
-                      <p className="mt-2 text-center text-xs text-red-500">
+                      <p className="mt-3 text-center text-xs text-red-500">
                         Min. {securityMinShares} share{securityMinShares !== 1 ? "s" : ""} required (R200 minimum)
                       </p>
                     )}
                   </div>
 
-                  {/* Investment summary */}
-                  <div className="space-y-2 mb-6">
-                    <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3.5">
-                      <span className="text-sm text-slate-600">Investment Amount</span>
-                      <span className="font-semibold text-slate-900">{fmtSecAmt(securityBuyTotal)}</span>
-                    </div>
-                    <div className="flex items-center justify-between rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3.5">
-                      <span className="text-xs font-semibold text-slate-700">Total Cost (incl. fees)</span>
-                      <span className="text-sm font-bold text-slate-900">{fmtSecAmt(securityBuyFees.total)}</span>
-                    </div>
-                  </div>
+                  {/* Agreement checkbox */}
+                  <motion.div
+                    className={`mb-4 rounded-2xl border p-4 shadow-sm ${securityBuyAgreementError && !securityBuyAgreementChecked ? "border-red-300 bg-red-50" : "border-slate-100 bg-white"}`}
+                    animate={securityBuyShakeAgreement ? { x: [0, -8, 8, -6, 6, -3, 3, 0] } : { x: 0 }}
+                    transition={{ duration: 0.45, ease: "easeInOut" }}
+                  >
+                    <label className="flex items-start gap-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={securityBuyAgreementChecked}
+                        onChange={e => { setSecurityBuyAgreementChecked(e.target.checked); if (e.target.checked) setSecurityBuyAgreementError(false); }}
+                        className="mt-1 h-4 w-4 rounded border-slate-300 text-violet-600 focus:ring-violet-500 flex-shrink-0"
+                      />
+                      <div className="flex-1">
+                        <p className="text-xs font-semibold text-slate-900">
+                          I agree to Risk Disclosure, Fee Schedule &{" "}
+                          <button
+                            type="button"
+                            onClick={e => { e.preventDefault(); setSecurityBuyShowMandateModal(true); }}
+                            className="underline text-violet-700 hover:text-violet-900"
+                          >
+                            Strategy Mandate
+                          </button>
+                        </p>
+                        <p className="text-xs text-slate-500 mt-1">
+                          By continuing, you confirm you have reviewed and agree to all terms and conditions
+                        </p>
+                      </div>
+                    </label>
+                    {securityBuyAgreementError && !securityBuyAgreementChecked && (
+                      <p className="mt-2 flex items-center gap-1.5 text-[11px] font-semibold text-red-500">
+                        <AlertCircle size={11} />Please tick this box before investing
+                      </p>
+                    )}
+                  </motion.div>
 
                   {/* Invest button */}
                   <button
                     type="button"
                     disabled={securityBuyIsInvalid}
                     onClick={() => {
+                      if (!securityBuyAgreementChecked) {
+                        setSecurityBuyAgreementError(true);
+                        setSecurityBuyShakeAgreement(true);
+                        setTimeout(() => setSecurityBuyShakeAgreement(false), 500);
+                        return;
+                      }
                       if (securityBuyIsInvalid) return;
                       setPendingSecurityCheckout({
                         security: investingSecurity,
@@ -2901,6 +3000,42 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                     Invest
                   </button>
                 </div>
+
+                {/* Strategy Mandate PDF overlay */}
+                <AnimatePresence>
+                  {securityBuyShowMandateModal && (
+                    <motion.div
+                      key="sec-mandate-overlay"
+                      className="fixed inset-0 flex flex-col bg-white"
+                      style={{ zIndex: 10000 }}
+                      initial={{ y: "100%" }}
+                      animate={{ y: 0 }}
+                      exit={{ y: "100%" }}
+                      transition={{ type: "spring", damping: 30, stiffness: 300 }}
+                    >
+                      <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 flex-shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => setSecurityBuyShowMandateModal(false)}
+                          className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-500"
+                        >
+                          <ArrowLeft className="h-4 w-4" />
+                        </button>
+                        <h2 className="text-sm font-semibold text-slate-900">Risk Disclosure</h2>
+                        <a
+                          href="/strategy-disclosures.pdf"
+                          download="Risk-Disclosure.pdf"
+                          className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-500"
+                        >
+                          <Download className="h-4 w-4" />
+                        </a>
+                      </div>
+                      <div className="flex-1 overflow-hidden">
+                        <PdfViewer file="/strategy-disclosures.pdf" style={{ height: "100%" }} />
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </motion.div>
             </>
           )}
