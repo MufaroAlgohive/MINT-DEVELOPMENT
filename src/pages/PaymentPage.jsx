@@ -396,6 +396,7 @@ const PaymentPage = ({
         walletLabel={isChildWalletPurchase ? `${childWalletName}'s wallet` : "Wallet Balance"}
         walletLoading={walletLoading}
         isProcessing={paymentStatus === "processing"}
+        isSingleSecurity={!isStrategyPurchase}
         onCancel={() => {
           setWalletConfirmOpen(false);
           setIsMethodModalOpen(true);
@@ -413,6 +414,7 @@ const PaymentPage = ({
         fees={fees}
         strategyName={strategy?.name}
         isProcessing={paymentStatus === "initializing"}
+        isSingleSecurity={!isStrategyPurchase}
         onCancel={() => {
           setOzowConfirmOpen(false);
           setIsMethodModalOpen(true);
@@ -666,10 +668,11 @@ const WalletConfirmModal = ({
   onCancel,
   onConfirm,
   onNavigateToDeposit,
+  isSingleSecurity,
 }) => {
   const { WALLET_TRANSACTION_FEE_RATE, AUM_FEE_RATE } = useFees();
 
-  const bufferedBase = fees?.bufferedBase ?? (baseAmount || 0) * 1.08;
+  const bufferedBase = fees?.bufferedBase ?? (isSingleSecurity ? (baseAmount || 0) : (baseAmount || 0) * 1.08);
   const brokerFee    = fees?.brokerAmount ?? 0;
   const isinTotal    = fees?.isinTotal    ?? 0;
   const txFee        = bufferedBase * WALLET_TRANSACTION_FEE_RATE;
@@ -705,7 +708,7 @@ const WalletConfirmModal = ({
 
         <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4 mb-5 space-y-2">
           <div className="flex justify-between text-xs">
-            <span className="text-slate-500">Investment (incl. 8% reserve)</span>
+            <span className="text-slate-500">{isSingleSecurity ? "Investment Amount" : "Investment (incl. 8% reserve)"}</span>
             <span className="font-semibold text-slate-900">{fmt(bufferedBase)}</span>
           </div>
           <div className="flex justify-between text-xs">
@@ -722,11 +725,13 @@ const WalletConfirmModal = ({
             <span className="text-slate-500">Transaction fee ({pct(WALLET_TRANSACTION_FEE_RATE)}) — Wallet</span>
             <span className="font-semibold text-slate-900">{fmt(txFee)}</span>
           </div>
-          {/* Recurring annual management fee — disclosure, NOT part of Total to Deduct. */}
-          <div className="flex justify-between text-xs">
-            <span className="text-slate-400">AUM fee ({pct(AUM_FEE_RATE)} p.a.)</span>
-            <span className="font-medium text-slate-400">monthly from cash</span>
-          </div>
+          {/* AUM fee only applies to strategies, not single securities */}
+          {!isSingleSecurity && (
+            <div className="flex justify-between text-xs">
+              <span className="text-slate-400">AUM fee ({pct(AUM_FEE_RATE)} p.a.)</span>
+              <span className="font-medium text-slate-400">monthly from cash</span>
+            </div>
+          )}
           <div className="border-t border-slate-200 mt-2 pt-2 flex justify-between text-sm">
             <span className="font-bold text-slate-700">Total to Deduct</span>
             <span className="font-bold text-violet-700">{fmt(walletTotal)}</span>
@@ -796,10 +801,11 @@ const OzowConfirmModal = ({
   isProcessing,
   onCancel,
   onConfirm,
+  isSingleSecurity,
 }) => {
   const { OZOW_TRANSACTION_FEE_RATE, AUM_FEE_RATE } = useFees();
 
-  const bufferedBase = fees?.bufferedBase ?? (baseAmount || 0) * 1.08;
+  const bufferedBase = fees?.bufferedBase ?? (isSingleSecurity ? (baseAmount || 0) : (baseAmount || 0) * 1.08);
   const brokerFee    = fees?.brokerAmount ?? 0;
   const isinTotal    = fees?.isinTotal    ?? 0;
   const txFee        = bufferedBase * OZOW_TRANSACTION_FEE_RATE;
@@ -836,7 +842,7 @@ const OzowConfirmModal = ({
 
         <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4 mb-5 space-y-2">
           <div className="flex justify-between text-xs">
-            <span className="text-slate-500">Investment (incl. 8% reserve)</span>
+            <span className="text-slate-500">{isSingleSecurity ? "Investment Amount" : "Investment (incl. 8% reserve)"}</span>
             <span className="font-semibold text-slate-900">{fmt(bufferedBase)}</span>
           </div>
           <div className="flex justify-between text-xs">
@@ -853,11 +859,13 @@ const OzowConfirmModal = ({
             <span className="text-slate-500">Transaction fee ({pct(OZOW_TRANSACTION_FEE_RATE)}) — Ozow</span>
             <span className="font-semibold text-slate-900">{fmt(txFee)}</span>
           </div>
-          {/* Recurring annual management fee — disclosure, NOT part of Total. */}
-          <div className="flex justify-between text-xs">
-            <span className="text-slate-400">AUM fee ({pct(AUM_FEE_RATE)} p.a.)</span>
-            <span className="font-medium text-slate-400">monthly from cash</span>
-          </div>
+          {/* AUM fee only applies to strategies, not single securities */}
+          {!isSingleSecurity && (
+            <div className="flex justify-between text-xs">
+              <span className="text-slate-400">AUM fee ({pct(AUM_FEE_RATE)} p.a.)</span>
+              <span className="font-medium text-slate-400">monthly from cash</span>
+            </div>
+          )}
           <div className="border-t border-slate-200 mt-2 pt-2 flex justify-between text-sm">
             <span className="font-bold text-slate-700">Total</span>
             <span className="font-bold text-violet-700">{fmt(ozowTotal)}</span>

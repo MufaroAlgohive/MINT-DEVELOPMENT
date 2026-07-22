@@ -1609,8 +1609,8 @@ const App = () => {
                   onOpenNewsArticle={(articleId) => { setSelectedArticleId(articleId); navigateTo("newsArticle"); }}
                   onOpenFactsheet={(strategy) => { if (!marketsChildFilter) setSelectedChildForInvest(null); setSelectedStrategy(strategy); navigateTo("factsheet"); }}
                   onInvestNow={(strategy) => { if (!marketsChildFilter) { setSelectedChildForInvest(null); setSelectedStrategy(strategy); setShowAdultInvestModal(true); } }}
-                  onProceedToPayment={({ security, amount, baseAmount, shareCount, goalId }) => {
-                    setStockCheckout({ security, amount, baseAmount: baseAmount || amount, shareCount });
+                  onProceedToPayment={({ security, amount, baseAmount, shareCount, fees, goalId }) => {
+                    setStockCheckout({ security, amount, baseAmount: baseAmount || amount, shareCount, fees });
                     setSelectedGoalId(goalId || null);
                     selectedGoalIdRef.current = goalId || null;
                     goalInvestAmountRef.current = baseAmount || amount;
@@ -1631,6 +1631,7 @@ const App = () => {
                 baseAmount={stockCheckout.baseAmount}
                 strategyName={stockCheckout.security?.name || stockCheckout.security?.symbol || "Stock"}
                 fees={stockCheckout.fees}
+                isSingleSecurity={true}
                 onSelectWallet={() => { setShowPaymentMethodModal(false); setPendingPaymentMethod("wallet"); navigateTo("stockPayment"); }}
                 onSelectOzow={async () => {
                   try {
@@ -1982,8 +1983,8 @@ const App = () => {
           onOpenBuy={() => navigateTo("stockBuy")}
           onNavigateToOnboarding={() => navigateTo("identityCheck")}
           onGiftDone={() => navigateTo("home")}
-          onProceedToPayment={({ security, amount, baseAmount, shareCount, goalId }) => {
-            setStockCheckout({ security, amount, baseAmount: baseAmount || amount, shareCount });
+          onProceedToPayment={({ security, amount, baseAmount, shareCount, fees, goalId }) => {
+            setStockCheckout({ security, amount, baseAmount: baseAmount || amount, shareCount, fees });
             setSelectedGoalId(goalId || null);
             selectedGoalIdRef.current = goalId || null;
             goalInvestAmountRef.current = baseAmount || amount;
@@ -1998,6 +1999,7 @@ const App = () => {
           baseAmount={stockCheckout.baseAmount}
           strategyName={stockCheckout.security?.name || stockCheckout.security?.symbol || "Stock"}
           fees={stockCheckout.fees}
+          isSingleSecurity={true}
           onSelectWallet={() => { setShowPaymentMethodModal(false); setPendingPaymentMethod("wallet"); navigateTo("stockPayment"); }}
           onSelectOzow={async () => {
             try {

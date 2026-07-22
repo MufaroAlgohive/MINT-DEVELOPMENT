@@ -292,12 +292,14 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
   const securityBuyIsInvalid = !Number.isFinite(securityBuyShares) || securityBuyShares <= 0 || securityBuyShares < securityMinShares;
 
   const securityBuyFees = useMemo(() => {
-    const buffered = securityBuyTotal * (1 + CASH_BUFFER_RATE);
-    const broker = buffered * BROKER_FEE_RATE;
-    const isin = ISIN_FEE_PER_ASSET * (securityValidShares > 0 ? 1 : 0);
-    const txn = buffered * TRANSACTION_FEE_RATE;
-    return { total: buffered + broker + isin + txn };
-  }, [securityBuyTotal, securityValidShares, CASH_BUFFER_RATE, BROKER_FEE_RATE, ISIN_FEE_PER_ASSET, TRANSACTION_FEE_RATE]);
+    // Single securities: no cash buffer — brokerage + custody + transaction fees only
+    const bufferedBase = securityBuyTotal;
+    const brokerAmount = bufferedBase * BROKER_FEE_RATE;
+    const isinTotal = ISIN_FEE_PER_ASSET * (securityValidShares > 0 ? 1 : 0);
+    const transactionAmount = bufferedBase * TRANSACTION_FEE_RATE;
+    const total = bufferedBase + brokerAmount + isinTotal + transactionAmount;
+    return { bufferedBase, brokerAmount, isinTotal, transactionAmount, total };
+  }, [securityBuyTotal, securityValidShares, BROKER_FEE_RATE, ISIN_FEE_PER_ASSET, TRANSACTION_FEE_RATE]);
 
   const fmtSecAmt = (val) => `${securityDisplayCurrency} ${Number(val).toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
@@ -2987,6 +2989,7 @@ const MarketsPage = ({ onBack, onOpenNotifications, onOpenStockDetail, onOpenNew
                         amount: securityBuyFees.total,
                         baseAmount: securityBuyTotal,
                         shareCount: securityValidShares,
+                        fees: securityBuyFees,
                       });
                       setShowSecurityBuySheet(false);
                       setTimeout(() => setShowSecurityGoalModal(true), 320);

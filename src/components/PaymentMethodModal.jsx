@@ -29,6 +29,7 @@ const PaymentMethodModal = ({
   pricePerUnitCents,   // when set, modal manages quantity and recomputes fees live
   numAssets = 0,
   onQuantityChange,    // async (newQty) => void  — called when user taps +/−
+  isSingleSecurity,    // true for single-stock purchases — no cash buffer, no AUM fee
 }) => {
   const [eftExpanded, setEftExpanded] = useState(false);
   const [copied, setCopied] = useState(null);
@@ -50,9 +51,10 @@ const PaymentMethodModal = ({
 
   // When pricePerUnitCents is provided, recompute fees from localQty live;
   // otherwise fall back to the pre-computed props (existing callers unchanged).
+  // Single securities have no cash buffer reserve.
   const bufferedBase = pricePerUnitCents
-    ? (localQty * pricePerUnitCents / 100) * (1 + CASH_BUFFER_RATE)
-    : (fees?.bufferedBase ?? (baseAmount || amount || 0) * 1.08);
+    ? (localQty * pricePerUnitCents / 100) * (isSingleSecurity ? 1 : (1 + CASH_BUFFER_RATE))
+    : (fees?.bufferedBase ?? (isSingleSecurity ? (baseAmount || amount || 0) : (baseAmount || amount || 0) * 1.08));
   const brokerFee = pricePerUnitCents
     ? bufferedBase * BROKER_FEE_RATE
     : (fees?.brokerAmount ?? bufferedBase * 0.0025);
@@ -271,7 +273,7 @@ const PaymentMethodModal = ({
 
                   <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4 space-y-2">
                     <div className="flex justify-between text-xs">
-                      <span className="text-slate-500">Investment (incl. 8% reserve)</span>
+                      <span className="text-slate-500">{isSingleSecurity ? "Investment Amount" : "Investment (incl. 8% reserve)"}</span>
                       <span className="font-semibold text-slate-900">{formatAmount(bufferedBase)}</span>
                     </div>
                     <div className="flex justify-between text-xs">
@@ -288,11 +290,12 @@ const PaymentMethodModal = ({
                       <span className="text-slate-500">Transaction fee ({pct(WALLET_TRANSACTION_FEE_RATE)}) — Wallet</span>
                       <span className="font-semibold text-slate-900">{formatAmount(walletTxFee)}</span>
                     </div>
-                    {/* Recurring annual management fee — disclosure, NOT part of Total to Deduct. */}
-                    <div className="flex justify-between text-xs">
-                      <span className="text-slate-400">AUM fee ({pct(AUM_FEE_RATE)} p.a.)</span>
-                      <span className="font-medium text-slate-400">monthly from cash</span>
-                    </div>
+                    {!isSingleSecurity && (
+                      <div className="flex justify-between text-xs">
+                        <span className="text-slate-400">AUM fee ({pct(AUM_FEE_RATE)} p.a.)</span>
+                        <span className="font-medium text-slate-400">monthly from cash</span>
+                      </div>
+                    )}
                     <div className="border-t border-slate-200 mt-2 pt-2 flex justify-between text-sm">
                       <span className="font-bold text-slate-700">Total to Deduct</span>
                       <span className="font-bold text-violet-700">{formatAmount(walletTotal)}</span>
@@ -353,7 +356,7 @@ const PaymentMethodModal = ({
 
                   <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4 space-y-2">
                     <div className="flex justify-between text-xs">
-                      <span className="text-slate-500">Investment (incl. 8% reserve)</span>
+                      <span className="text-slate-500">{isSingleSecurity ? "Investment Amount" : "Investment (incl. 8% reserve)"}</span>
                       <span className="font-semibold text-slate-900">{formatAmount(bufferedBase)}</span>
                     </div>
                     <div className="flex justify-between text-xs">
@@ -370,11 +373,12 @@ const PaymentMethodModal = ({
                       <span className="text-slate-500">Transaction fee ({pct(OZOW_TRANSACTION_FEE_RATE)}) — Ozow</span>
                       <span className="font-semibold text-slate-900">{formatAmount(ozowTxFee)}</span>
                     </div>
-                    {/* Recurring annual management fee — disclosure, NOT part of Total. */}
-                    <div className="flex justify-between text-xs">
-                      <span className="text-slate-400">AUM fee ({pct(AUM_FEE_RATE)} p.a.)</span>
-                      <span className="font-medium text-slate-400">monthly from cash</span>
-                    </div>
+                    {!isSingleSecurity && (
+                      <div className="flex justify-between text-xs">
+                        <span className="text-slate-400">AUM fee ({pct(AUM_FEE_RATE)} p.a.)</span>
+                        <span className="font-medium text-slate-400">monthly from cash</span>
+                      </div>
+                    )}
                     <div className="border-t border-slate-200 mt-2 pt-2 flex justify-between text-sm">
                       <span className="font-bold text-slate-700">Total</span>
                       <span className="font-bold text-violet-700">{formatAmount(ozowTotal)}</span>
